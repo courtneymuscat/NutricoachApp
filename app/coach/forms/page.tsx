@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { requireCoach } from '@/lib/coach'
 import { createClient } from '@/lib/supabase/server'
 import FormTemplates from './FormTemplates'
+import JotFormImport from './JotFormImport'
 
 const TYPE_LABELS: Record<string, string> = {
   onboarding: 'Onboarding',
@@ -49,6 +50,9 @@ export default async function CoachFormsPage() {
 
         {/* Template picker */}
         <FormTemplates />
+
+        {/* JotForm import */}
+        <JotFormImport />
 
         {/* Divider */}
         {(forms ?? []).length > 0 && (
