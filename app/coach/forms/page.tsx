@@ -3,6 +3,7 @@ import { requireCoach } from '@/lib/coach'
 import { createClient } from '@/lib/supabase/server'
 import FormTemplates from './FormTemplates'
 import JotFormImport from './JotFormImport'
+import PasteImport from './PasteImport'
 
 const TYPE_LABELS: Record<string, string> = {
   onboarding: 'Onboarding',
@@ -50,6 +51,9 @@ export default async function CoachFormsPage() {
 
         {/* Template picker */}
         <FormTemplates />
+
+        {/* Paste import */}
+        <PasteImport />
 
         {/* JotForm import */}
         <JotFormImport />
