@@ -362,7 +362,7 @@ export default function DailyCheckIn() {
       if (fallbackError) { setError(fallbackError.message); setPending(false); return }
       setCheckIns((prev) => [{
         id: fb.id, sleep_hours: null, sleep_quality: null, energy_level: null,
-        rhr: null, hrv: null, notes, created_at,
+        rhr: null, hrv: null, notes, created_at, coach_feedback: null, reviewed_by_coach: false,
       }, ...prev])
     } else {
       setCheckIns((prev) => [{
@@ -374,6 +374,8 @@ export default function DailyCheckIn() {
         hrv: hrv ? Number(hrv) : null,
         notes,
         created_at,
+        coach_feedback: null,
+        reviewed_by_coach: false,
       }, ...prev])
     }
 
