@@ -442,7 +442,7 @@ function ExerciseNotes({ weId, note, onNoteChange }: { weId: string; note: strin
 
 // ─── Exercise block ───────────────────────────────────────────────────────────
 
-function ExerciseBlock({ we, canUp, canDown, onMoveUp, onMoveDown, onAddSet, onRemove, onUpdateSet, onToggleComplete, onSetMetrics, onToggleRest, onNoteChange }: {
+function ExerciseBlock({ we, canUp, canDown, onMoveUp, onMoveDown, onAddSet, onRemove, onUpdateSet, onToggleComplete, onSetMetrics, onToggleRest, onNoteChange, onVideoChange }: {
   we: WorkoutExercise
   canUp: boolean
   canDown: boolean
@@ -455,9 +455,26 @@ function ExerciseBlock({ we, canUp, canDown, onMoveUp, onMoveDown, onAddSet, onR
   onSetMetrics: (m: Metrics) => void
   onToggleRest: () => void
   onNoteChange: (note: string) => void
+  onVideoChange: (url: string | null) => void
 }) {
   const [showVideo, setShowVideo] = useState(false)
+  const [editingVideo, setEditingVideo] = useState(false)
+  const [videoInput, setVideoInput] = useState(we.exercise.video_url ?? '')
+  const [savingVideo, setSavingVideo] = useState(false)
   const videoId = we.exercise.video_url ? getYouTubeId(we.exercise.video_url) : null
+
+  async function handleSaveVideo() {
+    setSavingVideo(true)
+    const url = videoInput.trim() || null
+    await fetch(`/api/exercises/${we.exercise.id}/video`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ video_url: url }),
+    })
+    setSavingVideo(false)
+    onVideoChange(url)
+    setEditingVideo(false)
+  }
   const cfg = METRICS_CONFIG[we.metrics]
   const hasTwoCols = !!cfg.col2
   const gridCols = we.showRest
@@ -476,14 +493,38 @@ function ExerciseBlock({ we, canUp, canDown, onMoveUp, onMoveDown, onAddSet, onR
           <p className="text-xs text-gray-400 capitalize mt-0.5">{we.exercise.category} · {we.exercise.equipment}</p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          {videoId && (
-            <button onClick={() => setShowVideo(true)} title="Watch demo" className="w-7 h-7 flex items-center justify-center rounded-full bg-red-50 hover:bg-red-100 transition-colors">
-              <svg className="w-3 h-3 text-red-600 ml-0.5" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
-            </button>
+          {videoId ? (
+            <>
+              <button onClick={() => setShowVideo(true)} title="Watch demo" className="w-7 h-7 flex items-center justify-center rounded-full bg-red-50 hover:bg-red-100 transition-colors">
+                <svg className="w-3 h-3 text-red-600 ml-0.5" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+              </button>
+              <button onClick={() => { setVideoInput(we.exercise.video_url ?? ''); setEditingVideo(true) }} title="Change video" className="w-7 h-7 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 transition-colors">
+                <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 012.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2a2 2 0 01.586-1.414z" /></svg>
+              </button>
+            </>
+          ) : (
+            <button onClick={() => { setVideoInput(''); setEditingVideo(true) }} className="text-xs text-gray-400 hover:text-blue-600 transition-colors whitespace-nowrap">+ video</button>
           )}
           <button onClick={onRemove} className="text-gray-300 hover:text-red-400 text-xl leading-none">×</button>
         </div>
       </div>
+
+      {editingVideo && (
+        <div className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2">
+          <input
+            autoFocus
+            value={videoInput}
+            onChange={(e) => setVideoInput(e.target.value)}
+            placeholder="Paste YouTube URL..."
+            className="flex-1 text-xs border rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400"
+            onKeyDown={(e) => { if (e.key === 'Enter') handleSaveVideo(); if (e.key === 'Escape') setEditingVideo(false) }}
+          />
+          <button onClick={handleSaveVideo} disabled={savingVideo} className="text-xs font-semibold bg-blue-600 text-white px-2.5 py-1.5 rounded-lg hover:bg-blue-700 disabled:opacity-50">
+            {savingVideo ? '…' : 'Save'}
+          </button>
+          <button onClick={() => setEditingVideo(false)} className="text-xs text-gray-400 hover:text-gray-600">✕</button>
+        </div>
+      )}
 
       {/* Metric selector */}
       <div className="flex items-center gap-1.5 flex-wrap">
@@ -858,6 +899,11 @@ export default function ActiveWorkout({ onFinish, onBack, template }: Props) {
             onSetMetrics={(m) => setMetrics(item.weId, m)}
             onToggleRest={() => toggleRest(item.weId)}
             onNoteChange={(note) => setExerciseNote(item.weId, note)}
+            onVideoChange={(url) => setItems((prev) => prev.map((i) =>
+              i.type === 'exercise' && i.weId === item.weId
+                ? { ...i, exercise: { ...i.exercise, video_url: url } }
+                : i
+            ))}
           />
         ) : (
           <FreestyleBlock
