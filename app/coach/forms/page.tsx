@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { requireCoach } from '@/lib/coach'
 import { createClient } from '@/lib/supabase/server'
+import FormTemplates from './FormTemplates'
 
 const TYPE_LABELS: Record<string, string> = {
   onboarding: 'Onboarding',
@@ -44,15 +45,22 @@ export default async function CoachFormsPage() {
         </a>
       </div>
 
-      <main className="max-w-3xl mx-auto w-full p-6 space-y-3">
-        {(!forms || forms.length === 0) && (
-          <div className="bg-white rounded-2xl border p-10 text-center">
-            <p className="text-gray-500 font-medium">No forms yet</p>
-            <p className="text-gray-400 text-sm mt-1">Create your first onboarding or check-in form.</p>
-            <a href="/coach/forms/new/edit" className="inline-block mt-4 bg-blue-600 text-white px-5 py-2 rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors">
-              Create a form
-            </a>
+      <main className="max-w-3xl mx-auto w-full p-6 space-y-6">
+
+        {/* Template picker */}
+        <FormTemplates />
+
+        {/* Divider */}
+        {(forms ?? []).length > 0 && (
+          <div className="flex items-center gap-3">
+            <div className="flex-1 border-t" />
+            <span className="text-xs text-gray-400 font-medium">Your forms</span>
+            <div className="flex-1 border-t" />
           </div>
+        )}
+
+        {(!forms || forms.length === 0) && (
+          <p className="text-sm text-gray-400 text-center py-4">No forms yet — use a template above or create from scratch.</p>
         )}
 
         {(forms ?? []).map((form) => (
