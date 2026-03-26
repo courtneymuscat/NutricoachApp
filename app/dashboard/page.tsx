@@ -37,6 +37,7 @@ export default async function DashboardPage() {
   const canFullCheckin      = sub.canAccess(FEATURES.DAILY_CHECKIN)
   const canCycleAdv         = sub.canAccess(FEATURES.CYCLE_TRACKER)
   const canMealScanner      = sub.canAccess(FEATURES.MEAL_SCANNER)
+  const canProgressPhotos   = sub.canAccess(FEATURES.PROGRESS_PHOTOS)
   const canProgressCompare  = sub.canAccess(FEATURES.PROGRESS_COMPARE)
 
   // Only show check-in banner for coached users (they have a coach waiting)
@@ -193,7 +194,10 @@ export default async function DashboardPage() {
 
         {/* Progress Photos */}
         <section>
-          <ProgressPhotos canCompare={canProgressCompare} />
+          {canProgressPhotos
+            ? <ProgressPhotos canCompare={canProgressCompare} />
+            : <UpgradePrompt plan="Optimiser" feature="Progress photos & comparison" />
+          }
         </section>
 
         {/* Coach Forms */}

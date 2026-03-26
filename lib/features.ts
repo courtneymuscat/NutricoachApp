@@ -16,6 +16,7 @@ export const FEATURES = {
   WEIGHT_TRACKING:     'weight_tracking',    // full chart + history
   DAILY_CHECKIN:       'daily_checkin',      // full: sleep/HRV/RHR/notes
   CYCLE_TRACKER:       'cycle_tracker',      // symptoms, BBT, cervical mucus, moods
+  PROGRESS_PHOTOS:     'progress_photos',    // upload & view progress photos
   PROGRESS_COMPARE:    'progress_compare',   // before/after photo comparison
 
   // ── Tier 3 — Elite ($34.99 AUD/mo) ───────────────────────────────────────
@@ -59,6 +60,7 @@ const TIER_2_FEATURES: Feature[] = [
   FEATURES.WEIGHT_TRACKING,
   FEATURES.DAILY_CHECKIN,
   FEATURES.CYCLE_TRACKER,
+  FEATURES.PROGRESS_PHOTOS,
   FEATURES.PROGRESS_COMPARE,
 ]
 
