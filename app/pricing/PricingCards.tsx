@@ -46,6 +46,10 @@ function PlanCard({
         router.push(`/login?redirect=/pricing`)
         return
       }
+      if (res.status === 403) {
+        router.push(`/login?redirect=/pricing`)
+        return
+      }
       const data = await res.json()
       if (data.url) {
         window.location.href = data.url
