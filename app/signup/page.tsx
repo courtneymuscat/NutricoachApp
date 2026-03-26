@@ -5,39 +5,69 @@ import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { signup } from '@/app/actions/auth'
 
+const PLAN_LABELS: Record<string, string> = {
+  individual_tier_2: 'Optimiser — $19.99 AUD/mo',
+  individual_tier_3: 'Elite — $34.99 AUD/mo',
+  coach_starter: 'Coach Starter — $29 AUD/mo',
+  coach_growth: 'Coach Growth — $69 AUD/mo',
+}
+
 function SignupForm() {
   const [state, action, pending] = useActionState(signup, null)
   const searchParams = useSearchParams()
   const invite = searchParams.get('invite')
+  const planKey = searchParams.get('plan') ?? ''
+  const billing = searchParams.get('billing') ?? 'monthly'
+  const type = searchParams.get('type') ?? 'individual'
+  const isCoach = type === 'coach'
+  const planLabel = PLAN_LABELS[planKey]
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="w-full max-w-md bg-white rounded-xl shadow p-8">
-        <h1 className="text-2xl font-bold mb-2 text-gray-900">Create account</h1>
-        <p className="text-sm text-gray-500 mb-6">
-          {invite ? 'Create an account to accept your coaching invite.' : 'Start tracking your nutrition today.'}
-        </p>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-sm border p-8 space-y-6">
+        <div>
+          <Link href="/" className="text-xl font-bold text-gray-900">NutriCoach</Link>
+          <h1 className="text-2xl font-bold mt-4 text-gray-900">
+            {invite ? 'Accept your invite' : isCoach ? 'Start coaching' : 'Create your account'}
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">
+            {invite
+              ? 'Create an account to accept your coaching invite.'
+              : planLabel
+              ? `You selected: ${planLabel}`
+              : 'Start tracking your nutrition, workouts, and cycle for free.'}
+          </p>
+        </div>
+
+        {planLabel && (
+          <div className="flex items-center gap-2 text-sm rounded-xl px-4 py-3 border" style={{ backgroundColor: '#FFFBF0', borderColor: '#FFE9A8' }}>
+            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="#B08000" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="text-yellow-800">After signing up you&apos;ll be taken to checkout to complete your subscription.</span>
+          </div>
+        )}
 
         <form action={action} className="space-y-4">
           {invite && <input type="hidden" name="invite" value={invite} />}
+          {planKey && <input type="hidden" name="planKey" value={planKey} />}
+          {billing && <input type="hidden" name="billing" value={billing} />}
+          {type && <input type="hidden" name="userType" value={type} />}
+
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-              Email
-            </label>
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
             <input
               id="email"
               name="email"
               type="email"
               required
               placeholder="you@example.com"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
             />
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-              Password
-            </label>
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
             <input
               id="password"
               name="password"
@@ -45,28 +75,27 @@ function SignupForm() {
               required
               minLength={6}
               placeholder="Min. 6 characters"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
             />
           </div>
 
           {state?.error && (
-            <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{state.error}</p>
+            <p className="text-sm text-red-600 bg-red-50 rounded-xl px-3 py-2">{state.error}</p>
           )}
 
           <button
             type="submit"
             disabled={pending}
-            className="w-full bg-blue-600 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            className="w-full py-3 rounded-xl text-sm font-semibold text-gray-900 hover:opacity-90 disabled:opacity-50 transition-colors"
+            style={{ backgroundColor: '#FFD885' }}
           >
-            {pending ? 'Creating account...' : 'Sign up'}
+            {pending ? 'Creating account…' : planLabel ? 'Create account & continue to checkout' : 'Create free account'}
           </button>
         </form>
 
-        <p className="mt-4 text-center text-sm text-gray-600">
+        <p className="text-center text-sm text-gray-500">
           Already have an account?{' '}
-          <Link href="/login" className="text-blue-600 hover:underline">
-            Log in
-          </Link>
+          <Link href="/login" className="text-gray-900 font-medium hover:underline">Log in</Link>
         </p>
       </div>
     </div>
