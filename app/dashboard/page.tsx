@@ -134,15 +134,15 @@ export default async function DashboardPage() {
                 <p className="text-xs text-gray-400 mt-0.5">kcal</p>
               </div>
               <div>
-                <p className="text-xl font-bold text-blue-600">{profile.target_protein}g</p>
+                <p className="text-xl font-bold text-purple-400">{profile.target_protein}g</p>
                 <p className="text-xs text-gray-400 mt-0.5">protein</p>
               </div>
               <div>
-                <p className="text-xl font-bold text-amber-600">{profile.target_carbs}g</p>
+                <p className="text-xl font-bold text-green-400">{profile.target_carbs}g</p>
                 <p className="text-xs text-gray-400 mt-0.5">carbs</p>
               </div>
               <div>
-                <p className="text-xl font-bold text-rose-600">{profile.target_fat}g</p>
+                <p className="text-xl font-bold text-blue-400">{profile.target_fat}g</p>
                 <p className="text-xs text-gray-400 mt-0.5">fat</p>
               </div>
             </div>
