@@ -78,8 +78,10 @@ export default async function DashboardPage() {
         <div className="flex items-center gap-1">
           {[
             { href: '/workouts', label: 'Workouts' },
-            { href: '/messages', label: 'Messages' },
-            { href: '/coach/dashboard', label: 'Coach' },
+            ...(isCoached ? [
+              { href: '/messages', label: 'Messages' },
+              { href: '/coach/dashboard', label: 'Coach' },
+            ] : []),
             { href: '/pricing', label: 'Upgrade' },
           ].map(({ href, label }) => (
             <a key={href} href={href} className="text-[13px] font-medium text-gray-500 hover:text-gray-900 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors">
