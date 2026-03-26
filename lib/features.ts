@@ -141,8 +141,9 @@ export const INDIVIDUAL_PLANS: PricingPlan[] = [
       'Manual food logging + macros',
       'Basic weight entry',
       'Basic workout logging',
-      'Period dates + cycle phase',
+      'Period dates + cycle phase bar',
       'Basic daily check-in (sleep + energy)',
+      'Personalised TDEE + macro targets',
     ],
     highlighted: false,
   },
@@ -155,6 +156,7 @@ export const INDIVIDUAL_PLANS: PricingPlan[] = [
     priceAnnualMonthly: 17.99,
     features: [
       'Everything in Tracker',
+      'Progress photos + before/after comparison',
       'Meal builder + saved meals',
       'Full workout tracking + structured sessions',
       'Weight chart + full history',
