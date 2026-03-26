@@ -91,17 +91,17 @@ function calcTDEE(
   return { bmr: Math.round(bmr), tdee }
 }
 
-function calcMacros(tdee: number, weight_kg: number, goal: Goal) {
+function calcMacros(tdee: number, weight_kg: number, goal: Goal, adjustmentPct: number) {
   let targetCals: number
   let proteinG: number
   let fatG: number
 
   if (goal === 'fat_loss') {
-    targetCals = Math.round(tdee * 0.80) // 20% deficit
+    targetCals = Math.round(tdee * (1 - adjustmentPct / 100))
     proteinG   = Math.round(weight_kg * 2.2)
     fatG       = Math.round(weight_kg * 0.8)
   } else if (goal === 'muscle_gain') {
-    targetCals = Math.round(tdee * 1.10) // 10% surplus
+    targetCals = Math.round(tdee * (1 + adjustmentPct / 100))
     proteinG   = Math.round(weight_kg * 2.2)
     fatG       = Math.round(weight_kg * 1.0)
   } else if (goal === 'performance') {
@@ -157,11 +157,19 @@ function MacroBar({ label, grams, calories, color }: { label: string; grams: num
 // ── Main component ────────────────────────────────────────────────────────
 const TOTAL_STEPS = 4
 
+// Default adjustment % per goal
+function defaultAdjPct(goal: Goal | null) {
+  if (goal === 'fat_loss') return 20
+  if (goal === 'muscle_gain') return 10
+  return 0
+}
+
 export default function OnboardingPage() {
   const router = useRouter()
   const [step, setStep] = useState(1)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [adjustmentPct, setAdjustmentPct] = useState(20)
 
   const [form, setForm] = useState<FormState>({
     goal: null,
@@ -174,6 +182,12 @@ export default function OnboardingPage() {
     steps_per_day: '8000',
     activities: [],
   })
+
+  // Reset adjustment % when goal changes
+  function setGoal(goal: Goal) {
+    setForm(f => ({ ...f, goal }))
+    setAdjustmentPct(defaultAdjPct(goal))
+  }
 
   // ── Derived TDEE ──
   const statsComplete =
@@ -191,7 +205,7 @@ export default function OnboardingPage() {
     : null
 
   const macros = tdeeResult && form.goal
-    ? calcMacros(tdeeResult.tdee, parseFloat(form.weight_kg), form.goal)
+    ? calcMacros(tdeeResult.tdee, parseFloat(form.weight_kg), form.goal, adjustmentPct)
     : null
 
   // ── Activity helpers ──
@@ -240,6 +254,7 @@ export default function OnboardingPage() {
         target_protein: macros?.proteinG ?? null,
         target_carbs: macros?.carbG ?? null,
         target_fat: macros?.fatG ?? null,
+        adjustment_pct: adjustmentPct,
       }),
     })
 
@@ -280,7 +295,7 @@ export default function OnboardingPage() {
                 {GOALS.map((g) => (
                   <button
                     key={g.value}
-                    onClick={() => setForm(f => ({ ...f, goal: g.value }))}
+                    onClick={() => setGoal(g.value)}
                     className={`text-left p-5 rounded-2xl border-2 transition-all ${
                       form.goal === g.value ? 'border-gray-900 bg-white shadow-sm' : 'border-gray-200 bg-white hover:border-gray-300'
                     }`}
@@ -555,13 +570,48 @@ export default function OnboardingPage() {
                   </div>
                 </div>
 
+                {/* Deficit / surplus adjuster */}
+                {(form.goal === 'fat_loss' || form.goal === 'muscle_gain') && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest">
+                        {form.goal === 'fat_loss' ? 'Calorie deficit' : 'Calorie surplus'}
+                      </p>
+                      <span className="text-sm font-bold text-gray-900">{adjustmentPct}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={form.goal === 'fat_loss' ? 5 : 5}
+                      max={form.goal === 'fat_loss' ? 30 : 25}
+                      step={5}
+                      value={adjustmentPct}
+                      onChange={e => setAdjustmentPct(Number(e.target.value))}
+                      className="w-full accent-gray-900"
+                    />
+                    <div className="flex justify-between text-xs text-gray-400">
+                      <span>{form.goal === 'fat_loss' ? 'Gentle (5%)' : 'Lean gain (5%)'}</span>
+                      <span>{form.goal === 'fat_loss' ? 'Aggressive (30%)' : 'Fast gain (25%)'}</span>
+                    </div>
+                    {form.goal === 'fat_loss' && adjustmentPct > 20 && (
+                      <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2">
+                        Deficits above 20% risk muscle loss. Recommended: 15–20%.
+                      </p>
+                    )}
+                    {form.goal === 'muscle_gain' && adjustmentPct > 15 && (
+                      <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2">
+                        Surpluses above 15% tend to add more fat than muscle. Recommended: 5–10%.
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {/* Target calories */}
                 <div className="rounded-xl p-4 text-center" style={{ backgroundColor: '#FFF9E6' }}>
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Daily calorie target</p>
                   <p className="text-4xl font-bold text-gray-900">{macros.targetCals.toLocaleString()}</p>
                   <p className="text-xs text-gray-500 mt-1">
-                    {form.goal === 'fat_loss'    ? '20% deficit below TDEE'  :
-                     form.goal === 'muscle_gain' ? '10% surplus above TDEE'  :
+                    {form.goal === 'fat_loss'    ? `${adjustmentPct}% deficit below TDEE` :
+                     form.goal === 'muscle_gain' ? `${adjustmentPct}% surplus above TDEE` :
                      'Maintenance (TDEE)'}
                   </p>
                 </div>
