@@ -143,7 +143,7 @@ export const INDIVIDUAL_PLANS: PricingPlan[] = [
       'Basic workout logging',
       'Period dates + cycle phase bar',
       'Basic daily check-in (sleep + energy)',
-      'Personalised TDEE + macro targets',
+      'Personalised TDEE + macro targets (calorie needs calculated from your actual workouts, not just an activity level guess)',
     ],
     highlighted: false,
   },
