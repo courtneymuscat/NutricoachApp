@@ -25,7 +25,7 @@ export default async function DashboardPage() {
   // Check onboarding status + fetch targets
   const { data: profile } = await supabase
     .from('profiles')
-    .select('onboarding_completed, goal, target_calories, target_protein, target_carbs, target_fat, tdee')
+    .select('onboarding_completed, goal, target_calories, target_protein, target_carbs, target_fat, tdee, sex')
     .eq('id', user.id)
     .single()
   if (profile && profile.onboarding_completed === false) redirect('/onboarding')
@@ -185,12 +185,14 @@ export default async function DashboardPage() {
           }
         </section>
 
-        {/* Cycle Tracker */}
-        <section>
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Cycle Tracker</h3>
-          <CycleTracker advancedAccess={canCycleAdv} />
-          <CyclePhaseBar />
-        </section>
+        {/* Cycle Tracker — hidden for male users */}
+        {profile?.sex !== 'male' && (
+          <section>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Cycle Tracker</h3>
+            <CycleTracker advancedAccess={canCycleAdv} />
+            <CyclePhaseBar />
+          </section>
+        )}
 
         {/* Progress Photos */}
         <section>
