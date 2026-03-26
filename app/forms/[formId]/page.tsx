@@ -296,7 +296,7 @@ export default function FormFillPage({ params }: { params: Promise<{ formId: str
                 </div>
               )}
             </div>
-          ))}
+          )})}
 
           {error && <p className="text-sm text-red-600 bg-red-50 rounded-xl px-4 py-3">{error}</p>}
 
