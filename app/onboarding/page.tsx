@@ -3,179 +3,290 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
+// ── Types ──────────────────────────────────────────────────────────────────
 type Goal = 'fat_loss' | 'muscle_gain' | 'performance' | 'general_health'
-type ActivityLevel = 'sedentary' | 'lightly_active' | 'moderately_active' | 'very_active' | 'athlete'
+type Sex = 'male' | 'female'
 type DietaryPreference = 'none' | 'vegetarian' | 'vegan' | 'gluten_free' | 'dairy_free'
+type ActivityType = 'running' | 'cycling' | 'strength' | 'hiit' | 'swimming' | 'walking' | 'rowing' | 'yoga'
 
-type FormData = {
-  goal: Goal | null
-  first_name: string
-  activity_level: ActivityLevel | ''
-  dietary_preference: DietaryPreference | ''
+type Activity = {
+  id: string
+  type: ActivityType
+  duration_minutes: string
+  sessions_per_week: string
 }
 
-// ── Data ──────────────────────────────────────────────────────────────────────
+type FormState = {
+  goal: Goal | null
+  first_name: string
+  age: string
+  sex: Sex | ''
+  height_cm: string
+  weight_kg: string
+  dietary_preference: DietaryPreference
+  steps_per_day: string
+  activities: Activity[]
+}
 
-const GOALS: { value: Goal; label: string; description: string; icon: React.ReactNode }[] = [
-  {
-    value: 'fat_loss',
-    label: 'Fat Loss',
-    description: 'Reduce body fat while preserving muscle',
-    icon: (
-      <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-      </svg>
-    ),
-  },
-  {
-    value: 'muscle_gain',
-    label: 'Muscle Gain',
-    description: 'Build strength and add lean mass',
-    icon: (
-      <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-      </svg>
-    ),
-  },
-  {
-    value: 'performance',
-    label: 'Performance',
-    description: 'Optimise training output and recovery',
-    icon: (
-      <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
-      </svg>
-    ),
-  },
-  {
-    value: 'general_health',
-    label: 'General Health',
-    description: 'Feel better, move more, stress less',
-    icon: (
-      <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-      </svg>
-    ),
-  },
-]
-
-const ACTIVITY_LEVELS: { value: ActivityLevel; label: string; description: string }[] = [
-  { value: 'sedentary', label: 'Sedentary', description: 'Little or no exercise' },
-  { value: 'lightly_active', label: 'Lightly active', description: '1–3 days/week' },
-  { value: 'moderately_active', label: 'Moderately active', description: '3–5 days/week' },
-  { value: 'very_active', label: 'Very active', description: '6–7 days/week' },
-  { value: 'athlete', label: 'Athlete', description: 'Training twice a day or competing' },
+// ── Data ──────────────────────────────────────────────────────────────────
+const GOALS: { value: Goal; label: string; description: string; emoji: string }[] = [
+  { value: 'fat_loss',      label: 'Fat Loss',      description: 'Reduce body fat while preserving muscle', emoji: '🔥' },
+  { value: 'muscle_gain',   label: 'Muscle Gain',   description: 'Build strength and add lean mass',         emoji: '💪' },
+  { value: 'performance',   label: 'Performance',   description: 'Optimise training output and recovery',    emoji: '⚡' },
+  { value: 'general_health',label: 'General Health',description: 'Feel better, move more, stress less',      emoji: '🌿' },
 ]
 
 const DIETARY_PREFS: { value: DietaryPreference; label: string }[] = [
-  { value: 'none', label: 'No preference' },
-  { value: 'vegetarian', label: 'Vegetarian' },
-  { value: 'vegan', label: 'Vegan' },
+  { value: 'none',        label: 'No preference' },
+  { value: 'vegetarian',  label: 'Vegetarian' },
+  { value: 'vegan',       label: 'Vegan' },
   { value: 'gluten_free', label: 'Gluten-free' },
-  { value: 'dairy_free', label: 'Dairy-free' },
+  { value: 'dairy_free',  label: 'Dairy-free' },
 ]
 
-// ── Progress bar ──────────────────────────────────────────────────────────────
+// MET values (gross MET from Compendium of Physical Activities)
+const ACTIVITY_OPTIONS: { value: ActivityType; label: string; met: number; hint: string }[] = [
+  { value: 'running',  label: 'Running',           met: 9.0, hint: 'Jogging or running' },
+  { value: 'cycling',  label: 'Cycling',            met: 7.5, hint: 'Road, trail or stationary bike' },
+  { value: 'strength', label: 'Strength Training',  met: 5.0, hint: 'Weights, resistance, machines' },
+  { value: 'hiit',     label: 'HIIT / Circuits',    met: 9.0, hint: 'High-intensity interval training' },
+  { value: 'swimming', label: 'Swimming',            met: 6.0, hint: 'Laps, general' },
+  { value: 'walking',  label: 'Brisk Walking',       met: 3.8, hint: 'Purposeful, faster than strolling' },
+  { value: 'rowing',   label: 'Rowing',              met: 7.0, hint: 'Rowing machine or on water' },
+  { value: 'yoga',     label: 'Yoga / Pilates',      met: 2.5, hint: 'Yoga, pilates, stretching' },
+]
 
+// ── TDEE calculation ───────────────────────────────────────────────────────
+function calcTDEE(
+  age: number, sex: Sex, height_cm: number, weight_kg: number,
+  activities: Activity[], steps_per_day: number,
+): { bmr: number; tdee: number } {
+  // Mifflin-St Jeor BMR
+  const bmr = sex === 'male'
+    ? 10 * weight_kg + 6.25 * height_cm - 5 * age + 5
+    : 10 * weight_kg + 6.25 * height_cm - 5 * age - 161
+
+  // Base daily NEAT (light movement, standing, walking around home/office)
+  const baseDailyNEAT = bmr * 0.15
+
+  // Step calories: net MET approach (MET_walk=3.5, subtract resting=1 → 2.5)
+  // ~100 steps/min walking pace → hours = steps / (100 × 60)
+  const stepCalsPerDay = 2.5 * weight_kg * steps_per_day / 6000
+
+  // Exercise calories per day from activities (net METs)
+  const weeklyExerciseCals = activities.reduce((sum, act) => {
+    const option = ACTIVITY_OPTIONS.find(o => o.value === act.type)
+    const met = option?.met ?? 5
+    const netMet = Math.max(met - 1, 0)
+    const hours = (parseFloat(act.duration_minutes) || 0) / 60
+    const sessions = parseFloat(act.sessions_per_week) || 0
+    return sum + netMet * weight_kg * hours * sessions
+  }, 0)
+  const dailyExerciseCals = weeklyExerciseCals / 7
+
+  // Thermic Effect of Food (~10%)
+  const tdee = Math.round(
+    (bmr + baseDailyNEAT + stepCalsPerDay + dailyExerciseCals) * 1.10,
+  )
+  return { bmr: Math.round(bmr), tdee }
+}
+
+function calcMacros(tdee: number, weight_kg: number, goal: Goal) {
+  let targetCals: number
+  let proteinG: number
+  let fatG: number
+
+  if (goal === 'fat_loss') {
+    targetCals = Math.round(tdee * 0.80) // 20% deficit
+    proteinG   = Math.round(weight_kg * 2.2)
+    fatG       = Math.round(weight_kg * 0.8)
+  } else if (goal === 'muscle_gain') {
+    targetCals = Math.round(tdee * 1.10) // 10% surplus
+    proteinG   = Math.round(weight_kg * 2.2)
+    fatG       = Math.round(weight_kg * 1.0)
+  } else if (goal === 'performance') {
+    targetCals = tdee
+    proteinG   = Math.round(weight_kg * 1.8)
+    fatG       = Math.round(weight_kg * 0.9)
+  } else {
+    targetCals = tdee
+    proteinG   = Math.round(weight_kg * 1.6)
+    fatG       = Math.round(weight_kg * 0.8)
+  }
+
+  const proteinCals = proteinG * 4
+  const fatCals     = fatG * 9
+  const carbCals    = Math.max(targetCals - proteinCals - fatCals, 0)
+  const carbG       = Math.round(carbCals / 4)
+
+  return { targetCals, proteinG, carbG, fatG }
+}
+
+// ── UI helpers ────────────────────────────────────────────────────────────
 function ProgressBar({ step, total }: { step: number; total: number }) {
   return (
-    <div className="w-full space-y-2">
+    <div className="w-full space-y-1.5">
       <div className="flex justify-between text-xs text-gray-400">
         <span>Step {step} of {total}</span>
         <span>{Math.round((step / total) * 100)}%</span>
       </div>
       <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
         <div
-          className="h-full bg-blue-600 rounded-full transition-all duration-500"
-          style={{ width: `${(step / total) * 100}%` }}
+          className="h-full rounded-full transition-all duration-500"
+          style={{ width: `${(step / total) * 100}%`, backgroundColor: '#FFD885' }}
         />
       </div>
     </div>
   )
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
+function MacroBar({ label, grams, calories, color }: { label: string; grams: number; calories: number; color: string }) {
+  return (
+    <div className="space-y-1">
+      <div className="flex justify-between items-baseline">
+        <span className="text-xs font-semibold text-gray-700">{label}</span>
+        <span className="text-xs text-gray-500">{grams}g · {calories} kcal</span>
+      </div>
+      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+        <div className="h-full rounded-full" style={{ width: '100%', backgroundColor: color }} />
+      </div>
+    </div>
+  )
+}
 
-const TOTAL_STEPS = 3
+// ── Main component ────────────────────────────────────────────────────────
+const TOTAL_STEPS = 4
 
 export default function OnboardingPage() {
   const router = useRouter()
   const [step, setStep] = useState(1)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [form, setForm] = useState<FormData>({
+
+  const [form, setForm] = useState<FormState>({
     goal: null,
     first_name: '',
-    activity_level: '',
-    dietary_preference: '',
+    age: '',
+    sex: '',
+    height_cm: '',
+    weight_kg: '',
+    dietary_preference: 'none',
+    steps_per_day: '8000',
+    activities: [],
   })
 
+  // ── Derived TDEE ──
+  const statsComplete =
+    form.age && form.sex && form.height_cm && form.weight_kg && form.goal
+
+  const tdeeResult = statsComplete
+    ? calcTDEE(
+        parseFloat(form.age),
+        form.sex as Sex,
+        parseFloat(form.height_cm),
+        parseFloat(form.weight_kg),
+        form.activities,
+        parseFloat(form.steps_per_day) || 0,
+      )
+    : null
+
+  const macros = tdeeResult && form.goal
+    ? calcMacros(tdeeResult.tdee, parseFloat(form.weight_kg), form.goal)
+    : null
+
+  // ── Activity helpers ──
+  function addActivity() {
+    setForm(f => ({
+      ...f,
+      activities: [
+        ...f.activities,
+        { id: crypto.randomUUID(), type: 'strength', duration_minutes: '45', sessions_per_week: '3' },
+      ],
+    }))
+  }
+
+  function updateActivity(id: string, patch: Partial<Activity>) {
+    setForm(f => ({
+      ...f,
+      activities: f.activities.map(a => a.id === id ? { ...a, ...patch } : a),
+    }))
+  }
+
+  function removeActivity(id: string) {
+    setForm(f => ({ ...f, activities: f.activities.filter(a => a.id !== id) }))
+  }
+
+  // ── Submit ──
   async function handleComplete() {
     setSubmitting(true)
     setError(null)
+
     const res = await fetch('/api/onboarding/complete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         goal: form.goal,
-        first_name: form.first_name,
-        activity_level: form.activity_level || null,
-        dietary_preference: form.dietary_preference || null,
+        first_name: form.first_name.trim() || null,
+        age: form.age ? parseFloat(form.age) : null,
+        sex: form.sex || null,
+        height_cm: form.height_cm ? parseFloat(form.height_cm) : null,
+        weight_kg: form.weight_kg ? parseFloat(form.weight_kg) : null,
+        dietary_preference: form.dietary_preference !== 'none' ? form.dietary_preference : null,
+        steps_per_day: parseFloat(form.steps_per_day) || 0,
+        activities: form.activities,
+        // Computed targets
+        tdee: tdeeResult?.tdee ?? null,
+        target_calories: macros?.targetCals ?? null,
+        target_protein: macros?.proteinG ?? null,
+        target_carbs: macros?.carbG ?? null,
+        target_fat: macros?.fatG ?? null,
       }),
     })
+
     if (!res.ok) {
       const d = await res.json()
       setError(d.error ?? 'Something went wrong')
       setSubmitting(false)
       return
     }
-    setStep(3)
+    setStep(5)
     setSubmitting(false)
   }
+
+  const goalLabel = GOALS.find(g => g.value === form.goal)?.label ?? ''
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
       <div className="bg-white border-b px-6 py-4 flex items-center justify-between">
         <span className="text-base font-bold text-gray-900">NutriCoach</span>
-        {step < 3 && (
-          <span className="text-xs text-gray-400">Setting up your account</span>
-        )}
+        {step < 5 && <span className="text-xs text-gray-400">Setting up your account</span>}
       </div>
 
-      <div className="flex-1 flex flex-col items-center justify-center px-4 py-10">
-        <div className="w-full max-w-lg space-y-8">
+      <div className="flex-1 flex flex-col items-center justify-start px-4 py-8">
+        <div className="w-full max-w-lg space-y-7">
 
-          {/* Progress — only show on steps 1 & 2 */}
-          {step < 3 && <ProgressBar step={step} total={TOTAL_STEPS - 1} />}
+          {step < 5 && <ProgressBar step={step} total={TOTAL_STEPS} />}
 
           {/* ── Step 1: Goal ── */}
           {step === 1 && (
             <div className="space-y-6">
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">What's your main goal?</h1>
-                <p className="text-gray-500 text-sm mt-1">This helps us personalise your experience.</p>
+                <h1 className="text-2xl font-bold text-gray-900">What&apos;s your main goal?</h1>
+                <p className="text-gray-500 text-sm mt-1">This shapes your calorie and macro targets.</p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {GOALS.map((g) => (
                   <button
                     key={g.value}
-                    onClick={() => setForm((f) => ({ ...f, goal: g.value }))}
+                    onClick={() => setForm(f => ({ ...f, goal: g.value }))}
                     className={`text-left p-5 rounded-2xl border-2 transition-all ${
-                      form.goal === g.value
-                        ? 'border-blue-600 bg-blue-50'
-                        : 'border-gray-200 bg-white hover:border-gray-300'
+                      form.goal === g.value ? 'border-gray-900 bg-white shadow-sm' : 'border-gray-200 bg-white hover:border-gray-300'
                     }`}
                   >
-                    <div className={`mb-3 ${form.goal === g.value ? 'text-blue-600' : 'text-gray-400'}`}>
-                      {g.icon}
-                    </div>
-                    <p className={`text-sm font-bold ${form.goal === g.value ? 'text-blue-700' : 'text-gray-900'}`}>
-                      {g.label}
-                    </p>
+                    <div className="text-2xl mb-2">{g.emoji}</div>
+                    <p className={`text-sm font-bold ${form.goal === g.value ? 'text-gray-900' : 'text-gray-700'}`}>{g.label}</p>
                     <p className="text-xs text-gray-500 mt-0.5">{g.description}</p>
                   </button>
                 ))}
@@ -184,66 +295,87 @@ export default function OnboardingPage() {
               <button
                 onClick={() => setStep(2)}
                 disabled={!form.goal}
-                className="w-full bg-blue-600 text-white py-3 rounded-2xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="w-full py-3 rounded-2xl text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-gray-900"
+                style={{ backgroundColor: '#FFD885' }}
               >
                 Continue
               </button>
             </div>
           )}
 
-          {/* ── Step 2: Profile info ── */}
+          {/* ── Step 2: Body stats ── */}
           {step === 2 && (
             <div className="space-y-6">
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Tell us a bit about yourself</h1>
-                <p className="text-gray-500 text-sm mt-1">All fields are optional — you can update these later.</p>
+                <h1 className="text-2xl font-bold text-gray-900">Tell us about yourself</h1>
+                <p className="text-gray-500 text-sm mt-1">Used to calculate your personalised calorie and macro targets.</p>
               </div>
 
               <div className="bg-white rounded-2xl border p-6 space-y-5">
                 {/* Name */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">First name</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">First name <span className="text-gray-400 font-normal">(optional)</span></label>
                   <input
                     type="text"
                     value={form.first_name}
-                    onChange={(e) => setForm((f) => ({ ...f, first_name: e.target.value }))}
+                    onChange={e => setForm(f => ({ ...f, first_name: e.target.value }))}
                     placeholder="e.g. Alex"
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
                   />
                 </div>
 
-                {/* Activity level */}
+                {/* Sex */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Activity level</label>
-                  <div className="space-y-2">
-                    {ACTIVITY_LEVELS.map((a) => (
-                      <label
-                        key={a.value}
-                        className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
-                          form.activity_level === a.value
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'border-gray-200 hover:border-gray-300'
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Biological sex <span className="text-gray-400 font-normal text-xs">(for BMR calculation)</span></label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(['male', 'female'] as Sex[]).map(s => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setForm(f => ({ ...f, sex: s }))}
+                        className={`py-2.5 rounded-xl border text-sm font-medium transition-all ${
+                          form.sex === s ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 text-gray-700 hover:border-gray-400'
                         }`}
                       >
-                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                          form.activity_level === a.value ? 'border-blue-600 bg-blue-600' : 'border-gray-300'
-                        }`}>
-                          {form.activity_level === a.value && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                        </div>
-                        <input
-                          type="radio"
-                          name="activity_level"
-                          value={a.value}
-                          checked={form.activity_level === a.value}
-                          onChange={() => setForm((f) => ({ ...f, activity_level: a.value }))}
-                          className="sr-only"
-                        />
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{a.label}</p>
-                          <p className="text-xs text-gray-500">{a.description}</p>
-                        </div>
-                      </label>
+                        {s.charAt(0).toUpperCase() + s.slice(1)}
+                      </button>
                     ))}
+                  </div>
+                </div>
+
+                {/* Age */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Age</label>
+                  <input
+                    type="number" min="10" max="100"
+                    value={form.age}
+                    onChange={e => setForm(f => ({ ...f, age: e.target.value }))}
+                    placeholder="e.g. 28"
+                    className="w-28 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  />
+                </div>
+
+                {/* Height & Weight */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Height (cm)</label>
+                    <input
+                      type="number" min="100" max="250"
+                      value={form.height_cm}
+                      onChange={e => setForm(f => ({ ...f, height_cm: e.target.value }))}
+                      placeholder="e.g. 168"
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Weight (kg)</label>
+                    <input
+                      type="number" min="30" max="300" step="0.1"
+                      value={form.weight_kg}
+                      onChange={e => setForm(f => ({ ...f, weight_kg: e.target.value }))}
+                      placeholder="e.g. 70"
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                    />
                   </div>
                 </div>
 
@@ -251,14 +383,14 @@ export default function OnboardingPage() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">Dietary preference</label>
                   <div className="flex flex-wrap gap-2">
-                    {DIETARY_PREFS.map((d) => (
+                    {DIETARY_PREFS.map(d => (
                       <button
                         key={d.value}
                         type="button"
-                        onClick={() => setForm((f) => ({ ...f, dietary_preference: d.value }))}
+                        onClick={() => setForm(f => ({ ...f, dietary_preference: d.value }))}
                         className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
                           form.dietary_preference === d.value
-                            ? 'bg-blue-600 text-white border-blue-600'
+                            ? 'bg-gray-900 text-white border-gray-900'
                             : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400'
                         }`}
                       >
@@ -269,59 +401,267 @@ export default function OnboardingPage() {
                 </div>
               </div>
 
-              {error && (
-                <p className="text-sm text-red-600 bg-red-50 rounded-xl px-4 py-3">{error}</p>
-              )}
-
               <div className="flex gap-3">
+                <button onClick={() => setStep(1)} className="flex-1 border border-gray-200 text-gray-700 py-3 rounded-2xl text-sm font-semibold hover:bg-gray-50 transition-colors">Back</button>
                 <button
-                  onClick={() => setStep(1)}
-                  className="flex-1 border border-gray-200 text-gray-700 py-3 rounded-2xl text-sm font-semibold hover:bg-gray-50 transition-colors"
+                  onClick={() => setStep(3)}
+                  disabled={!form.sex || !form.age || !form.height_cm || !form.weight_kg}
+                  className="flex-[2] py-3 rounded-2xl text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-gray-900"
+                  style={{ backgroundColor: '#FFD885' }}
                 >
-                  Back
-                </button>
-                <button
-                  onClick={handleComplete}
-                  disabled={submitting}
-                  className="flex-[2] bg-blue-600 text-white py-3 rounded-2xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                >
-                  {submitting ? 'Saving…' : 'Complete setup'}
+                  Continue
                 </button>
               </div>
             </div>
           )}
 
-          {/* ── Step 3: Confirmation ── */}
+          {/* ── Step 3: Activity ── */}
           {step === 3 && (
+            <div className="space-y-6">
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">Your activity</h1>
+                <p className="text-gray-500 text-sm mt-1">We use METs (Metabolic Equivalent of Task) to accurately estimate your energy expenditure.</p>
+              </div>
+
+              <div className="bg-white rounded-2xl border p-5 space-y-5">
+                {/* Daily steps */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-0.5">Daily steps <span className="text-gray-400 font-normal">(rough estimate)</span></label>
+                  <p className="text-xs text-gray-400 mb-2">Check your phone health app for an average</p>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="number" min="0" max="40000" step="500"
+                      value={form.steps_per_day}
+                      onChange={e => setForm(f => ({ ...f, steps_per_day: e.target.value }))}
+                      className="w-32 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                    />
+                    <span className="text-sm text-gray-500">steps/day</span>
+                  </div>
+                  <div className="flex gap-2 mt-2 flex-wrap">
+                    {[3000, 5000, 8000, 10000, 15000].map(s => (
+                      <button key={s} type="button"
+                        onClick={() => setForm(f => ({ ...f, steps_per_day: String(s) }))}
+                        className={`px-2.5 py-1 rounded-lg text-xs border transition-colors ${
+                          form.steps_per_day === String(s) ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-200 text-gray-600 hover:border-gray-400'
+                        }`}
+                      >
+                        {s.toLocaleString()}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Activities */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-medium text-gray-700">Planned exercise sessions</label>
+                    <button type="button" onClick={addActivity}
+                      className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 hover:border-gray-400 text-gray-700 transition-colors">
+                      + Add activity
+                    </button>
+                  </div>
+
+                  {form.activities.length === 0 && (
+                    <p className="text-xs text-gray-400 py-3 text-center border border-dashed border-gray-200 rounded-xl">
+                      No activities added — your TDEE will be based on steps only
+                    </p>
+                  )}
+
+                  <div className="space-y-3">
+                    {form.activities.map(act => {
+                      const opt = ACTIVITY_OPTIONS.find(o => o.value === act.type)
+                      return (
+                        <div key={act.id} className="border border-gray-200 rounded-xl p-3 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <select
+                              value={act.type}
+                              onChange={e => updateActivity(act.id, { type: e.target.value as ActivityType })}
+                              className="text-sm font-medium text-gray-900 border-none bg-transparent focus:outline-none cursor-pointer"
+                            >
+                              {ACTIVITY_OPTIONS.map(o => (
+                                <option key={o.value} value={o.value}>{o.label}</option>
+                              ))}
+                            </select>
+                            <button type="button" onClick={() => removeActivity(act.id)}
+                              className="text-gray-300 hover:text-red-400 transition-colors">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                          <p className="text-xs text-gray-400">{opt?.hint} · MET {opt?.met}</p>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="text-xs text-gray-500 block mb-1">Duration (min/session)</label>
+                              <input
+                                type="number" min="5" max="300"
+                                value={act.duration_minutes}
+                                onChange={e => updateActivity(act.id, { duration_minutes: e.target.value })}
+                                className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-xs text-gray-500 block mb-1">Sessions per week</label>
+                              <input
+                                type="number" min="1" max="14"
+                                value={act.sessions_per_week}
+                                onChange={e => updateActivity(act.id, { sessions_per_week: e.target.value })}
+                                className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button onClick={() => setStep(2)} className="flex-1 border border-gray-200 text-gray-700 py-3 rounded-2xl text-sm font-semibold hover:bg-gray-50 transition-colors">Back</button>
+                <button
+                  onClick={() => setStep(4)}
+                  className="flex-[2] py-3 rounded-2xl text-sm font-semibold transition-colors text-gray-900"
+                  style={{ backgroundColor: '#FFD885' }}
+                >
+                  Calculate my targets
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── Step 4: TDEE & Macros preview ── */}
+          {step === 4 && tdeeResult && macros && form.goal && (
+            <div className="space-y-6">
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">Your daily targets</h1>
+                <p className="text-gray-500 text-sm mt-1">
+                  Based on your body stats, activity, and <strong>{GOALS.find(g => g.value === form.goal)?.label}</strong> goal.
+                </p>
+              </div>
+
+              {/* TDEE card */}
+              <div className="bg-white rounded-2xl border p-5 space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-gray-50">
+                  <div>
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Estimated TDEE</p>
+                    <p className="text-3xl font-bold text-gray-900 mt-0.5">{tdeeResult.tdee.toLocaleString()}</p>
+                    <p className="text-xs text-gray-400">kcal/day total energy expenditure</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-gray-400">BMR</p>
+                    <p className="text-lg font-semibold text-gray-500">{tdeeResult.bmr.toLocaleString()}</p>
+                    <p className="text-xs text-gray-400">kcal base</p>
+                  </div>
+                </div>
+
+                {/* Target calories */}
+                <div className="rounded-xl p-4 text-center" style={{ backgroundColor: '#FFF9E6' }}>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Daily calorie target</p>
+                  <p className="text-4xl font-bold text-gray-900">{macros.targetCals.toLocaleString()}</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {form.goal === 'fat_loss'    ? '20% deficit below TDEE'  :
+                     form.goal === 'muscle_gain' ? '10% surplus above TDEE'  :
+                     'Maintenance (TDEE)'}
+                  </p>
+                </div>
+
+                {/* Macros */}
+                <div className="space-y-3">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Macro breakdown</p>
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className="rounded-xl border border-blue-100 bg-blue-50 py-3">
+                      <p className="text-xl font-bold text-blue-700">{macros.proteinG}g</p>
+                      <p className="text-xs text-blue-500 font-medium mt-0.5">Protein</p>
+                      <p className="text-xs text-blue-400">{macros.proteinG * 4} kcal</p>
+                    </div>
+                    <div className="rounded-xl border border-amber-100 bg-amber-50 py-3">
+                      <p className="text-xl font-bold text-amber-700">{macros.carbG}g</p>
+                      <p className="text-xs text-amber-500 font-medium mt-0.5">Carbs</p>
+                      <p className="text-xs text-amber-400">{macros.carbG * 4} kcal</p>
+                    </div>
+                    <div className="rounded-xl border border-rose-100 bg-rose-50 py-3">
+                      <p className="text-xl font-bold text-rose-700">{macros.fatG}g</p>
+                      <p className="text-xs text-rose-500 font-medium mt-0.5">Fat</p>
+                      <p className="text-xs text-rose-400">{macros.fatG * 9} kcal</p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-400 leading-relaxed">
+                    These targets are a starting point — adjust based on how your body responds over 2–3 weeks. Protein is prioritised to preserve muscle.
+                  </p>
+                </div>
+              </div>
+
+              {error && <p className="text-sm text-red-600 bg-red-50 rounded-xl px-4 py-3">{error}</p>}
+
+              <div className="flex gap-3">
+                <button onClick={() => setStep(3)} className="flex-1 border border-gray-200 text-gray-700 py-3 rounded-2xl text-sm font-semibold hover:bg-gray-50 transition-colors">Back</button>
+                <button
+                  onClick={handleComplete}
+                  disabled={submitting}
+                  className="flex-[2] py-3 rounded-2xl text-sm font-semibold disabled:opacity-50 transition-colors text-gray-900"
+                  style={{ backgroundColor: '#FFD885' }}
+                >
+                  {submitting ? 'Saving…' : 'Save & go to dashboard →'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── Step 4 fallback: no stats entered ── */}
+          {step === 4 && !tdeeResult && (
+            <div className="space-y-6">
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">Almost there</h1>
+                <p className="text-gray-500 text-sm mt-1">We need your body stats to calculate your targets. Go back and fill them in.</p>
+              </div>
+              <button onClick={() => setStep(2)} className="w-full border border-gray-200 text-gray-700 py-3 rounded-2xl text-sm font-semibold hover:bg-gray-50">Back to stats</button>
+            </div>
+          )}
+
+          {/* ── Step 5: Success ── */}
+          {step === 5 && (
             <div className="text-center space-y-6">
-              <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mx-auto">
-                <svg className="w-10 h-10 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
+              <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto" style={{ backgroundColor: '#FFF9E6' }}>
+                <span className="text-4xl">🎉</span>
               </div>
 
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">
                   {form.first_name ? `Welcome, ${form.first_name}!` : "You're all set!"}
                 </h1>
-                <p className="text-gray-500 text-sm mt-2">
-                  Your account is ready. Head to your dashboard to start tracking.
-                </p>
+                <p className="text-gray-500 text-sm mt-2">Your targets are saved. Track your food and hit your macros every day.</p>
               </div>
 
-              <div className="bg-white rounded-2xl border p-5 text-left space-y-3">
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Your goal</p>
-                <p className="text-sm font-semibold text-gray-900">
-                  {GOALS.find((g) => g.value === form.goal)?.label}
-                </p>
-                <p className="text-xs text-gray-500">
-                  {GOALS.find((g) => g.value === form.goal)?.description}
-                </p>
-              </div>
+              {macros && (
+                <div className="bg-white rounded-2xl border p-5 text-left space-y-3">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Your daily targets</p>
+                  <div className="grid grid-cols-4 gap-2 text-center">
+                    <div>
+                      <p className="text-lg font-bold text-gray-900">{macros.targetCals}</p>
+                      <p className="text-xs text-gray-400">kcal</p>
+                    </div>
+                    <div>
+                      <p className="text-lg font-bold text-blue-600">{macros.proteinG}g</p>
+                      <p className="text-xs text-gray-400">protein</p>
+                    </div>
+                    <div>
+                      <p className="text-lg font-bold text-amber-600">{macros.carbG}g</p>
+                      <p className="text-xs text-gray-400">carbs</p>
+                    </div>
+                    <div>
+                      <p className="text-lg font-bold text-rose-600">{macros.fatG}g</p>
+                      <p className="text-xs text-gray-400">fat</p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-400">Goal: <span className="font-medium text-gray-600">{goalLabel}</span></p>
+                </div>
+              )}
 
               <button
                 onClick={() => router.push('/dashboard')}
-                className="w-full bg-blue-600 text-white py-3 rounded-2xl text-sm font-semibold hover:bg-blue-700 transition-colors"
+                className="w-full py-3 rounded-2xl text-sm font-semibold transition-colors text-gray-900"
+                style={{ backgroundColor: '#FFD885' }}
               >
                 Go to dashboard →
               </button>
