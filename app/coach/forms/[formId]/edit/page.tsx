@@ -57,7 +57,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ formId: 
         // Normalise questions from DB: convert legacy 'select' → 'radio', ensure options is always array|null
         const qs = (d.questions ?? []).map((q: Question) => ({
           ...q,
-          type: q.type === 'select' ? 'radio' : q.type,
+          type: (q.type as string) === 'select' ? 'radio' as QuestionType : q.type,
           options: Array.isArray(q.options) ? q.options
             : typeof q.options === 'string' ? (() => { try { const p = JSON.parse(q.options as unknown as string); return Array.isArray(p) ? p : null } catch { return null } })()
             : null,
