@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import { acceptInvite } from '@/lib/coach'
 
@@ -20,14 +21,16 @@ export async function signup(prevState: AuthState, formData: FormData): Promise<
   const { data, error } = await supabase.auth.signUp({ email, password })
   if (error) return { error: error.message }
 
-  if (data.session?.user) {
-    await supabase.from('profiles').insert({
-      id: data.session.user.id,
-      email: data.session.user.email,
-      role: userType === 'coach' ? 'coach' : 'client',
-      user_type: userType,
-    })
-    if (invite) await acceptInvite(invite, data.session.user.id)
+  // data.user is set even when email confirmation is required; data.session may be null
+  const user = data.session?.user ?? data.user
+  if (user) {
+    // Use admin client so profile creation is never blocked by RLS
+    const admin = createAdminClient()
+    await admin.from('profiles').upsert(
+      { id: user.id, email: user.email, role: userType === 'coach' ? 'coach' : 'client', user_type: userType },
+      { onConflict: 'id' }
+    )
+    if (invite) await acceptInvite(invite, user.id)
   }
 
   // If a paid plan was selected, redirect to Stripe checkout
@@ -63,10 +66,21 @@ export async function login(prevState: AuthState, formData: FormData): Promise<A
   if (data.session?.user) {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('onboarding_completed')
+      .select('onboarding_completed, user_type')
       .eq('id', data.session.user.id)
       .single()
-    if (!profile?.onboarding_completed) {
+
+    // Profile missing (signup completed but profile creation failed) — create it now
+    if (!profile) {
+      const admin = createAdminClient()
+      await admin.from('profiles').upsert(
+        { id: data.session.user.id, email: data.session.user.email, user_type: 'individual', role: 'client' },
+        { onConflict: 'id' }
+      )
+      redirect('/onboarding')
+    }
+
+    if (!profile.onboarding_completed) {
       redirect('/onboarding')
     }
   }
