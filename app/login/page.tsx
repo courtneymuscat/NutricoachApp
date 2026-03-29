@@ -9,6 +9,7 @@ function LoginForm() {
   const [state, action, pending] = useActionState(login, null)
   const searchParams = useSearchParams()
   const invite = searchParams.get('invite')
+  const next = searchParams.get('next')
   const deleted = searchParams.get('deleted')
 
   return (
@@ -36,6 +37,7 @@ function LoginForm() {
 
           <form action={action} className="space-y-4">
             {invite && <input type="hidden" name="invite" value={invite} />}
+            {next && <input type="hidden" name="next" value={next} />}
             <div className="space-y-1">
               <label htmlFor="email" className="block text-xs font-medium text-gray-600">
                 Email

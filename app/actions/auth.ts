@@ -47,6 +47,7 @@ export async function login(prevState: AuthState, formData: FormData): Promise<A
   const email = formData.get('email') as string
   const password = formData.get('password') as string
   const invite = (formData.get('invite') as string) || null
+  const next = (formData.get('next') as string) || null
 
   const { data, error } = await supabase.auth.signInWithPassword({ email, password })
   if (error) return { error: error.message }
@@ -55,6 +56,8 @@ export async function login(prevState: AuthState, formData: FormData): Promise<A
     await acceptInvite(invite, data.session.user.id)
     redirect('/onboarding/coached')
   }
+
+  if (next) redirect(next)
 
   // Check if onboarding has been completed
   if (data.session?.user) {

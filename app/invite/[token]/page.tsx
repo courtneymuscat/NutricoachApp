@@ -23,11 +23,7 @@ export default async function InvitePage({
     return <InvalidInvite message="This invite link is invalid." />
   }
 
-  if (invite.status === 'accepted') {
-    return <InvalidInvite message="This invite has already been accepted." />
-  }
-
-  if (new Date(invite.expires_at) < new Date()) {
+  if (new Date(invite.expires_at) < new Date() && invite.status !== 'accepted') {
     return <InvalidInvite message="This invite link has expired. Ask your coach to send a new one." />
   }
 
@@ -38,11 +34,47 @@ export default async function InvitePage({
     .eq('id', invite.coach_id)
     .single()
 
-  // If already logged in and NOT the coach who sent this invite — auto-accept and redirect
+  // If already logged in and NOT the coach who sent this invite — handle redirect
   const { data: { session } } = await supabase.auth.getSession()
   if (session && session.user.id !== invite.coach_id) {
-    await acceptInvite(token, session.user.id)
-    redirect('/onboarding/coached')
+    if (invite.status === 'accepted') {
+      // Link already used — check if this logged-in user is the enrolled client
+      const { data: rel } = await supabase
+        .from('coach_clients')
+        .select('id')
+        .eq('coach_id', invite.coach_id)
+        .eq('client_id', session.user.id)
+        .single()
+      // If they're already in coach_clients, send them back to where they left off
+      if (rel) redirect('/onboarding/coached')
+    } else {
+      await acceptInvite(token, session.user.id)
+      redirect('/onboarding/coached')
+    }
+  }
+
+  // Invite already accepted and user not logged in — prompt them to log in to resume
+  if (invite.status === 'accepted') {
+    const coachEmail = coachProfile?.email ?? 'your coach'
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-white rounded-2xl shadow-sm border p-8 space-y-6 text-center">
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">Resume your onboarding</h1>
+            <p className="text-gray-500 mt-2 text-sm">
+              Log in to continue where you left off with{' '}
+              <span className="font-medium text-gray-700">{coachEmail}</span>.
+            </p>
+          </div>
+          <a
+            href={`/login?next=/onboarding/coached`}
+            className="block w-full bg-blue-600 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors"
+          >
+            Log in to continue
+          </a>
+        </div>
+      </div>
+    )
   }
 
   const coachEmail = coachProfile?.email ?? 'your coach'
