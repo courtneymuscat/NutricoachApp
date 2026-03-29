@@ -436,9 +436,9 @@ function ExerciseNotes({
     if (!user) { setUploading(false); return }
     const ext = file.name.split('.').pop() ?? 'mp4'
     const path = `${user.id}/${weId}-${Date.now()}.${ext}`
-    const { error } = await supabase.storage.from('exercise-videos').upload(path, file, { upsert: true })
+    const { error } = await supabase.storage.from('EXERCISE-VIDEOS').upload(path, file, { upsert: true })
     if (!error) {
-      const { data: signed } = await supabase.storage.from('exercise-videos').createSignedUrl(path, 315360000)
+      const { data: signed } = await supabase.storage.from('EXERCISE-VIDEOS').createSignedUrl(path, 315360000)
       if (signed?.signedUrl) onFormVideoChange(signed.signedUrl)
     }
     setUploading(false)
