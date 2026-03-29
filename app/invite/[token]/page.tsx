@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { acceptInvite } from '@/lib/coach'
 
 export default async function InvitePage({
@@ -9,9 +10,10 @@ export default async function InvitePage({
 }) {
   const { token } = await params
   const supabase = await createClient()
+  const admin = createAdminClient()
 
-  // Look up invite
-  const { data: invite } = await supabase
+  // Look up invite via admin client — unauthenticated users can't read coach_invites via RLS
+  const { data: invite } = await admin
     .from('coach_invites')
     .select('id, email, status, expires_at, coach_id')
     .eq('token', token)
@@ -30,7 +32,7 @@ export default async function InvitePage({
   }
 
   // Get coach profile
-  const { data: coachProfile } = await supabase
+  const { data: coachProfile } = await admin
     .from('profiles')
     .select('email')
     .eq('id', invite.coach_id)
