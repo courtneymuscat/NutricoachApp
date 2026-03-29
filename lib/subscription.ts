@@ -15,13 +15,13 @@ const DEFAULTS: Subscription = {
 
 export async function getSubscription(): Promise<Subscription> {
   const supabase = await createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return DEFAULTS
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return DEFAULTS
 
   const { data: profile } = await supabase
     .from('profiles')
     .select('subscription_tier, user_type')
-    .eq('id', session.user.id)
+    .eq('id', user.id)
     .single()
 
   const tier = (profile?.subscription_tier as SubscriptionTier | null) ?? 'tier_1'

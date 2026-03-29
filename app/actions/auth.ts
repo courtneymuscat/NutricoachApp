@@ -51,6 +51,18 @@ export async function login(prevState: AuthState, formData: FormData): Promise<A
     await acceptInvite(invite, data.session.user.id)
   }
 
+  // Check if onboarding has been completed
+  if (data.session?.user) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('onboarding_completed')
+      .eq('id', data.session.user.id)
+      .single()
+    if (!profile?.onboarding_completed) {
+      redirect('/onboarding')
+    }
+  }
+
   redirect('/dashboard')
 }
 

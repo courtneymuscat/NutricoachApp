@@ -49,6 +49,8 @@ type FoodLog = {
   carbs: number
   fat: number
   scan_image_url: string | null
+  meal_notes: string | null
+  meal_photo_url: string | null
 }
 
 type Note = {
@@ -57,11 +59,19 @@ type Note = {
   created_at: string
 }
 
+type MealNote = {
+  log_date: string
+  meal_type: string
+  note: string | null
+  photo_url: string | null
+}
+
 type ClientData = {
   checkIns: CheckIn[]
   workouts: Workout[]
   weightLogs: WeightLog[]
   foodLogs: FoodLog[]
+  mealNotes: MealNote[]
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -426,7 +436,7 @@ export default function ClientTabs({ clientId }: { clientId: string }) {
       {/* Nutrition */}
       {tab === 'nutrition' && data && (
         <div className="space-y-3">
-          {data.foodLogs.length === 0 && <Empty label="No food logs recorded." />}
+          {data.foodLogs.length === 0 && data.mealNotes.length === 0 && <Empty label="No food logs recorded." />}
           {Object.entries(
             data.foodLogs.reduce<Record<string, typeof data.foodLogs>>((acc, f) => {
               acc[f.log_date] = acc[f.log_date] ?? []
@@ -437,6 +447,15 @@ export default function ClientTabs({ clientId }: { clientId: string }) {
             const totals = logs.reduce((a, l) => ({
               cal: a.cal + l.calories, p: a.p + l.protein, c: a.c + l.carbs, f: a.f + l.fat,
             }), { cal: 0, p: 0, c: 0, f: 0 })
+            // Group food items by meal_type for this day
+            const byMeal = logs.reduce<Record<string, typeof logs>>((acc, l) => {
+              acc[l.meal_type] = acc[l.meal_type] ?? []
+              acc[l.meal_type].push(l)
+              return acc
+            }, {})
+            // Meal notes for this day
+            const dayMealNotes = data.mealNotes.filter((n) => n.log_date === date)
+            const allMealTypes = Array.from(new Set([...Object.keys(byMeal), ...dayMealNotes.map((n) => n.meal_type)]))
             return (
               <div key={date} className="bg-white rounded-2xl border overflow-hidden">
                 <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
@@ -445,28 +464,57 @@ export default function ClientTabs({ clientId }: { clientId: string }) {
                     {Math.round(totals.cal)} kcal · {Math.round(totals.p)}g P · {Math.round(totals.c)}g C · {Math.round(totals.f)}g F
                   </p>
                 </div>
-                {/* Scan images for this day */}
-                {Array.from(new Set(logs.map((l) => l.scan_image_url).filter(Boolean))).map((url) => (
-                  <div key={url} className="px-5 pt-3">
-                    <a href={url!} target="_blank" rel="noopener noreferrer">
-                      <img
-                        src={url!}
-                        alt="Meal scan"
-                        className="w-full max-h-52 object-cover rounded-xl border border-gray-100 hover:opacity-90 transition-opacity"
-                      />
-                    </a>
-                    <p className="text-[10px] text-gray-400 mt-1 mb-1">📷 Scanned meal — tap to view full size</p>
-                  </div>
-                ))}
-                {logs.map((l) => (
-                  <div key={l.id} className="px-5 py-3 border-t border-gray-50 flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-gray-800">{l.food_name ?? 'Food entry'}</p>
-                      <p className="text-xs text-gray-400 capitalize">{l.meal_type}</p>
+                {allMealTypes.map((mealType) => {
+                  const mealLogs = byMeal[mealType] ?? []
+                  const mealNote = dayMealNotes.find((n) => n.meal_type === mealType)
+                  return (
+                    <div key={mealType}>
+                      {/* Meal-level note / photo */}
+                      {(mealNote?.note || mealNote?.photo_url) && (
+                        <div className="px-5 py-2.5 border-t border-gray-50 bg-blue-50/40 flex items-start gap-3">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[11px] font-semibold text-blue-500 uppercase tracking-wide capitalize">{mealType} note</p>
+                            {mealNote.note && <p className="text-xs text-blue-600 italic mt-0.5">"{mealNote.note}"</p>}
+                          </div>
+                          {mealNote.photo_url && (
+                            <a href={mealNote.photo_url} target="_blank" rel="noopener noreferrer" className="flex-shrink-0">
+                              <img src={mealNote.photo_url} alt="Meal photo" className="h-14 w-20 object-cover rounded-lg border border-blue-100 hover:opacity-80 transition-opacity" />
+                            </a>
+                          )}
+                        </div>
+                      )}
+                      {mealLogs.map((l) => (
+                        <div key={l.id} className="px-5 py-3 border-t border-gray-50">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-gray-800">{l.food_name ?? 'Food entry'}</p>
+                              <p className="text-xs text-gray-400 capitalize">{l.meal_type}</p>
+                              {l.meal_notes && (
+                                <p className="text-xs text-blue-500 italic mt-0.5">"{l.meal_notes}"</p>
+                              )}
+                              {l.scan_image_url && (
+                                <div className="mt-2">
+                                  <a href={l.scan_image_url} target="_blank" rel="noopener noreferrer">
+                                    <img src={l.scan_image_url} alt="AI meal scan" className="h-20 w-28 object-cover rounded-lg border border-gray-100 hover:opacity-80 transition-opacity" />
+                                  </a>
+                                  <p className="text-[10px] text-gray-400 mt-0.5">AI scanned meal</p>
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex items-start gap-2 flex-shrink-0">
+                              {l.meal_photo_url && (
+                                <a href={l.meal_photo_url} target="_blank" rel="noopener noreferrer">
+                                  <img src={l.meal_photo_url} alt="Meal photo" className="h-12 w-16 object-cover rounded-lg border border-gray-100 hover:opacity-80 transition-opacity" />
+                                </a>
+                              )}
+                              <p className="text-xs text-gray-500 mt-0.5">{Math.round(l.calories)} kcal</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    <p className="text-xs text-gray-500">{Math.round(l.calories)} kcal</p>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )
           })}

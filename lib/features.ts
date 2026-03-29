@@ -141,6 +141,7 @@ export const INDIVIDUAL_PLANS: PricingPlan[] = [
     priceAnnualMonthly: 0,
     features: [
       'Manual food logging + macros',
+      'Add notes & photos to meals',
       'Basic weight entry',
       'Basic workout logging',
       'Period dates + cycle phase bar',

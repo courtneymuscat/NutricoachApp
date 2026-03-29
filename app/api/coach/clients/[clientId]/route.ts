@@ -26,7 +26,7 @@ export async function GET(
 
   const supabase = await createClient()
 
-  const [checkIns, workoutsRaw, weightLogs, foodLogs] = await Promise.all([
+  const [checkIns, workoutsRaw, weightLogs, foodLogs, mealNotesRaw] = await Promise.all([
     supabase
       .from('check_ins')
       .select('id, created_at, sleep_hours, sleep_quality, energy_level, rhr, hrv, notes, coach_feedback, reviewed_by_coach')
@@ -51,7 +51,14 @@ export async function GET(
 
     supabase
       .from('food_logs')
-      .select('id, log_date, meal_type, food_name, calories, protein, carbs, fat, scan_image_url')
+      .select('id, log_date, meal_type, food_name, calories, protein, carbs, fat, scan_image_url, meal_notes, meal_photo_url')
+      .eq('user_id', clientId)
+      .order('log_date', { ascending: false })
+      .limit(50),
+
+    supabase
+      .from('meal_notes')
+      .select('log_date, meal_type, note, photo_url')
       .eq('user_id', clientId)
       .order('log_date', { ascending: false })
       .limit(50),
@@ -90,6 +97,7 @@ export async function GET(
     workouts,
     weightLogs: weightLogs.data ?? [],
     foodLogs: foodLogs.data ?? [],
+    mealNotes: mealNotesRaw.data ?? [],
   })
 }
 

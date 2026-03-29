@@ -12,7 +12,6 @@ import CycleTracker from './CycleTracker'
 import CyclePhaseBar from './CyclePhaseBar'
 import FormsSection from './FormsSection'
 import CoachBanner from './CoachBanner'
-import ProgressPhotos from './ProgressPhotos'
 import UpgradePrompt from '@/components/UpgradePrompt'
 
 export default async function DashboardPage() {
@@ -28,7 +27,7 @@ export default async function DashboardPage() {
     .select('onboarding_completed, goal, target_calories, target_protein, target_carbs, target_fat, tdee, sex')
     .eq('id', user.id)
     .single()
-  if (profile && profile.onboarding_completed === false) redirect('/onboarding')
+  if (!profile?.onboarding_completed) redirect('/onboarding')
 
   // Subscription feature access
   const sub = await getSubscription()
@@ -37,11 +36,10 @@ export default async function DashboardPage() {
   const canFullCheckin      = sub.canAccess(FEATURES.DAILY_CHECKIN)
   const canCycleAdv         = sub.canAccess(FEATURES.CYCLE_TRACKER)
   const canMealScanner        = sub.canAccess(FEATURES.MEAL_SCANNER)
-  const canProgressPhotos     = sub.canAccess(FEATURES.PROGRESS_PHOTOS)
-  const canProgressCompare    = sub.canAccess(FEATURES.PROGRESS_COMPARE)
   const canAdvancedAnalytics  = sub.canAccess(FEATURES.ADVANCED_ANALYTICS)
   const canCycleIntelligence  = sub.canAccess(FEATURES.CYCLE_INTELLIGENCE)
 
+  const isCoach   = sub.userType === 'coach'
   // Only show check-in banner for coached users (they have a coach waiting)
   const isCoached = sub.tier === 'coached'
   let showCheckInBanner = false
@@ -83,11 +81,14 @@ export default async function DashboardPage() {
         <div className="flex items-center gap-1">
           {[
             { href: '/workouts', label: 'Workouts' },
+            { href: '/progress', label: 'Progress Photos' },
+            ...(isCoach ? [
+              { href: '/coach/dashboard', label: 'Coach Dashboard' },
+            ] : []),
             ...(isCoached ? [
               { href: '/messages', label: 'Messages' },
-              { href: '/coach/dashboard', label: 'Coach' },
             ] : []),
-            { href: '/pricing', label: 'Upgrade' },
+            ...(!isCoach ? [{ href: '/pricing', label: 'Upgrade' }] : []),
             { href: '/settings', label: 'Settings' },
           ].map(({ href, label }) => (
             <a key={href} href={href} className="text-[13px] font-medium text-gray-500 hover:text-gray-900 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors">
@@ -112,13 +113,40 @@ export default async function DashboardPage() {
           </div>
           {/* Tier badge */}
           <a href="/pricing" className="text-xs font-semibold px-3 py-1.5 rounded-full border hover:opacity-80 transition-colors" style={{
-            backgroundColor: sub.tier === 'tier_3' ? '#f3e8ff' : sub.tier === 'tier_2' || sub.tier === 'coached' ? '#FFF5D0' : '#f3f4f6',
-            color: sub.tier === 'tier_3' ? '#7c3aed' : sub.tier === 'tier_2' || sub.tier === 'coached' ? '#B08000' : '#6b7280',
-            borderColor: sub.tier === 'tier_3' ? '#e9d5ff' : sub.tier === 'tier_2' || sub.tier === 'coached' ? '#FFE9A8' : '#e5e7eb',
+            backgroundColor: isCoach ? '#eff6ff' : sub.tier === 'tier_3' ? '#f3e8ff' : sub.tier === 'tier_2' || sub.tier === 'coached' ? '#FFF5D0' : '#f3f4f6',
+            color: isCoach ? '#1d4ed8' : sub.tier === 'tier_3' ? '#7c3aed' : sub.tier === 'tier_2' || sub.tier === 'coached' ? '#B08000' : '#6b7280',
+            borderColor: isCoach ? '#bfdbfe' : sub.tier === 'tier_3' ? '#e9d5ff' : sub.tier === 'tier_2' || sub.tier === 'coached' ? '#FFE9A8' : '#e5e7eb',
           }}>
-            {sub.tier === 'tier_3' ? 'Elite' : sub.tier === 'tier_2' ? 'Optimiser' : sub.tier === 'coached' ? 'Coached' : 'Tracker — Free'}
+            {isCoach
+              ? `Coach — ${sub.tier === 'tier_2' ? 'Growth' : 'Starter'}`
+              : sub.tier === 'tier_3' ? 'Elite'
+              : sub.tier === 'tier_2' ? 'Optimiser'
+              : sub.tier === 'coached' ? 'Coached'
+              : 'Tracker — Free'}
           </a>
         </div>
+
+        {/* Coach switch banner */}
+        {isCoach && (
+          <a
+            href="/coach/dashboard"
+            className="flex items-center justify-between gap-4 rounded-2xl px-5 py-4 transition-opacity hover:opacity-90"
+            style={{ backgroundColor: '#FFD885' }}
+          >
+            <div className="flex items-center gap-3">
+              <svg className="w-5 h-5 flex-shrink-0 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <div>
+                <p className="text-sm font-semibold text-gray-900">Go to Coach Dashboard</p>
+                <p className="text-xs mt-0.5 text-gray-700">Manage your clients, check-ins, and forms</p>
+              </div>
+            </div>
+            <svg className="w-4 h-4 flex-shrink-0 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </a>
+        )}
 
         {/* Coach banner — only shown when actually coached */}
         {coachEmail && <CoachBanner coachEmail={coachEmail} />}
@@ -187,7 +215,13 @@ export default async function DashboardPage() {
         </section>
 
         {/* Daily Food Log */}
-        <DailyLog canScanMeal={canMealScanner} />
+        <DailyLog
+          canScanMeal={canMealScanner}
+          targetCalories={profile?.target_calories ?? null}
+          targetProtein={profile?.target_protein ?? null}
+          targetCarbs={profile?.target_carbs ?? null}
+          targetFat={profile?.target_fat ?? null}
+        />
 
         {/* Elite teaser — AI meal scanner */}
         {!canMealScanner && (
@@ -245,14 +279,6 @@ export default async function DashboardPage() {
             </a>
           </div>
         )}
-
-        {/* Progress Photos */}
-        <section>
-          {canProgressPhotos
-            ? <ProgressPhotos canCompare={canProgressCompare} />
-            : <UpgradePrompt plan="Optimiser" feature="Progress photos & comparison" />
-          }
-        </section>
 
         {/* Coach Forms */}
         <FormsSection />

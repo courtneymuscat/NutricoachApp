@@ -21,8 +21,11 @@ export async function POST(req: NextRequest) {
     .gt('expires_at', new Date().toISOString())
     .single()
 
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL
+    ?? (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:3000')
+
   if (existing) {
-    const url = `${req.nextUrl.origin}/invite/${existing.token}`
+    const url = `${baseUrl}/invite/${existing.token}`
     return Response.json({ url, token: existing.token })
   }
 
@@ -34,6 +37,6 @@ export async function POST(req: NextRequest) {
 
   if (error) return Response.json({ error: error.message }, { status: 500 })
 
-  const url = `${req.nextUrl.origin}/invite/${invite.token}`
+  const url = `${baseUrl}/invite/${invite.token}`
   return Response.json({ url, token: invite.token })
 }
