@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { requireCoach } from '@/lib/coach'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import ClientTabs from './ClientTabs'
 import MessageButton from './MessageButton'
 import RemoveClientButton from './RemoveClientButton'
@@ -26,7 +27,9 @@ export default async function ClientProfilePage({
 
   if (!rel) redirect('/coach/clients')
 
-  const { data: profile } = await supabase
+  // Use admin client to bypass RLS — coach-client relationship already verified above
+  const admin = createAdminClient()
+  const { data: profile } = await admin
     .from('profiles')
     .select('email, subscription_tier')
     .eq('id', clientId)

@@ -36,9 +36,9 @@ export default async function InvitePage({
     .eq('id', invite.coach_id)
     .single()
 
-  // If already logged in — auto-accept and redirect
+  // If already logged in and NOT the coach who sent this invite — auto-accept and redirect
   const { data: { session } } = await supabase.auth.getSession()
-  if (session) {
+  if (session && session.user.id !== invite.coach_id) {
     await acceptInvite(token, session.user.id)
     redirect('/dashboard?joined=1')
   }
