@@ -91,6 +91,7 @@ export default function DailyLog({
   const [noteOpenId, setNoteOpenId] = useState<string | null>(null)
   const [noteDraft, setNoteDraft] = useState('')
   const [uploadingPhotoId, setUploadingPhotoId] = useState<string | null>(null)
+  const [noteError, setNoteError] = useState<string | null>(null)
   // Meal-level notes (one per meal per day, stored in meal_notes table)
   const [mealNotes, setMealNotes] = useState<Record<string, { note: string | null; photo_url: string | null }>>({})
   const [mealNoteOpen, setMealNoteOpen] = useState<MealKey | null>(null)
@@ -219,12 +220,15 @@ export default function DailyLog({
   }
 
   async function saveNote(id: string, text: string) {
+    setNoteError(null)
     const supabase = createClient()
-    await supabase.from('food_logs').update({ meal_notes: text.trim() || null }).eq('id', id)
+    const { error } = await supabase.from('food_logs').update({ meal_notes: text.trim() || null }).eq('id', id)
+    if (error) { setNoteError(error.message); return }
     fetchLogs()
   }
 
   async function uploadMealPhoto(id: string, file: File) {
+    setNoteError(null)
     setUploadingPhotoId(id)
     const supabase = createClient()
     const { data: { session } } = await supabase.auth.getSession()
@@ -237,14 +241,21 @@ export default function DailyLog({
       .from('meal-photos')
       .upload(path, file, { upsert: true })
 
-    if (!uploadError) {
-      const { data: signed } = await supabase.storage
-        .from('meal-photos')
-        .createSignedUrl(path, 315360000)
-      if (signed?.signedUrl) {
-        await supabase.from('food_logs').update({ meal_photo_url: signed.signedUrl }).eq('id', id)
-      }
+    if (uploadError) {
+      setNoteError(`Photo upload failed: ${uploadError.message}`)
+      setUploadingPhotoId(null)
+      return
     }
+
+    const { data: signed } = await supabase.storage
+      .from('meal-photos')
+      .createSignedUrl(path, 315360000)
+
+    if (signed?.signedUrl) {
+      const { error: dbError } = await supabase.from('food_logs').update({ meal_photo_url: signed.signedUrl }).eq('id', id)
+      if (dbError) { setNoteError(dbError.message); setUploadingPhotoId(null); return }
+    }
+
     setUploadingPhotoId(null)
     fetchLogs()
   }
@@ -628,8 +639,8 @@ export default function DailyLog({
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      if (noteOpenId === log.id) { setNoteOpenId(null) }
-                                      else { setNoteOpenId(log.id); setNoteDraft(log.meal_notes ?? '') }
+                                      if (noteOpenId === log.id) { setNoteOpenId(null); setNoteError(null) }
+                                      else { setNoteOpenId(log.id); setNoteDraft(log.meal_notes ?? ''); setNoteError(null) }
                                     }}
                                     className={`p-1 rounded transition-colors ${log.meal_notes || log.meal_photo_url ? 'text-blue-400 hover:text-blue-600 hover:bg-blue-50' : 'text-gray-300 opacity-0 group-hover:opacity-100 hover:text-gray-500 hover:bg-gray-100'}`}
                                     title="Note / photo"
@@ -694,17 +705,20 @@ export default function DailyLog({
                                       </a>
                                     )}
                                   </div>
+                                  {noteError && (
+                                    <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{noteError}</p>
+                                  )}
                                   <div className="flex gap-2">
                                     <button
                                       type="button"
-                                      onClick={() => { saveNote(log.id, noteDraft); setNoteOpenId(null) }}
+                                      onClick={() => { saveNote(log.id, noteDraft).then(() => { if (!noteError) setNoteOpenId(null) }) }}
                                       className="flex-1 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-colors"
                                     >
                                       Save note
                                     </button>
                                     <button
                                       type="button"
-                                      onClick={() => setNoteOpenId(null)}
+                                      onClick={() => { setNoteOpenId(null); setNoteError(null) }}
                                       className="px-3 py-1.5 text-gray-500 hover:text-gray-700 text-xs rounded-lg hover:bg-gray-100 transition-colors"
                                     >
                                       Cancel
