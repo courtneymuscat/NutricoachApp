@@ -10,7 +10,7 @@ export default function RemoveClientButton({ clientId }: { clientId: string }) {
 
   async function handleRemove() {
     setLoading(true)
-    await fetch(`/api/coach/clients/${clientId}/remove`, { method: 'POST' })
+    await fetch(`/api/coach/clients/${clientId}`, { method: 'DELETE' })
     router.push('/coach/clients')
   }
 

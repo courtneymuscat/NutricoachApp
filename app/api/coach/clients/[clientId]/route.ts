@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { requireCoach } from '@/lib/coach'
 import type { NextRequest } from 'next/server'
 
@@ -116,6 +117,13 @@ export async function DELETE(
     .update({ status: 'removed' })
     .eq('coach_id', coachId)
     .eq('client_id', clientId)
+
+  // Revert client to free tier — admin client bypasses RLS on profiles
+  const admin = createAdminClient()
+  await admin
+    .from('profiles')
+    .update({ subscription_tier: 'tier_1' })
+    .eq('id', clientId)
 
   return Response.json({ ok: true })
 }
