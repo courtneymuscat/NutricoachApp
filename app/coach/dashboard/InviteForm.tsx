@@ -30,6 +30,7 @@ export default function InviteForm() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!serviceId) { setError('Please select a service before sending an invite.'); return }
     setPending(true)
     setError(null)
     setLink(null)
@@ -37,7 +38,7 @@ export default function InviteForm() {
     const res = await fetch('/api/coach/invite', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, service_id: serviceId || null }),
+      body: JSON.stringify({ email, service_id: serviceId }),
     })
     const json = await res.json()
 
@@ -64,13 +65,16 @@ export default function InviteForm() {
       <form onSubmit={handleSubmit} className="space-y-3">
         {servicesLoaded && services.length > 0 && (
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Service</label>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              Service <span className="text-red-500">*</span>
+            </label>
             <select
               value={serviceId}
               onChange={(e) => setServiceId(e.target.value)}
+              required
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
             >
-              <option value="">No service</option>
+              <option value="">Select a service…</option>
               {services.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}{s.price_label ? ` — ${s.price_label}` : ''}
@@ -80,8 +84,9 @@ export default function InviteForm() {
           </div>
         )}
         {servicesLoaded && services.length === 0 && (
-          <p className="text-xs text-gray-400">
-            Add services in Settings to attach a payment link to invites.
+          <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2">
+            You need to add at least one service before inviting clients.{' '}
+            <a href="/coach/settings" className="underline font-medium">Go to Settings →</a>
           </p>
         )}
         <div className="flex gap-2">
@@ -95,7 +100,7 @@ export default function InviteForm() {
           />
           <button
             type="submit"
-            disabled={pending}
+            disabled={pending || !serviceId || services.length === 0}
             className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors whitespace-nowrap"
           >
             {pending ? 'Generating…' : 'Generate link'}
