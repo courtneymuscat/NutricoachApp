@@ -6,7 +6,7 @@ export async function POST(req: NextRequest) {
   const coachId = await requireCoach()
   if (!coachId) return Response.json({ error: 'Unauthorised' }, { status: 401 })
 
-  const { email } = await req.json()
+  const { email, service_id } = await req.json()
   if (!email) return Response.json({ error: 'Email required' }, { status: 400 })
 
   const supabase = await createClient()
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
 
   const { data: invite, error } = await supabase
     .from('coach_invites')
-    .insert({ coach_id: coachId, email })
+    .insert({ coach_id: coachId, email, service_id: service_id || null })
     .select('token')
     .single()
 

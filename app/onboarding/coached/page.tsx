@@ -14,7 +14,7 @@ export default async function CoachedOnboardingPage() {
   // Look up their coach via coach_clients table
   const { data: coachClientRow } = await supabase
     .from('coach_clients')
-    .select('coach_id')
+    .select('coach_id, service_id')
     .eq('client_id', user.id)
     .eq('status', 'active')
     .single()
@@ -23,13 +23,13 @@ export default async function CoachedOnboardingPage() {
     redirect('/onboarding')
   }
 
-  // Use admin client to bypass RLS for reading the coach's profile
+  // Use admin client to bypass RLS for reading the coach's profile and service
   const admin = createAdminClient()
 
   const [{ data: coachProfile }, { data: clientProfile }] = await Promise.all([
     admin
       .from('profiles')
-      .select('first_name, email, payment_link')
+      .select('first_name, email')
       .eq('id', coachClientRow.coach_id)
       .single(),
     supabase
@@ -39,9 +39,21 @@ export default async function CoachedOnboardingPage() {
       .single(),
   ])
 
+  // Fetch service if one is attached
+  let service: { name: string; payment_link: string; price_label: string | null } | null = null
+  if (coachClientRow.service_id) {
+    const { data } = await admin
+      .from('coach_services')
+      .select('name, payment_link, price_label')
+      .eq('id', coachClientRow.service_id)
+      .single()
+    service = data ?? null
+  }
+
   const afterPayUrl = clientProfile?.onboarding_completed ? '/dashboard' : '/onboarding'
   const coachName = coachProfile?.first_name || coachProfile?.email || 'your coach'
-  const paymentLink = coachProfile?.payment_link ?? null
+  const paymentLink = service?.payment_link ?? null
+  const serviceName = service?.name ?? null
 
   // No payment link configured — skip straight to the next step
   if (!paymentLink) {
@@ -64,6 +76,9 @@ export default async function CoachedOnboardingPage() {
           <h1 className="text-xl font-bold text-gray-900">
             Welcome to {coachName}&apos;s program
           </h1>
+          {serviceName && (
+            <p className="text-sm text-gray-600 font-medium">You&apos;re joining: {serviceName}</p>
+          )}
           <p className="text-sm text-gray-500">Complete the steps below to get started.</p>
         </div>
 

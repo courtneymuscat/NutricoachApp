@@ -1,13 +1,32 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+
+type Service = {
+  id: string
+  name: string
+  price_label: string | null
+}
 
 export default function InviteForm() {
   const [email, setEmail] = useState('')
+  const [serviceId, setServiceId] = useState('')
+  const [services, setServices] = useState<Service[]>([])
+  const [servicesLoaded, setServicesLoaded] = useState(false)
   const [link, setLink] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/coach/services')
+      .then((r) => r.ok ? r.json() : [])
+      .then((data: Service[]) => {
+        setServices(data)
+        setServicesLoaded(true)
+      })
+      .catch(() => setServicesLoaded(true))
+  }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -18,7 +37,7 @@ export default function InviteForm() {
     const res = await fetch('/api/coach/invite', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ email, service_id: serviceId || null }),
     })
     const json = await res.json()
 
@@ -27,6 +46,7 @@ export default function InviteForm() {
     } else {
       setLink(json.url)
       setEmail('')
+      setServiceId('')
     }
     setPending(false)
   }
@@ -41,22 +61,46 @@ export default function InviteForm() {
   return (
     <div className="bg-white rounded-xl border p-5 space-y-4">
       <h3 className="text-sm font-semibold text-gray-900">Invite a client</h3>
-      <form onSubmit={handleSubmit} className="flex gap-2">
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-          placeholder="client@example.com"
-          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        <button
-          type="submit"
-          disabled={pending}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors whitespace-nowrap"
-        >
-          {pending ? 'Generating…' : 'Generate link'}
-        </button>
+      <form onSubmit={handleSubmit} className="space-y-3">
+        {servicesLoaded && services.length > 0 && (
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Service</label>
+            <select
+              value={serviceId}
+              onChange={(e) => setServiceId(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            >
+              <option value="">No service</option>
+              {services.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}{s.price_label ? ` — ${s.price_label}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        {servicesLoaded && services.length === 0 && (
+          <p className="text-xs text-gray-400">
+            Add services in Settings to attach a payment link to invites.
+          </p>
+        )}
+        <div className="flex gap-2">
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            placeholder="client@example.com"
+            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <button
+            type="submit"
+            disabled={pending}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors whitespace-nowrap"
+          >
+            {pending ? 'Generating…' : 'Generate link'}
+          </button>
+        </div>
       </form>
 
       {error && <p className="text-xs text-red-600 bg-red-50 rounded px-3 py-2">{error}</p>}
