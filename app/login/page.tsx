@@ -9,6 +9,7 @@ function LoginForm() {
   const [state, action, pending] = useActionState(login, null)
   const searchParams = useSearchParams()
   const invite = searchParams.get('invite')
+  const deleted = searchParams.get('deleted')
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
@@ -17,6 +18,13 @@ function LoginForm() {
         <div className="text-center mb-8">
           <span className="text-2xl font-bold tracking-tight text-gray-900">NutriCoach</span>
         </div>
+
+        {deleted && (
+          <div className="bg-green-50 border border-green-200 rounded-2xl px-5 py-4 mb-4 text-center">
+            <p className="text-sm font-semibold text-green-800">Account deleted</p>
+            <p className="text-xs text-green-700 mt-1">Your account and all data have been permanently deleted. Any active subscription has been cancelled.</p>
+          </div>
+        )}
 
         <div className="bg-white rounded-2xl p-8 space-y-5">
           <div>

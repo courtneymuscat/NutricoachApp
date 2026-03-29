@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
+import { getStripe } from '@/lib/stripe'
 
 export async function DELETE() {
   const supabase = await createClient()
@@ -8,6 +9,23 @@ export async function DELETE() {
 
   const userId = user.id
   const service = createServiceClient()
+
+  // Cancel active Stripe subscription if exists
+  const { data: profile } = await service
+    .from('profiles')
+    .select('stripe_subscription_id')
+    .eq('id', userId)
+    .single()
+
+  if (profile?.stripe_subscription_id) {
+    try {
+      const stripe = getStripe()
+      await stripe.subscriptions.cancel(profile.stripe_subscription_id)
+    } catch (err) {
+      console.error('Error cancelling Stripe subscription:', err)
+      // Non-fatal — continue with account deletion
+    }
+  }
 
   // Delete all user data rows first
   await service.from('food_logs').delete().eq('user_id', userId)
