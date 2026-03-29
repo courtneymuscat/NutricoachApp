@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { getSubscription } from '@/lib/subscription'
 import { FEATURES } from '@/lib/features'
 import { logout } from '@/app/actions/auth'
+
+export const dynamic = 'force-dynamic'
 import DailyLog from './DailyLog'
 import DailyCheckIn from './DailyCheckIn'
 import WeightLog from './WeightLog'

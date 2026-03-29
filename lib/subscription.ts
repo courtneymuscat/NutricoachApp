@@ -27,8 +27,9 @@ export async function getSubscription(): Promise<Subscription> {
   const tier = (profile?.subscription_tier as SubscriptionTier | null) ?? 'tier_1'
   const userType = (profile?.user_type as UserType | null) ?? 'individual'
 
+  // Coaches get their coach-specific features plus full elite individual features
   const features = userType === 'coach'
-    ? (COACH_TIER_FEATURES[tier] ?? [])
+    ? [...(COACH_TIER_FEATURES[tier] ?? []), ...TIER_FEATURES['tier_3']]
     : (TIER_FEATURES[tier] ?? TIER_FEATURES['tier_1'])
 
   return {
