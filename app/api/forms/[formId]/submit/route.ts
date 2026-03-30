@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import type { NextRequest } from 'next/server'
 
 type Ctx = { params: Promise<{ formId: string }> }
@@ -10,7 +11,9 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   const { data: { session } } = await supabase.auth.getSession()
   if (!session) return Response.json({ error: 'Unauthorised' }, { status: 401 })
 
-  const { data: form } = await supabase
+  // Use admin client — clients can't read coach-owned forms via RLS
+  const admin = createAdminClient()
+  const { data: form } = await admin
     .from('forms')
     .select('id, coach_id, is_active')
     .eq('id', formId)
@@ -18,8 +21,8 @@ export async function POST(req: NextRequest, { params }: Ctx) {
 
   if (!form || !form.is_active) return Response.json({ error: 'Form not found' }, { status: 404 })
 
-  // Verify client belongs to this coach
-  const { data: rel } = await supabase
+  // Verify client belongs to this coach (admin client — RLS may block client reading coach_clients)
+  const { data: rel } = await admin
     .from('coach_clients')
     .select('id')
     .eq('coach_id', form.coach_id)
@@ -32,7 +35,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   const { answers }: { answers: Record<string, string> } = await req.json()
 
   // Create submission
-  const { data: submission, error: subError } = await supabase
+  const { data: submission, error: subError } = await admin
     .from('form_submissions')
     .insert({ form_id: formId, client_id: session.user.id, coach_id: form.coach_id })
     .select('id')
@@ -48,7 +51,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   }))
 
   if (answerRows.length) {
-    await supabase.from('form_answers').insert(answerRows)
+    await admin.from('form_answers').insert(answerRows)
   }
 
   return Response.json({ id: submission.id })
