@@ -66,7 +66,7 @@ export async function login(prevState: AuthState, formData: FormData): Promise<A
   if (data.session?.user) {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('onboarding_completed, user_type')
+      .select('onboarding_completed, user_type, subscription_tier')
       .eq('id', data.session.user.id)
       .single()
 
@@ -81,6 +81,9 @@ export async function login(prevState: AuthState, formData: FormData): Promise<A
     }
 
     if (!profile.onboarding_completed) {
+      if (profile.subscription_tier === 'coached') {
+        redirect('/onboarding/coached')
+      }
       redirect('/onboarding')
     }
   }

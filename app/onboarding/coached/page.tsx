@@ -12,12 +12,25 @@ export default async function CoachedOnboardingPage() {
   }
 
   // Look up their coach via coach_clients table
+  // Select core columns; form_id may not exist yet if migration hasn't run
   const { data: coachClientRow } = await supabase
     .from('coach_clients')
-    .select('coach_id, service_id, form_id')
+    .select('coach_id, service_id')
     .eq('client_id', user.id)
     .eq('status', 'active')
     .single()
+
+  // Separately try to get form_id (column may not exist yet)
+  let coachClientFormId: string | null = null
+  try {
+    const { data: formRow } = await supabase
+      .from('coach_clients')
+      .select('form_id')
+      .eq('client_id', user.id)
+      .eq('status', 'active')
+      .single()
+    coachClientFormId = (formRow as { form_id?: string | null })?.form_id ?? null
+  } catch { /* column doesn't exist yet */ }
 
   if (!coachClientRow) {
     redirect('/onboarding')
@@ -50,7 +63,7 @@ export default async function CoachedOnboardingPage() {
     service = data ?? null
   }
 
-  const formUrl = coachClientRow.form_id ? `/forms/${coachClientRow.form_id}` : null
+  const formUrl = coachClientFormId ? `/forms/${coachClientFormId}` : null
   const afterPayUrl = formUrl ?? (clientProfile?.onboarding_completed ? '/dashboard' : '/onboarding')
   const coachName = coachProfile?.first_name || coachProfile?.email || 'your coach'
   const paymentLink = service?.payment_link ?? null
