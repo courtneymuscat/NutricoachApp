@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import TimezoneSelector from '@/app/components/TimezoneSelector'
 
 type Service = {
   id: string
@@ -242,6 +243,15 @@ export default function CoachSettingsPage() {
                 <p className="text-xs text-gray-500">
                   To change your password, sign out and use the &quot;Forgot password&quot; link on the login page.
                 </p>
+              </div>
+
+              {/* Timezone */}
+              <div className="bg-white rounded-2xl border p-6 space-y-3">
+                <div>
+                  <h2 className="text-sm font-semibold text-gray-900">Timezone</h2>
+                  <p className="text-xs text-gray-500 mt-0.5">Used to display your schedule and client activity in the correct local time.</p>
+                </div>
+                <TimezoneSelector apiUrl="/api/coach/settings" />
               </div>
 
               {error && <p className="text-sm text-red-600 bg-red-50 rounded-xl px-4 py-3">{error}</p>}

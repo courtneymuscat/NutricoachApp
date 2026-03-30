@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { logout } from '@/app/actions/auth'
 import DeleteAccount from './DeleteAccount'
+import TimezoneSelector from '@/app/components/TimezoneSelector'
 
 export default async function SettingsPage() {
   const supabase = await createClient()
@@ -86,6 +87,15 @@ export default async function SettingsPage() {
             </a>
           </div>
         )}
+
+        {/* Timezone */}
+        <div className="bg-white rounded-2xl border p-5 space-y-3">
+          <div>
+            <p className="text-sm font-semibold text-gray-900">Timezone</p>
+            <p className="text-xs text-gray-400 mt-0.5">Used to display your logs and check-ins in the correct local time.</p>
+          </div>
+          <TimezoneSelector apiUrl="/api/settings" />
+        </div>
 
         {/* Danger zone */}
         <div className="space-y-2">

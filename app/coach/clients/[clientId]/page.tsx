@@ -31,7 +31,7 @@ export default async function ClientProfilePage({
   const admin = createAdminClient()
   const { data: profile } = await admin
     .from('profiles')
-    .select('email, subscription_tier')
+    .select('email, subscription_tier, timezone')
     .eq('id', clientId)
     .single()
 
@@ -71,11 +71,18 @@ export default async function ClientProfilePage({
                 </span>
               )}
             </div>
-            {rel.accepted_at && (
-              <p className="text-xs text-gray-400 mt-0.5">
-                Client since {new Date(rel.accepted_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-              </p>
-            )}
+            <div className="flex items-center gap-3 flex-wrap mt-0.5">
+              {rel.accepted_at && (
+                <p className="text-xs text-gray-400">
+                  Client since {new Date(rel.accepted_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                </p>
+              )}
+              {profile?.timezone && (
+                <p className="text-xs text-gray-400">
+                  🕐 {profile.timezone.replace(/_/g, ' ')}
+                </p>
+              )}
+            </div>
           </div>
           {rel.status === 'active' && (
             <div className="flex items-center gap-2 flex-shrink-0">
