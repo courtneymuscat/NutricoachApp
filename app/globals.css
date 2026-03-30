@@ -4,6 +4,36 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ── PWA / native-feel ──────────────────────────────────────────────────────── */
+
+/* No tap highlight flash on iOS */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Prevent pull-to-refresh and overscroll bounce */
+html, body {
+  overscroll-behavior: none;
+}
+
+/* Smooth momentum scrolling inside scroll containers */
+.scroll-smooth-ios {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Safe-area padding utilities — use pb-safe-bottom on fixed bottom bars */
+.pb-safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.pt-safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* Sticky navs should respect the top safe area on notch devices */
+nav.sticky, nav[class*="sticky"] {
+  padding-top: max(0px, env(safe-area-inset-top));
+}
+
 /* ── Design tokens ─────────────────────────────────────────────────────────── */
 :root {
   /* Lemon yellow primary */
