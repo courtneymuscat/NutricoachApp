@@ -147,7 +147,7 @@ function UploadModal({ onClose, onUploaded }: {
               <span className="text-sm font-medium">Choose or take photo</span>
             </button>
           )}
-          <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handleFile} className="hidden" />
+          <input ref={fileRef} type="file" accept="image/*" onChange={handleFile} className="hidden" />
 
           {/* Date */}
           <div>
