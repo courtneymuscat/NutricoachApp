@@ -85,6 +85,7 @@ export default async function DashboardPage() {
           <div className="hidden md:flex items-center gap-1">
             {[
               { href: '/workouts', label: 'Workouts' },
+              ...(profile?.sex !== 'male' ? [{ href: '/cycle', label: 'Cycle' }] : []),
               { href: '/progress', label: 'Progress Photos' },
               ...(isCoach ? [{ href: '/coach/dashboard', label: 'Coach Dashboard' }] : []),
               ...(isCoached ? [{ href: '/messages', label: 'Messages' }] : []),

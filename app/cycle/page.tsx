@@ -2,9 +2,9 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getSubscription } from '@/lib/subscription'
 import { FEATURES } from '@/lib/features'
+import { logout } from '@/app/actions/auth'
 import CycleTracker from '@/app/dashboard/CycleTracker'
 import CyclePhaseBar from '@/app/dashboard/CyclePhaseBar'
-import UpgradePrompt from '@/components/UpgradePrompt'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,11 +25,46 @@ export default async function CyclePage() {
   const sub = await getSubscription()
   const canCycleAdv = sub.canAccess(FEATURES.CYCLE_TRACKER)
   const canCycleIntelligence = sub.canAccess(FEATURES.CYCLE_INTELLIGENCE)
+  const isCoach = sub.userType === 'coach'
+  const isCoached = sub.tier === 'coached'
+
+  const NAV_LINKS = [
+    { href: '/dashboard', label: 'Home' },
+    { href: '/workouts', label: 'Workouts' },
+    { href: '/cycle', label: 'Cycle' },
+    { href: '/progress', label: 'Progress Photos' },
+    ...(isCoach ? [{ href: '/coach/dashboard', label: 'Coach Dashboard' }] : []),
+    ...(isCoached ? [{ href: '/messages', label: 'Messages' }] : []),
+    ...(!isCoach ? [{ href: '/pricing', label: 'Upgrade' }] : []),
+    { href: '/settings', label: 'Settings' },
+  ]
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white border-b px-6 py-3.5 sticky top-0 z-20">
-        <span className="text-[15px] font-bold tracking-tight text-gray-900">NutriCoach</span>
+      <nav className="bg-white border-b px-6 py-3.5 flex justify-between items-center sticky top-0 z-20">
+        <a href="/dashboard" className="text-[15px] font-bold tracking-tight text-gray-900">NutriCoach</a>
+        <div className="flex items-center gap-1">
+          <div className="hidden md:flex items-center gap-1">
+            {NAV_LINKS.map(({ href, label }) => (
+              <a
+                key={href}
+                href={href}
+                className={`text-[13px] font-medium px-3 py-1.5 rounded-lg transition-colors ${
+                  href === '/cycle'
+                    ? 'text-gray-900 bg-gray-100 font-semibold'
+                    : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                }`}
+              >
+                {label}
+              </a>
+            ))}
+          </div>
+          <form action={logout}>
+            <button type="submit" className="text-[13px] font-medium text-gray-500 hover:text-red-500 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors">
+              Log out
+            </button>
+          </form>
+        </div>
       </nav>
 
       <main className="max-w-lg mx-auto p-6 space-y-6">
