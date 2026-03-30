@@ -6,13 +6,20 @@ type Ctx = { params: Promise<{ questionId: string }> }
 
 async function ownsQuestion(coachId: string, questionId: string) {
   const supabase = await createClient()
-  const { data } = await supabase
+  // Get the form_id for this question, then check ownership separately
+  const { data: q } = await supabase
     .from('form_questions')
-    .select('id, forms!inner(coach_id)')
+    .select('form_id')
     .eq('id', questionId)
     .single()
-  const f = data?.forms?.[0] as { coach_id: string } | undefined
-  return f?.coach_id === coachId
+  if (!q?.form_id) return false
+  const { data: form } = await supabase
+    .from('forms')
+    .select('id')
+    .eq('id', q.form_id)
+    .eq('coach_id', coachId)
+    .single()
+  return !!form
 }
 
 export async function PUT(req: NextRequest, { params }: Ctx) {
