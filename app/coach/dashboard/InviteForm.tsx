@@ -36,13 +36,14 @@ export default function InviteForm() {
 
     fetch('/api/forms')
       .then((r) => r.ok ? r.json() : [])
-      .then((data: Form[]) => setForms(data))
+      .then((data: Form[]) => setForms(Array.isArray(data) ? data : []))
       .catch(() => {})
   }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!serviceId) { setError('Please select a service before sending an invite.'); return }
+    if (!formId) { setError('Please select an onboarding form before sending an invite.'); return }
     setPending(true)
     setError(null)
     setLink(null)
@@ -96,15 +97,24 @@ export default function InviteForm() {
             </select>
           </div>
         )}
+        {servicesLoaded && forms.length === 0 && (
+          <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2">
+            You need to create at least one onboarding form before inviting clients.{' '}
+            <a href="/coach/forms" className="underline font-medium">Go to Forms →</a>
+          </p>
+        )}
         {forms.length > 0 && (
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Onboarding form (optional)</label>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              Onboarding form <span className="text-red-500">*</span>
+            </label>
             <select
               value={formId}
               onChange={(e) => setFormId(e.target.value)}
+              required
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
             >
-              <option value="">No form</option>
+              <option value="">Select a form…</option>
               {forms.map((f) => (
                 <option key={f.id} value={f.id}>{f.title}</option>
               ))}
@@ -129,7 +139,7 @@ export default function InviteForm() {
           />
           <button
             type="submit"
-            disabled={pending || !serviceId || services.length === 0}
+            disabled={pending || !serviceId || services.length === 0 || !formId || forms.length === 0}
             className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors whitespace-nowrap"
           >
             {pending ? 'Generating…' : 'Generate link'}
