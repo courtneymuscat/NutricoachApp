@@ -129,6 +129,8 @@ const TIMEZONES = [
   { value: 'Asia/Ho_Chi_Minh',           label: 'Vietnam — Ho Chi Minh City (UTC+7)' },
   { value: 'Asia/Phnom_Penh',            label: 'Cambodia — Phnom Penh (UTC+7)' },
   { value: 'Asia/Jakarta',               label: 'Indonesia — Jakarta (UTC+7)' },
+  { value: 'Asia/Makassar',              label: 'Indonesia — Bali / Makassar (UTC+8)' },
+  { value: 'Asia/Jayapura',              label: 'Indonesia — Jayapura (UTC+9)' },
   { value: 'Asia/Novosibirsk',           label: 'Russia — Novosibirsk (UTC+7)' },
   { value: 'Asia/Singapore',             label: 'Singapore (UTC+8)' },
   { value: 'Asia/Kuala_Lumpur',          label: 'Malaysia — Kuala Lumpur (UTC+8)' },
