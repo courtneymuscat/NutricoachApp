@@ -330,7 +330,7 @@ export default function FoodSearch({ onSelect }: Props) {
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8H3a2 2 0 00-2 2v8a2 2 0 002 2h3m0-12V4a2 2 0 012-2h8a2 2 0 012 2v4m0 0h2" />
               </svg>
-              <span className="hidden sm:inline">Scan</span>
+              <span>Scan Barcode</span>
             </button>
 
           </div>
