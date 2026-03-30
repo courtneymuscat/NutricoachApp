@@ -95,7 +95,7 @@ function SignupForm() {
 
         <p className="text-center text-sm text-gray-500">
           Already have an account?{' '}
-          <Link href="/login" className="text-gray-900 font-medium hover:underline">Log in</Link>
+          <Link href={invite ? `/login?invite=${invite}` : '/login'} className="text-gray-900 font-medium hover:underline">Log in</Link>
         </p>
       </div>
     </div>
