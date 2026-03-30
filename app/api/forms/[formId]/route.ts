@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { requireCoach } from '@/lib/coach'
 import type { NextRequest } from 'next/server'
 
@@ -12,9 +13,10 @@ async function ownsForm(coachId: string, formId: string) {
 
 export async function GET(_req: NextRequest, { params }: Ctx) {
   const { formId } = await params
-  const supabase = await createClient()
+  // Use admin client — clients filling in forms are reading their coach's data, RLS blocks them
+  const admin = createAdminClient()
 
-  const { data: form } = await supabase
+  const { data: form } = await admin
     .from('forms')
     .select('id, title, description, type, is_active, coach_id')
     .eq('id', formId)
@@ -22,7 +24,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
 
   if (!form) return Response.json({ error: 'Not found' }, { status: 404 })
 
-  const { data: questions } = await supabase
+  const { data: questions } = await admin
     .from('form_questions')
     .select('id, order_index, label, description, type, options, required')
     .eq('form_id', formId)
