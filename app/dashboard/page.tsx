@@ -10,8 +10,6 @@ import DailyCheckIn from './DailyCheckIn'
 import WeightLog from './WeightLog'
 import WeightChart from './WeightChart'
 import MealSection from './MealSection'
-import CycleTracker from './CycleTracker'
-import CyclePhaseBar from './CyclePhaseBar'
 import FormsSection from './FormsSection'
 import CoachBanner from './CoachBanner'
 import UpgradePrompt from '@/components/UpgradePrompt'
@@ -36,10 +34,8 @@ export default async function DashboardPage() {
   const canWeightChart      = sub.canAccess(FEATURES.WEIGHT_TRACKING)
   const canMealBuilder      = sub.canAccess(FEATURES.MEAL_BUILDER)
   const canFullCheckin      = sub.canAccess(FEATURES.DAILY_CHECKIN)
-  const canCycleAdv         = sub.canAccess(FEATURES.CYCLE_TRACKER)
   const canMealScanner        = sub.canAccess(FEATURES.MEAL_SCANNER)
   const canAdvancedAnalytics  = sub.canAccess(FEATURES.ADVANCED_ANALYTICS)
-  const canCycleIntelligence  = sub.canAccess(FEATURES.CYCLE_INTELLIGENCE)
 
   const isCoach   = sub.userType === 'coach'
   // Only show check-in banner for coached users (they have a coach waiting)
@@ -251,26 +247,6 @@ export default async function DashboardPage() {
           }
         </section>
 
-        {/* Cycle Tracker — hidden for male users */}
-        {profile?.sex !== 'male' && (
-          <section>
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Cycle Tracker</h3>
-            <CycleTracker advancedAccess={canCycleAdv} />
-            <CyclePhaseBar />
-            {!canCycleIntelligence && (
-              <div className="flex items-center gap-4 bg-purple-50 border border-purple-100 rounded-2xl px-5 py-4 mt-4">
-                <span className="text-2xl">🔮</span>
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-purple-900">Cycle Intelligence</p>
-                  <p className="text-xs text-purple-600 mt-0.5">Predict your next period, ovulation & phase windows — plus personalised insights based on your data.</p>
-                </div>
-                <a href="/pricing" className="flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg text-purple-900 hover:opacity-90 transition-colors" style={{ backgroundColor: '#e9d5ff' }}>
-                  Try Elite →
-                </a>
-              </div>
-            )}
-          </section>
-        )}
 
         {/* Advanced Analytics — teaser for non-Elite */}
         {!canAdvancedAnalytics && (
