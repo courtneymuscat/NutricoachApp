@@ -413,15 +413,637 @@ function FilesTab({ clientId }: { clientId: string }) {
   )
 }
 
+// ── Program tab ───────────────────────────────────────────────────────────────
+
+type ProgramExercise = {
+  id: string
+  name: string
+  sets: number
+  reps: string
+  weight: string
+  rest: number
+  notes: string
+  video_url: string
+}
+
+type ProgramDay = {
+  id: string
+  name: string
+  exercises: ProgramExercise[]
+}
+
+type ProgramWeek = {
+  id: string
+  label: string
+  days: ProgramDay[]
+}
+
+type ClientProgram = {
+  id: string
+  program_id: string | null
+  name: string
+  content: ProgramWeek[]
+  start_date: string
+  status: string
+  created_at: string
+  updated_at: string
+}
+
+type ProgramTemplate = {
+  id: string
+  name: string
+  description: string | null
+  week_count: number
+}
+
+const REST_LABELS: Record<number, string> = {
+  30: '30s', 45: '45s', 60: '1 min', 90: '90s',
+  120: '2 min', 180: '3 min', 240: '4 min', 300: '5 min',
+}
+
+function fmtRestLabel(seconds: number): string {
+  return REST_LABELS[seconds] ?? `${seconds}s`
+}
+
+function StatusBadge({ status }: { status: string }) {
+  if (status === 'active') {
+    return (
+      <span className="text-xs bg-green-50 text-green-600 font-semibold px-2 py-0.5 rounded-full">Active</span>
+    )
+  }
+  if (status === 'completed') {
+    return (
+      <span className="text-xs bg-gray-100 text-gray-500 font-semibold px-2 py-0.5 rounded-full">Completed</span>
+    )
+  }
+  return (
+    <span className="text-xs bg-amber-50 text-amber-500 font-semibold px-2 py-0.5 rounded-full capitalize">{status}</span>
+  )
+}
+
+function ProgramExerciseRow({
+  exercise,
+  editable,
+  onChange,
+  onDelete,
+}: {
+  exercise: ProgramExercise
+  editable: boolean
+  onChange?: (ex: ProgramExercise) => void
+  onDelete?: () => void
+}) {
+  function field<K extends keyof ProgramExercise>(key: K, value: ProgramExercise[K]) {
+    if (onChange) onChange({ ...exercise, [key]: value })
+  }
+
+  if (!editable) {
+    return (
+      <div className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-gray-900">{exercise.name || '—'}</p>
+          {exercise.notes && <p className="text-xs text-gray-400 italic mt-0.5">"{exercise.notes}"</p>}
+        </div>
+        <div className="flex items-center gap-3 text-xs text-gray-500 flex-shrink-0">
+          <span>{exercise.sets}×{exercise.reps}</span>
+          {exercise.weight && <span className="text-gray-400">{exercise.weight}</span>}
+          <span className="text-gray-300">{fmtRestLabel(exercise.rest)}</span>
+          {exercise.video_url && (
+            <a href={exercise.video_url} target="_blank" rel="noopener noreferrer" className="text-purple-500 hover:text-purple-700">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.723v6.554a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+            </a>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="border border-gray-100 rounded-xl p-3 bg-white space-y-2">
+      <div className="flex items-center gap-2">
+        <input
+          type="text"
+          value={exercise.name}
+          onChange={(e) => field('name', e.target.value)}
+          placeholder="Exercise name"
+          className="flex-1 text-sm font-medium border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-gray-300"
+        />
+        {onDelete && (
+          <button onClick={onDelete} className="text-gray-200 hover:text-red-400 transition-colors">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <div className="flex items-center gap-1">
+          <label className="text-[10px] text-gray-400 font-medium uppercase">Sets</label>
+          <input
+            type="number" min={1} max={20}
+            value={exercise.sets}
+            onChange={(e) => field('sets', parseInt(e.target.value) || 1)}
+            className="w-14 text-xs border border-gray-200 rounded-lg px-2 py-1 text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        <div className="flex items-center gap-1">
+          <label className="text-[10px] text-gray-400 font-medium uppercase">Reps</label>
+          <input
+            type="text" value={exercise.reps}
+            onChange={(e) => field('reps', e.target.value)}
+            placeholder="8-12"
+            className="w-20 text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-gray-300"
+          />
+        </div>
+        <div className="flex items-center gap-1">
+          <label className="text-[10px] text-gray-400 font-medium uppercase">Load</label>
+          <input
+            type="text" value={exercise.weight}
+            onChange={(e) => field('weight', e.target.value)}
+            placeholder="RPE 8"
+            className="w-24 text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-gray-300"
+          />
+        </div>
+        <div className="flex items-center gap-1">
+          <label className="text-[10px] text-gray-400 font-medium uppercase">Rest</label>
+          <select
+            value={exercise.rest}
+            onChange={(e) => field('rest', parseInt(e.target.value))}
+            className="text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+          >
+            {[30,45,60,90,120,180,240,300].map((v) => (
+              <option key={v} value={v}>{fmtRestLabel(v)}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <input
+        type="text" value={exercise.notes}
+        onChange={(e) => field('notes', e.target.value)}
+        placeholder="Notes (optional)"
+        className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-gray-300"
+      />
+    </div>
+  )
+}
+
+function AssignedProgramCard({
+  assignment,
+  clientId,
+  onUnassign,
+  onUpdated,
+}: {
+  assignment: ClientProgram
+  clientId: string
+  onUnassign: (id: string) => void
+  onUpdated: (updated: ClientProgram) => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const [activeWeek, setActiveWeek] = useState(0)
+  const [editing, setEditing] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [localContent, setLocalContent] = useState<ProgramWeek[]>(
+    Array.isArray(assignment.content) ? assignment.content : []
+  )
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function scheduleContentSave(content: ProgramWeek[]) {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = setTimeout(async () => {
+      setSaving(true)
+      const res = await fetch(`/api/coach/clients/${clientId}/programs/${assignment.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
+      })
+      setSaving(false)
+      if (res.ok) {
+        const updated = await res.json()
+        onUpdated(updated)
+      }
+    }, 1500)
+  }
+
+  function updateExercise(weekIdx: number, dayIdx: number, exIdx: number, ex: ProgramExercise) {
+    const next = localContent.map((w, wi) => {
+      if (wi !== weekIdx) return w
+      return {
+        ...w,
+        days: w.days.map((d, di) => {
+          if (di !== dayIdx) return d
+          const exercises = [...d.exercises]
+          exercises[exIdx] = ex
+          return { ...d, exercises }
+        }),
+      }
+    })
+    setLocalContent(next)
+    scheduleContentSave(next)
+  }
+
+  function deleteExercise(weekIdx: number, dayIdx: number, exIdx: number) {
+    const next = localContent.map((w, wi) => {
+      if (wi !== weekIdx) return w
+      return {
+        ...w,
+        days: w.days.map((d, di) => {
+          if (di !== dayIdx) return d
+          return { ...d, exercises: d.exercises.filter((_, ei) => ei !== exIdx) }
+        }),
+      }
+    })
+    setLocalContent(next)
+    scheduleContentSave(next)
+  }
+
+  function addExercise(weekIdx: number, dayIdx: number) {
+    const blank: ProgramExercise = {
+      id: crypto.randomUUID(),
+      name: '', sets: 3, reps: '8-12', weight: '', rest: 90, notes: '', video_url: '',
+    }
+    const next = localContent.map((w, wi) => {
+      if (wi !== weekIdx) return w
+      return {
+        ...w,
+        days: w.days.map((d, di) => {
+          if (di !== dayIdx) return d
+          return { ...d, exercises: [...d.exercises, blank] }
+        }),
+      }
+    })
+    setLocalContent(next)
+    scheduleContentSave(next)
+  }
+
+  async function handleStatusChange(status: string) {
+    const res = await fetch(`/api/coach/clients/${clientId}/programs/${assignment.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    })
+    if (res.ok) {
+      const updated = await res.json()
+      onUpdated(updated)
+    }
+  }
+
+  async function handleUnassign() {
+    if (!confirm(`Remove "${assignment.name}" from this client?`)) return
+    const res = await fetch(`/api/coach/clients/${clientId}/programs/${assignment.id}`, {
+      method: 'DELETE',
+    })
+    if (res.ok) onUnassign(assignment.id)
+  }
+
+  const currentWeek = localContent[activeWeek] ?? null
+
+  return (
+    <div className="bg-white rounded-2xl border overflow-hidden">
+      {/* Card header */}
+      <div className="flex items-start justify-between p-5">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap mb-1">
+            <p className="text-sm font-semibold text-gray-900">{assignment.name}</p>
+            <StatusBadge status={assignment.status} />
+            {saving && <span className="text-xs text-gray-400">Saving…</span>}
+          </div>
+          <p className="text-xs text-gray-400">
+            Started {new Date(assignment.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            {' · '}{localContent.length} week{localContent.length !== 1 ? 's' : ''}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+          <select
+            value={assignment.status}
+            onChange={(e) => handleStatusChange(e.target.value)}
+            className="text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+          >
+            <option value="active">Active</option>
+            <option value="completed">Completed</option>
+            <option value="paused">Paused</option>
+          </select>
+          <button
+            onClick={() => { setEditing((v) => !v); setExpanded(true) }}
+            className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${
+              editing
+                ? 'bg-blue-50 text-blue-600 border-blue-200'
+                : 'text-gray-500 border-gray-200 hover:bg-gray-50'
+            }`}
+          >
+            {editing ? 'Done' : 'Edit'}
+          </button>
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="text-gray-400 hover:text-gray-700 transition-colors"
+          >
+            <svg
+              className={`w-4 h-4 transition-transform ${expanded ? 'rotate-180' : ''}`}
+              fill="none" stroke="currentColor" viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          <button
+            onClick={handleUnassign}
+            className="text-gray-300 hover:text-red-400 transition-colors"
+            title="Remove program"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {/* Expanded content */}
+      {expanded && (
+        <div className="border-t border-gray-100">
+          {localContent.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-8">No weeks in this program.</p>
+          ) : (
+            <>
+              {/* Week tabs */}
+              <div className="flex gap-1 px-5 pt-4 flex-wrap">
+                {localContent.map((w, i) => (
+                  <button
+                    key={w.id}
+                    onClick={() => setActiveWeek(i)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                      i === activeWeek
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                    }`}
+                  >
+                    {w.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Days */}
+              {currentWeek && (
+                <div className="p-5 space-y-4">
+                  {currentWeek.days.length === 0 && (
+                    <p className="text-xs text-gray-400 text-center py-4">No days in this week.</p>
+                  )}
+                  {currentWeek.days.map((day, di) => (
+                    <div key={day.id} className="bg-gray-50 rounded-xl p-4">
+                      <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-3">{day.name}</p>
+                      <div className="space-y-2">
+                        {day.exercises.length === 0 && !editing && (
+                          <p className="text-xs text-gray-400">No exercises.</p>
+                        )}
+                        {day.exercises.map((ex, ei) => (
+                          <ProgramExerciseRow
+                            key={ex.id}
+                            exercise={ex}
+                            editable={editing}
+                            onChange={editing ? (updated) => updateExercise(activeWeek, di, ei, updated) : undefined}
+                            onDelete={editing ? () => deleteExercise(activeWeek, di, ei) : undefined}
+                          />
+                        ))}
+                        {editing && (
+                          <button
+                            onClick={() => addExercise(activeWeek, di)}
+                            className="w-full text-xs font-semibold text-blue-600 border border-dashed border-blue-200 rounded-lg py-2 hover:bg-blue-50 transition-colors"
+                          >
+                            + Add Exercise
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function AssignProgramModal({
+  clientId,
+  onClose,
+  onAssigned,
+}: {
+  clientId: string
+  onClose: () => void
+  onAssigned: (assignment: ClientProgram) => void
+}) {
+  const [templates, setTemplates] = useState<ProgramTemplate[]>([])
+  const [loadingTemplates, setLoadingTemplates] = useState(true)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10))
+  const [assigning, setAssigning] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch('/api/coach/programs')
+      .then((r) => r.json())
+      .then((d) => setTemplates(Array.isArray(d) ? d : []))
+      .finally(() => setLoadingTemplates(false))
+  }, [])
+
+  async function handleAssign() {
+    if (!selectedId) return
+    setAssigning(true)
+    setError(null)
+    const res = await fetch(`/api/coach/clients/${clientId}/programs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ program_id: selectedId, start_date: startDate }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      setError(data.error ?? 'Failed to assign program')
+      setAssigning(false)
+      return
+    }
+    onAssigned(data)
+    onClose()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-base font-bold text-gray-900">Assign Program</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {loadingTemplates ? (
+          <p className="text-sm text-gray-400 text-center py-8">Loading programs…</p>
+        ) : templates.length === 0 ? (
+          <div className="text-center py-8">
+            <p className="text-sm text-gray-500 mb-3">No programs yet.</p>
+            <a
+              href="/coach/programs"
+              className="text-sm font-semibold text-blue-600 hover:underline"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Create a program first →
+            </a>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+              {templates.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setSelectedId(t.id)}
+                  className={`w-full text-left rounded-xl border p-3.5 transition-colors ${
+                    selectedId === t.id
+                      ? 'border-blue-400 bg-blue-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <p className="text-sm font-semibold text-gray-900">{t.name}</p>
+                  {t.description && (
+                    <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{t.description}</p>
+                  )}
+                  <p className="text-xs text-gray-400 mt-1">
+                    {t.week_count} week{t.week_count !== 1 ? 's' : ''}
+                  </p>
+                </button>
+              ))}
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                Start date
+              </label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            {error && <p className="text-xs text-red-500">{error}</p>}
+
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={onClose}
+                className="flex-1 border border-gray-200 text-gray-600 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAssign}
+                disabled={!selectedId || assigning}
+                className="flex-1 bg-blue-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                {assigning ? 'Assigning…' : 'Assign Program'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ProgramTab({ clientId }: { clientId: string }) {
+  const [assignments, setAssignments] = useState<ClientProgram[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showAssignModal, setShowAssignModal] = useState(false)
+
+  useEffect(() => {
+    fetch(`/api/coach/clients/${clientId}/programs`)
+      .then((r) => r.json())
+      .then((d) => setAssignments(Array.isArray(d) ? d : []))
+      .finally(() => setLoading(false))
+  }, [clientId])
+
+  function handleAssigned(assignment: ClientProgram) {
+    setAssignments((prev) => [assignment, ...prev])
+  }
+
+  function handleUnassign(id: string) {
+    setAssignments((prev) => prev.filter((a) => a.id !== id))
+  }
+
+  function handleUpdated(updated: ClientProgram) {
+    setAssignments((prev) => prev.map((a) => (a.id === updated.id ? updated : a)))
+  }
+
+  if (loading) {
+    return <p className="text-sm text-gray-400 text-center py-10">Loading programs…</p>
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Header row */}
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+          {assignments.length === 0 ? 'No programs assigned' : `${assignments.length} program${assignments.length !== 1 ? 's' : ''}`}
+        </p>
+        <button
+          onClick={() => setShowAssignModal(true)}
+          className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors"
+        >
+          + Assign Program
+        </button>
+      </div>
+
+      {assignments.length === 0 && (
+        <div className="text-center py-14 bg-white rounded-2xl border">
+          <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center mx-auto mb-3">
+            <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+            </svg>
+          </div>
+          <p className="text-sm text-gray-500 mb-1">No programs assigned yet</p>
+          <p className="text-xs text-gray-400 mb-4">Assign a training program template to this client.</p>
+          <button
+            onClick={() => setShowAssignModal(true)}
+            className="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors"
+          >
+            + Assign Program
+          </button>
+        </div>
+      )}
+
+      {assignments.map((a) => (
+        <AssignedProgramCard
+          key={a.id}
+          assignment={a}
+          clientId={clientId}
+          onUnassign={handleUnassign}
+          onUpdated={handleUpdated}
+        />
+      ))}
+
+      {showAssignModal && (
+        <AssignProgramModal
+          clientId={clientId}
+          onClose={() => setShowAssignModal(false)}
+          onAssigned={handleAssigned}
+        />
+      )}
+    </div>
+  )
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
-type TabId = 'overview' | 'checkins' | 'nutrition' | 'training' | 'notes' | 'files'
+type TabId = 'overview' | 'checkins' | 'nutrition' | 'training' | 'notes' | 'files' | 'program'
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'checkins', label: 'Check-ins' },
   { id: 'nutrition', label: 'Nutrition' },
   { id: 'training', label: 'Training' },
+  { id: 'program', label: 'Program' },
   { id: 'notes', label: 'Notes' },
   { id: 'files', label: 'Files' },
 ]
@@ -461,6 +1083,9 @@ export default function ClientTabs({ clientId }: { clientId: string }) {
 
       {/* Overview */}
       {tab === 'overview' && data && <OverviewTab data={data} />}
+
+      {/* Program */}
+      {tab === 'program' && <ProgramTab clientId={clientId} />}
 
       {/* Notes — always loaded on demand */}
       {tab === 'notes' && <NotesTab clientId={clientId} />}
