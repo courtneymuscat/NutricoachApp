@@ -25,17 +25,18 @@ export async function GET(
   if (!coachId) return Response.json({ error: 'Unauthorised' }, { status: 401 })
   if (!(await verifyAccess(coachId, clientId))) return Response.json({ error: 'Forbidden' }, { status: 403 })
 
-  const supabase = await createClient()
+  // Use admin client — coach is reading another user's data, RLS would block the regular client
+  const admin = createAdminClient()
 
   const [checkIns, workoutsRaw, weightLogs, foodLogs, mealNotesRaw] = await Promise.all([
-    supabase
+    admin
       .from('check_ins')
       .select('id, created_at, sleep_hours, sleep_quality, energy_level, rhr, hrv, notes, coach_feedback, reviewed_by_coach')
       .eq('user_id', clientId)
       .order('created_at', { ascending: false })
       .limit(20),
 
-    supabase
+    admin
       .from('workouts')
       .select('id, name, started_at, ended_at')
       .eq('user_id', clientId)
@@ -43,21 +44,21 @@ export async function GET(
       .order('started_at', { ascending: false })
       .limit(20),
 
-    supabase
+    admin
       .from('weight_logs')
       .select('logged_at, weight_lbs, weight_unit')
       .eq('user_id', clientId)
       .order('logged_at', { ascending: false })
       .limit(30),
 
-    supabase
+    admin
       .from('food_logs')
       .select('id, log_date, meal_type, food_name, calories, protein, carbs, fat, scan_image_url, meal_notes, meal_photo_url')
       .eq('user_id', clientId)
       .order('log_date', { ascending: false })
       .limit(50),
 
-    supabase
+    admin
       .from('meal_notes')
       .select('log_date, meal_type, note, photo_url')
       .eq('user_id', clientId)
@@ -68,7 +69,7 @@ export async function GET(
   // Fetch exercise details for workouts
   const workoutIds = (workoutsRaw.data ?? []).map((w) => w.id)
   const workoutExercises = workoutIds.length
-    ? await supabase
+    ? await admin
         .from('workout_exercises')
         .select('workout_id, order_index, notes, video_url, exercises(id, name, category)')
         .in('workout_id', workoutIds)

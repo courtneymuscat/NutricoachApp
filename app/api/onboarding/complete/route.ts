@@ -1,9 +1,8 @@
-import { createServiceClient } from '@/lib/supabase/service'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import type { NextRequest } from 'next/server'
 
 export async function POST(req: NextRequest) {
-  // Verify the user is authenticated
   const supabase = await createClient()
   const { data: { session } } = await supabase.auth.getSession()
   if (!session) return Response.json({ error: 'Unauthorised' }, { status: 401 })
@@ -17,28 +16,36 @@ export async function POST(req: NextRequest) {
 
   if (!goal) return Response.json({ error: 'Goal is required' }, { status: 400 })
 
-  // Use service client so the upsert is never blocked by RLS
-  const service = createServiceClient()
-  const { error } = await service
+  const admin = createAdminClient()
+
+  // Preserve existing subscription_tier — coached clients must not be downgraded to tier_1
+  const { data: existing } = await admin
+    .from('profiles')
+    .select('subscription_tier')
+    .eq('id', session.user.id)
+    .single()
+
+  const { error } = await admin
     .from('profiles')
     .upsert({
-      id:                  session.user.id,
+      id:                   session.user.id,
       goal,
-      first_name:          first_name ?? null,
-      age:                 age ?? null,
-      sex:                 sex ?? null,
-      height_cm:           height_cm ?? null,
-      weight_kg:           weight_kg ?? null,
-      dietary_preference:  dietary_preference ?? null,
-      steps_per_day:       steps_per_day ?? null,
-      activities:          activities ?? [],
-      tdee:                tdee ?? null,
-      target_calories:     target_calories ?? null,
-      target_protein:      target_protein ?? null,
-      target_carbs:        target_carbs ?? null,
-      target_fat:          target_fat ?? null,
-      adjustment_pct:      adjustment_pct ?? null,
+      first_name:           first_name ?? null,
+      age:                  age ?? null,
+      sex:                  sex ?? null,
+      height_cm:            height_cm ?? null,
+      weight_kg:            weight_kg ?? null,
+      dietary_preference:   dietary_preference ?? null,
+      steps_per_day:        steps_per_day ?? null,
+      activities:           activities ?? [],
+      tdee:                 tdee ?? null,
+      target_calories:      target_calories ?? null,
+      target_protein:       target_protein ?? null,
+      target_carbs:         target_carbs ?? null,
+      target_fat:           target_fat ?? null,
+      adjustment_pct:       adjustment_pct ?? null,
       onboarding_completed: true,
+      subscription_tier:    existing?.subscription_tier ?? 'tier_1',
     }, { onConflict: 'id' })
 
   if (error) return Response.json({ error: error.message }, { status: 500 })
