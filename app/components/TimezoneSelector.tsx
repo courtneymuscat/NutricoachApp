@@ -230,7 +230,8 @@ export default function TimezoneSelector({ apiUrl, getApiUrl, fieldName = 'timez
 
   // If the saved timezone isn't in the curated list, add it as a custom option
   const inList = TIMEZONES.some((t) => t.value === timezone)
-  const options = inList || !timezone ? TIMEZONES : [{ value: timezone, label: timezone }, ...TIMEZONES]
+  const base = inList || !timezone ? TIMEZONES : [{ value: timezone, label: timezone }, ...TIMEZONES]
+  const options = [...base].sort((a, b) => a.label.localeCompare(b.label))
 
   return (
     <div className="space-y-2">
