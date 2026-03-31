@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { requireCoach } from '@/lib/coach'
+import { seedCoachTemplates } from '@/lib/seed-coach-templates'
 import type { NextRequest } from 'next/server'
 
 export async function GET(_req: NextRequest) {
@@ -7,6 +8,14 @@ export async function GET(_req: NextRequest) {
   if (!coachId) return Response.json({ error: 'Unauthorised' }, { status: 401 })
 
   const supabase = await createClient()
+
+  // Auto-seed default templates on first load
+  const { count } = await supabase
+    .from('programs')
+    .select('id', { count: 'exact', head: true })
+    .eq('coach_id', coachId)
+  if ((count ?? 0) === 0) await seedCoachTemplates(coachId)
+
   const { data, error } = await supabase
     .from('programs')
     .select('id, name, description, content, created_at, updated_at')
