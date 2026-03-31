@@ -78,9 +78,10 @@ async function fetchOpenFoodFacts(q: string): Promise<FoodRow[]> {
   const timer = setTimeout(() => controller.abort(), 4000)
 
   try {
-    // Use v2 search API — searches product name AND brand fields
-    const url = new URL('https://world.openfoodfacts.org/api/v2/search')
+    // Legacy search endpoint — correctly filters by product name and brand
+    const url = new URL('https://world.openfoodfacts.org/cgi/search.pl')
     url.searchParams.set('search_terms', q)
+    url.searchParams.set('json', '1')
     url.searchParams.set('fields', 'product_name,product_name_en,brands,nutriments')
     url.searchParams.set('page_size', '10')
     url.searchParams.set('sort_by', 'unique_scans_n')
