@@ -14,6 +14,7 @@ export type FoodResult = {
   fat_per_100g: number
   unit?: string
   custom?: boolean
+  source?: string
 }
 
 type BarcodeState =
@@ -96,14 +97,35 @@ export default function FoodSearch({ onSelect }: Props) {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
-  function handleSelect(food: FoodResult) {
-    setSelected(food)
-    setHighlightedId(food.id)
-    setQuery(food.name)
+  async function handleSelect(food: FoodResult) {
+    // If this is an Open Food Facts result, save it to the shared DB first
+    // so it gets a real UUID for food_logs.food_id
+    let resolvedFood = food
+    if (food.source === 'off') {
+      try {
+        const res = await fetch('/api/foods/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: food.name,
+            calories_per_100g: food.calories_per_100g,
+            protein_per_100g: food.protein_per_100g,
+            carbs_per_100g: food.carbs_per_100g,
+            fat_per_100g: food.fat_per_100g,
+          }),
+        })
+        if (res.ok) resolvedFood = await res.json()
+      } catch {
+        // save failed — use food as-is (food_id will be null-ish, that's acceptable)
+      }
+    }
+    setSelected(resolvedFood)
+    setHighlightedId(resolvedFood.id)
+    setQuery(resolvedFood.name)
     setOpen(false)
     setBarcode({ status: 'idle' })
-    setUnit(food.unit === 'ml' ? 'ml' : 'g')
-    onSelect(food, grams)
+    setUnit(resolvedFood.unit === 'ml' ? 'ml' : 'g')
+    onSelect(resolvedFood, grams)
   }
 
   function handleGramsChange(val: number) {
@@ -272,6 +294,7 @@ export default function FoodSearch({ onSelect }: Props) {
                                   <div className="flex items-center gap-1.5">
                                     <p className={`text-sm font-semibold truncate ${isHighlighted ? 'text-blue-700' : 'text-gray-900'}`}>{food.name}</p>
                                     {food.custom && <span className="flex-shrink-0 text-xs font-medium px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700">My food</span>}
+                                    {food.source === 'off' && <span className="flex-shrink-0 text-xs font-medium px-1.5 py-0.5 rounded-full bg-green-50 text-green-600">Global</span>}
                                   </div>
                                   <div className="flex items-center gap-1.5 mt-0.5">
                                     <p className="text-xs text-gray-400">per 100{food.unit === 'ml' ? 'ml' : 'g'}</p>

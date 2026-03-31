@@ -1,52 +1,116 @@
 import { createClient } from '@/lib/supabase/server'
 import type { NextRequest } from 'next/server'
 
+type FoodRow = {
+  id: string
+  name: string
+  calories_per_100g: number
+  protein_per_100g: number
+  carbs_per_100g: number
+  fat_per_100g: number
+  unit?: string
+  custom?: boolean
+  source?: string
+}
+
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get('q')?.trim()
   if (!q || q.length < 2) return Response.json([])
 
   const supabase = await createClient()
 
+  // Run local DB + Open Food Facts search in parallel
   const [
     { data: dbStarts },
     { data: dbContains },
     { data: customFoods },
+    offResults,
   ] = await Promise.all([
-    // Exact starts-with matches (highest priority)
     supabase
       .from('food_database')
       .select('id, name, calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g, unit')
       .ilike('name', `${q}%`)
       .order('name')
       .limit(8),
-    // Broader contains matches (lower priority)
     supabase
       .from('food_database')
       .select('id, name, calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g, unit')
       .ilike('name', `%${q}%`)
       .order('name')
       .limit(12),
-    // User's personal foods
     supabase
       .from('foods')
       .select('id, name, calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g, unit')
       .ilike('name', `%${q}%`)
       .order('name')
       .limit(5),
+    fetchOpenFoodFacts(q),
   ])
 
-  // Merge: personal foods first, then starts-with, then contains — deduplicate by id
+  // Merge: personal foods → local starts-with → local contains → OFF
+  // Deduplicate by id, cap at 15 results
   const custom = (customFoods ?? []).map((f) => ({ ...f, custom: true }))
   const seen = new Set<string>()
-  const merged = []
+  const merged: FoodRow[] = []
+
   for (const food of [...custom, ...(dbStarts ?? []), ...(dbContains ?? [])]) {
     const key = String(food.id)
     if (!seen.has(key)) {
       seen.add(key)
+      merged.push(food as FoodRow)
+    }
+  }
+
+  // Fill remaining slots with OFF results not already in local DB by name
+  const localNames = new Set(merged.map((f) => f.name.toLowerCase()))
+  for (const food of offResults) {
+    if (merged.length >= 15) break
+    if (!localNames.has(food.name.toLowerCase())) {
       merged.push(food)
     }
-    if (merged.length >= 12) break
   }
 
   return Response.json(merged)
+}
+
+async function fetchOpenFoodFacts(q: string): Promise<FoodRow[]> {
+  try {
+    const url = new URL('https://world.openfoodfacts.org/cgi/search.pl')
+    url.searchParams.set('search_terms', q)
+    url.searchParams.set('json', '1')
+    url.searchParams.set('page_size', '8')
+    url.searchParams.set('fields', 'product_name,product_name_en,nutriments')
+    url.searchParams.set('sort_by', 'unique_scans_n')
+
+    const res = await fetch(url.toString(), {
+      headers: { 'User-Agent': 'NutriCoach/1.0 (nutricoach.app)' },
+      signal: AbortSignal.timeout(3000), // 3s max — don't block local results
+    })
+
+    if (!res.ok) return []
+    const data = await res.json()
+
+    const results: FoodRow[] = []
+    for (const p of (data.products ?? [])) {
+      const name = (p.product_name_en || p.product_name || '').trim()
+      if (!name) continue
+
+      const n = p.nutriments ?? {}
+      const kcal = n['energy-kcal_100g'] ?? (n['energy_100g'] ? n['energy_100g'] / 4.184 : null)
+      if (kcal == null) continue // skip products with no calorie data
+
+      results.push({
+        id: `off:${encodeURIComponent(name)}`,
+        name,
+        calories_per_100g: Math.round(kcal),
+        protein_per_100g: Math.round((n['proteins_100g'] ?? 0) * 10) / 10,
+        carbs_per_100g: Math.round((n['carbohydrates_100g'] ?? 0) * 10) / 10,
+        fat_per_100g: Math.round((n['fat_100g'] ?? 0) * 10) / 10,
+        source: 'off',
+      })
+    }
+    return results
+  } catch {
+    return []
+  }
 }
