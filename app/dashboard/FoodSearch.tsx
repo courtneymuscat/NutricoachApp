@@ -3,6 +3,45 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 
+// Called directly from the browser — avoids server-side rate limiting by OFF
+async function searchOpenFoodFacts(q: string, pageSize = 8, page = 1): Promise<FoodResult[]> {
+  try {
+    const url = new URL('https://world.openfoodfacts.org/cgi/search.pl')
+    url.searchParams.set('search_terms', q)
+    url.searchParams.set('json', '1')
+    url.searchParams.set('fields', 'product_name,product_name_en,brands,nutriments')
+    url.searchParams.set('page_size', String(pageSize))
+    url.searchParams.set('page', String(page))
+    url.searchParams.set('sort_by', 'unique_scans_n')
+
+    const res = await fetch(url.toString(), { signal: AbortSignal.timeout(8000) })
+    if (!res.ok) return []
+    const data = await res.json()
+
+    return (data.products ?? []).flatMap((p: Record<string, unknown>) => {
+      const base = ((p.product_name_en || p.product_name || '') as string).trim()
+      if (!base) return []
+      const brand = ((p.brands as string) ?? '').split(',')[0].trim()
+      const name = brand && !base.toLowerCase().includes(brand.toLowerCase())
+        ? `${brand} — ${base}` : base
+      const n = (p.nutriments ?? {}) as Record<string, number>
+      const kcal = n['energy-kcal_100g'] ?? (n['energy_100g'] ? n['energy_100g'] / 4.184 : null)
+      if (kcal == null) return []
+      return [{
+        id: `off:${encodeURIComponent(name)}`,
+        name,
+        calories_per_100g: Math.round(kcal),
+        protein_per_100g: Math.round((n['proteins_100g'] ?? 0) * 10) / 10,
+        carbs_per_100g: Math.round((n['carbohydrates_100g'] ?? 0) * 10) / 10,
+        fat_per_100g: Math.round((n['fat_100g'] ?? 0) * 10) / 10,
+        source: 'off' as const,
+      }]
+    })
+  } catch {
+    return []
+  }
+}
+
 const BarcodeScanner = dynamic(() => import('./BarcodeScanner'), { ssr: false })
 
 export type FoodResult = {
@@ -90,12 +129,18 @@ function ExpandedSearchModal({ initialQuery, onSelect, onClose }: {
     activeQuery.current = query
     setLoading(true)
     try {
-      const res = await fetch(`/api/foods/search?q=${encodeURIComponent(query)}&expanded=1&page=${p}`)
-      const data = await res.json()
-      // Discard stale responses if query changed while fetching
+      // Local DB + OFF called in parallel directly from browser
+      const [localRes, offResults] = await Promise.all([
+        fetch(`/api/foods/search?q=${encodeURIComponent(query)}`).then(r => r.json()).catch(() => []),
+        searchOpenFoodFacts(query, 30, p),
+      ])
       if (activeQuery.current !== query) return
-      setResults((prev) => reset ? (data.results ?? []) : [...prev, ...(data.results ?? [])])
-      setHasMore(!!data.hasMore)
+      const local: FoodResult[] = Array.isArray(localRes) ? localRes : []
+      const localNames = new Set(local.map((f) => f.name.toLowerCase()))
+      const merged = [...local, ...offResults.filter(f => !localNames.has(f.name.toLowerCase()))]
+      const hasMoreResults = offResults.length === 30
+      setResults((prev) => reset ? merged : [...prev, ...offResults.filter(f => !new Set(prev.map(p => p.name.toLowerCase())).has(f.name.toLowerCase()))])
+      setHasMore(hasMoreResults)
       setPage(p)
     } catch {
       // silent
@@ -211,8 +256,15 @@ export default function FoodSearch({ onSelect }: Props) {
     debounceRef.current = setTimeout(async () => {
       setLoading(true)
       try {
-        const res = await fetch(`/api/foods/search?q=${encodeURIComponent(query)}`)
-        setResults(await res.json())
+        // Local DB + OFF in parallel directly from browser
+        const [localData, offData] = await Promise.all([
+          fetch(`/api/foods/search?q=${encodeURIComponent(query)}`).then(r => r.json()).catch(() => []),
+          searchOpenFoodFacts(query, 8),
+        ])
+        const local: FoodResult[] = Array.isArray(localData) ? localData : []
+        const localNames = new Set(local.map((f) => f.name.toLowerCase()))
+        const merged = [...local, ...offData.filter((f) => !localNames.has(f.name.toLowerCase()))]
+        setResults(merged.slice(0, 15))
         setOpen(true)
       } finally {
         setLoading(false)
