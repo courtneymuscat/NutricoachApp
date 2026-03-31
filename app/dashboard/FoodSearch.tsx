@@ -260,15 +260,8 @@ export default function FoodSearch({ onSelect }: Props) {
     debounceRef.current = setTimeout(async () => {
       setLoading(true)
       try {
-        // Local DB + OFF in parallel directly from browser
-        const [localData, offData] = await Promise.all([
-          fetch(`/api/foods/search?q=${encodeURIComponent(query)}`).then(r => r.json()).catch(() => []),
-          searchOpenFoodFacts(query, 8),
-        ])
-        const local: FoodResult[] = Array.isArray(localData) ? localData : []
-        const localNames = new Set(local.map((f) => f.name.toLowerCase()))
-        const merged = [...local, ...offData.filter((f) => !localNames.has(f.name.toLowerCase()))]
-        setResults(merged.slice(0, 15))
+        const res = await fetch(`/api/foods/search?q=${encodeURIComponent(query)}`)
+        setResults(await res.json())
         setOpen(true)
       } finally {
         setLoading(false)
