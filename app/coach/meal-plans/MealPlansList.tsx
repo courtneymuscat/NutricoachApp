@@ -25,7 +25,7 @@ type MealSlot = {
 type MealPlan = {
   id: string
   name: string
-  goal: 'cut' | 'build' | 'maintain'
+  goal: string
   total_calories: number
   content: MealSlot[]
   created_at: string
@@ -46,41 +46,31 @@ function fmtCalories(n: number) {
   return n.toLocaleString('en-US')
 }
 
-const GOAL_BADGE: Record<string, { label: string; className: string }> = {
-  cut: { label: 'Cut', className: 'bg-red-50 text-red-600' },
-  build: { label: 'Build', className: 'bg-green-50 text-green-600' },
-  maintain: { label: 'Maintain', className: 'bg-blue-50 text-blue-600' },
+const DIET_BADGE: Record<string, { label: string; className: string }> = {
+  omnivore:    { label: 'Omnivore',    className: 'bg-orange-50 text-orange-600' },
+  vegetarian:  { label: 'Vegetarian',  className: 'bg-green-50 text-green-600' },
+  vegan:       { label: 'Vegan',       className: 'bg-emerald-50 text-emerald-700' },
+  pescatarian: { label: 'Pescatarian', className: 'bg-cyan-50 text-cyan-600' },
+  other:       { label: 'Other',       className: 'bg-gray-100 text-gray-500' },
 }
-
-type GoalFilter = 'all' | 'cut' | 'build' | 'maintain'
-
-const FILTER_TABS: { id: GoalFilter; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'cut', label: 'Cut' },
-  { id: 'build', label: 'Build' },
-  { id: 'maintain', label: 'Maintain' },
-]
 
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function MealPlansList({ plans: initialPlans }: { plans: MealPlan[] }) {
   const router = useRouter()
   const [plans, setPlans] = useState<MealPlan[]>(initialPlans)
-  const [filter, setFilter] = useState<GoalFilter>('all')
   const [showModal, setShowModal] = useState(false)
   const [name, setName] = useState('')
-  const [goal, setGoal] = useState<'cut' | 'build' | 'maintain'>('maintain')
+  const [goal, setGoal] = useState('omnivore')
   const [calories, setCalories] = useState('')
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null)
 
-  const filtered = filter === 'all' ? plans : plans.filter((p) => p.goal === filter)
-
   function openModal() {
     setName('')
-    setGoal('maintain')
+    setGoal('omnivore')
     setCalories('')
     setCreateError(null)
     setShowModal(true)
@@ -146,25 +136,8 @@ export default function MealPlansList({ plans: initialPlans }: { plans: MealPlan
       </div>
 
       <main className="flex-1 p-6 max-w-5xl mx-auto w-full">
-        {/* Filter tabs */}
-        <div className="flex gap-1 bg-gray-100 p-1 rounded-xl mb-6 w-fit">
-          {FILTER_TABS.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setFilter(t.id)}
-              className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
-                filter === t.id
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-
         {/* Empty state */}
-        {filtered.length === 0 && (
+        {plans.length === 0 && (
           <div className="text-center py-20">
             <div className="w-14 h-14 rounded-2xl bg-blue-50 flex items-center justify-center mx-auto mb-4">
               <svg className="w-7 h-7 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -172,28 +145,22 @@ export default function MealPlansList({ plans: initialPlans }: { plans: MealPlan
                   d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
             </div>
-            {filter === 'all' ? (
-              <>
-                <p className="text-sm font-semibold text-gray-700 mb-1">No meal plans yet</p>
-                <p className="text-xs text-gray-400 mb-5">Create your first plan and assign it to clients.</p>
-                <button
-                  onClick={openModal}
-                  className="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors"
-                >
-                  + New Plan
-                </button>
-              </>
-            ) : (
-              <p className="text-sm text-gray-400">No {filter} plans found.</p>
-            )}
+            <p className="text-sm font-semibold text-gray-700 mb-1">No meal plans yet</p>
+            <p className="text-xs text-gray-400 mb-5">Create your first plan and assign it to clients.</p>
+            <button
+              onClick={openModal}
+              className="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors"
+            >
+              + New Plan
+            </button>
           </div>
         )}
 
         {/* Grid */}
-        {filtered.length > 0 && (
+        {plans.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {filtered.map((plan) => {
-              const badge = GOAL_BADGE[plan.goal] ?? GOAL_BADGE.maintain
+            {plans.map((plan) => {
+              const badge = DIET_BADGE[plan.goal] ?? DIET_BADGE.other
               const mealCount = Array.isArray(plan.content) ? plan.content.length : 0
               return (
                 <div
@@ -277,7 +244,7 @@ export default function MealPlansList({ plans: initialPlans }: { plans: MealPlan
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. 2,200 kcal Build Phase"
+                  placeholder="e.g. Sarah's 2,000 kcal Plan"
                   autoFocus
                   className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
@@ -285,16 +252,18 @@ export default function MealPlansList({ plans: initialPlans }: { plans: MealPlan
 
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                  Goal
+                  Diet type
                 </label>
                 <select
                   value={goal}
-                  onChange={(e) => setGoal(e.target.value as typeof goal)}
+                  onChange={(e) => setGoal(e.target.value)}
                   className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                 >
-                  <option value="cut">Cut — caloric deficit</option>
-                  <option value="build">Build — caloric surplus</option>
-                  <option value="maintain">Maintain — maintenance calories</option>
+                  <option value="omnivore">Omnivore</option>
+                  <option value="vegetarian">Vegetarian</option>
+                  <option value="vegan">Vegan</option>
+                  <option value="pescatarian">Pescatarian</option>
+                  <option value="other">Other</option>
                 </select>
               </div>
 
