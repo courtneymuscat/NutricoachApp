@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
         icon
       )
     `)
-    .eq('user_id', user.id)
+    .eq('client_id', user.id)
 
   if (start_date) query = query.gte('log_date', start_date)
   if (end_date) query = query.lte('log_date', end_date)
@@ -34,7 +34,8 @@ export async function GET(req: NextRequest) {
   if (error) return Response.json({ error: error.message }, { status: 400 })
 
   const rows = (data ?? []).map((row) => {
-    const habit = row.habits as { name: string; unit: string; target: number; icon: string } | null
+    const habitRaw = row.habits
+    const habit = (Array.isArray(habitRaw) ? habitRaw[0] : habitRaw) as { name: string; unit: string; target: number; icon: string } | null
     return {
       habit_id: row.habit_id,
       habit_name: habit?.name ?? null,
@@ -61,7 +62,7 @@ export async function POST(req: NextRequest) {
   const { data, error } = await supabase
     .from('habit_logs')
     .upsert(
-      { habit_id, log_date, value, completed, user_id: user.id },
+      { habit_id, log_date, value, completed, client_id: user.id },
       { onConflict: 'habit_id,log_date' }
     )
     .select()
