@@ -23,9 +23,38 @@ export async function GET(req: NextRequest) {
   const supabase = await createClient()
 
   if (expanded) {
-    // Expanded mode: fetch more OFF results for the full search modal
-    const offResults = await fetchOpenFoodFacts(q, 30, page)
-    return Response.json({ results: offResults, hasMore: offResults.length === 30 })
+    // Expanded mode: local DB + full OFF results in parallel
+    const [{ data: dbResults }, { data: customFoods }, offResults] = await Promise.all([
+      supabase
+        .from('food_database')
+        .select('id, name, calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g, unit')
+        .ilike('name', `%${q}%`)
+        .order('name')
+        .limit(10),
+      supabase
+        .from('foods')
+        .select('id, name, calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g, unit')
+        .ilike('name', `%${q}%`)
+        .order('name')
+        .limit(5),
+      fetchOpenFoodFacts(q, 30, page),
+    ])
+
+    const custom = (customFoods ?? []).map((f) => ({ ...f, custom: true }))
+    const seen = new Set<string>()
+    const merged: FoodRow[] = []
+
+    for (const food of [...custom, ...(dbResults ?? [])]) {
+      const key = String(food.id)
+      if (!seen.has(key)) { seen.add(key); merged.push(food as FoodRow) }
+    }
+
+    const localNames = new Set(merged.map((f) => f.name.toLowerCase()))
+    for (const food of offResults) {
+      if (!localNames.has(food.name.toLowerCase())) merged.push(food)
+    }
+
+    return Response.json({ results: merged, hasMore: offResults.length === 30 })
   }
 
   // Standard dropdown: local DB + first page of OFF in parallel
@@ -79,7 +108,7 @@ export async function GET(req: NextRequest) {
 
 async function fetchOpenFoodFacts(q: string, pageSize = 8, page = 1): Promise<FoodRow[]> {
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 4000)
+  const timer = setTimeout(() => controller.abort(), 8000)
 
   try {
     // Legacy search endpoint — correctly filters by product name and brand
@@ -110,8 +139,7 @@ async function fetchOpenFoodFacts(q: string, pageSize = 8, page = 1): Promise<Fo
         : base
 
       const n = p.nutriments ?? {}
-      const kcal = n['energy-kcal_100g'] ?? (n['energy_100g'] ? n['energy_100g'] / 4.184 : null)
-      if (kcal == null) continue
+      const kcal = n['energy-kcal_100g'] ?? (n['energy_100g'] ? n['energy_100g'] / 4.184 : 0)
 
       results.push({
         id: `off:${encodeURIComponent(name)}`,
