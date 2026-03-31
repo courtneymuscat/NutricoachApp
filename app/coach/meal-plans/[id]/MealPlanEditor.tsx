@@ -91,12 +91,6 @@ function recomputeFood(food: MealFood & { _calories_per_100g?: number; _protein_
   return food
 }
 
-const GOAL_BADGE: Record<string, { label: string; className: string }> = {
-  cut: { label: 'Cut', className: 'bg-red-50 text-red-600' },
-  build: { label: 'Build', className: 'bg-green-50 text-green-600' },
-  maintain: { label: 'Maintain', className: 'bg-blue-50 text-blue-600' },
-}
-
 // ── FoodSearch ────────────────────────────────────────────────────────────────
 
 function FoodSearchInline({ onAdd }: { onAdd: (food: MealFood) => void }) {
@@ -418,7 +412,6 @@ export default function MealPlanEditor({ plan: initialPlan }: { plan: MealPlan }
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: updated.name,
-          goal: updated.goal,
           total_calories: Math.round(totals.calories),
           content: updated.content,
         }),
@@ -472,7 +465,6 @@ export default function MealPlanEditor({ plan: initialPlan }: { plan: MealPlan }
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: plan.name,
-        goal: plan.goal,
         total_calories: Math.round(totals.calories),
         content: plan.content,
       }),
@@ -480,8 +472,6 @@ export default function MealPlanEditor({ plan: initialPlan }: { plan: MealPlan }
     setSaveStatus(res.ok ? 'saved' : 'error')
     if (res.ok) setTimeout(() => setSaveStatus('idle'), 2500)
   }
-
-  const badge = GOAL_BADGE[plan.goal] ?? GOAL_BADGE.maintain
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
@@ -520,9 +510,6 @@ export default function MealPlanEditor({ plan: initialPlan }: { plan: MealPlan }
               </svg>
             </button>
           )}
-          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${badge.className}`}>
-            {badge.label}
-          </span>
         </div>
 
         <div className="flex items-center gap-3 flex-shrink-0">
@@ -592,43 +579,23 @@ export default function MealPlanEditor({ plan: initialPlan }: { plan: MealPlan }
       {/* Main content */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto p-6 space-y-4">
-          {/* Goal selector */}
+          {/* Calorie target */}
           <div className="bg-white rounded-2xl border p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Goal</p>
-                <select
-                  value={plan.goal}
-                  onChange={(e) => {
-                    const updated = { ...plan, goal: e.target.value as MealPlan['goal'] }
-                    setPlan(updated)
-                    scheduleSave(updated)
-                  }}
-                  className="text-sm font-semibold border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                >
-                  <option value="cut">Cut — caloric deficit</option>
-                  <option value="build">Build — caloric surplus</option>
-                  <option value="maintain">Maintain — maintenance</option>
-                </select>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Calorie target</p>
-                <div className="relative">
-                  <input
-                    type="number"
-                    value={plan.total_calories || ''}
-                    onChange={(e) => {
-                      const updated = { ...plan, total_calories: parseInt(e.target.value) || 0 }
-                      setPlan(updated)
-                      scheduleSave(updated)
-                    }}
-                    placeholder="0"
-                    min={0}
-                    className="w-32 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">kcal</span>
-                </div>
-              </div>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Calorie target</p>
+            <div className="relative w-40">
+              <input
+                type="number"
+                value={plan.total_calories || ''}
+                onChange={(e) => {
+                  const updated = { ...plan, total_calories: parseInt(e.target.value) || 0 }
+                  setPlan(updated)
+                  scheduleSave(updated)
+                }}
+                placeholder="0"
+                min={0}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">kcal</span>
             </div>
           </div>
 
