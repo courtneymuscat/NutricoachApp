@@ -3,16 +3,68 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 
-// Proxied through our own API route to avoid browser CORS restrictions.
-// Direct browser→OFF calls fail silently on some endpoints/networks.
+// Called directly from the browser — OFF blocks server-to-server requests as bots.
+// Browser requests pass their bot detection (cookies, real User-Agent, CORS allowed by OFF).
 export async function searchOpenFoodFacts(q: string, pageSize = 50, page = 1): Promise<{ results: FoodResult[]; total: number }> {
   try {
-    const params = new URLSearchParams({ q, page: String(page), page_size: String(pageSize) })
-    const res = await fetch(`/api/foods/off-search?${params}`, {
-      signal: AbortSignal.timeout(14000),
-    })
+    const url = new URL('https://world.openfoodfacts.org/cgi/search.pl')
+    url.searchParams.set('search_terms', q)
+    url.searchParams.set('search_simple', '1')   // search product name + brand
+    url.searchParams.set('action', 'process')
+    url.searchParams.set('json', '1')
+    url.searchParams.set('page_size', String(pageSize))
+    url.searchParams.set('page', String(page))
+    url.searchParams.set('sort_by', 'unique_scans_n')
+    // Don't restrict fields — some products store kcal under different keys;
+    // fetching all nutriments ensures we never miss calorie data
+
+    const res = await fetch(url.toString(), { signal: AbortSignal.timeout(12000) })
     if (!res.ok) return { results: [], total: 0 }
-    return await res.json()
+
+    const data = await res.json()
+    const total: number = data.count ?? 0
+
+    const results = (data.products ?? []).flatMap((p: Record<string, unknown>) => {
+      const base = ((p.product_name_en || p.product_name || '') as string).trim()
+      if (!base) return []
+
+      const brand = ((p.brands as string) ?? '').split(',')[0].trim()
+      const name = brand && !base.toLowerCase().includes(brand.toLowerCase())
+        ? `${brand} — ${base}` : base
+
+      const n = (p.nutriments ?? {}) as Record<string, number>
+
+      // Try every possible calorie field OFF uses
+      let kcal: number | null =
+        n['energy-kcal_100g'] ??
+        n['energy-kcal'] ??
+        (n['energy-kj_100g'] != null ? Math.round(n['energy-kj_100g'] / 4.184) : null) ??
+        (n['energy_100g']    != null ? Math.round(n['energy_100g']    / 4.184) : null) ??
+        null
+
+      // Last resort: estimate from macros if all energy fields are missing
+      if (kcal == null) {
+        const p100 = n['proteins_100g'] ?? 0
+        const c100 = n['carbohydrates_100g'] ?? 0
+        const f100 = n['fat_100g'] ?? 0
+        if (p100 > 0 || c100 > 0 || f100 > 0) {
+          kcal = Math.round(p100 * 4 + c100 * 4 + f100 * 9)
+        }
+      }
+
+      // Still no calorie data at all — show with 0 so the food is at least visible
+      return [{
+        id: `off:${encodeURIComponent(name)}`,
+        name,
+        calories_per_100g: kcal != null ? Math.round(kcal) : 0,
+        protein_per_100g:  Math.round((n['proteins_100g']      ?? 0) * 10) / 10,
+        carbs_per_100g:    Math.round((n['carbohydrates_100g'] ?? 0) * 10) / 10,
+        fat_per_100g:      Math.round((n['fat_100g']           ?? 0) * 10) / 10,
+        source: 'off' as const,
+      }]
+    })
+
+    return { results, total }
   } catch {
     return { results: [], total: 0 }
   }
