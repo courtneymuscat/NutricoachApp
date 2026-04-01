@@ -185,13 +185,13 @@ function FoodRow({
           <span className="text-[11px] bg-orange-50 text-orange-500 font-semibold px-1.5 py-0.5 rounded-full">
             {Math.round(food.calories)} kcal
           </span>
-          <span className="text-[11px] bg-blue-50 text-blue-500 font-semibold px-1.5 py-0.5 rounded-full">
+          <span className="text-[11px] bg-purple-50 text-purple-500 font-semibold px-1.5 py-0.5 rounded-full">
             P {food.protein.toFixed(1)}g
           </span>
-          <span className="text-[11px] bg-yellow-50 text-yellow-600 font-semibold px-1.5 py-0.5 rounded-full">
+          <span className="text-[11px] bg-green-50 text-green-500 font-semibold px-1.5 py-0.5 rounded-full">
             C {food.carbs.toFixed(1)}g
           </span>
-          <span className="text-[11px] bg-pink-50 text-pink-500 font-semibold px-1.5 py-0.5 rounded-full">
+          <span className="text-[11px] bg-blue-50 text-blue-400 font-semibold px-1.5 py-0.5 rounded-full">
             F {food.fat.toFixed(1)}g
           </span>
         </div>
@@ -351,9 +351,9 @@ function MealSlotCard({
         <div className="mt-2 pt-2 border-t border-gray-100 flex items-center gap-2 flex-wrap">
           <span className="text-[11px] text-gray-400 font-semibold uppercase tracking-wide">Total:</span>
           <span className="text-[11px] text-orange-500 font-semibold">{Math.round(slotMacros.cal)} kcal</span>
-          <span className="text-[11px] text-blue-500 font-semibold">P {slotMacros.p.toFixed(1)}g</span>
-          <span className="text-[11px] text-yellow-600 font-semibold">C {slotMacros.c.toFixed(1)}g</span>
-          <span className="text-[11px] text-pink-500 font-semibold">F {slotMacros.f.toFixed(1)}g</span>
+          <span className="text-[11px] text-purple-500 font-semibold">P {slotMacros.p.toFixed(1)}g</span>
+          <span className="text-[11px] text-green-500 font-semibold">C {slotMacros.c.toFixed(1)}g</span>
+          <span className="text-[11px] text-blue-400 font-semibold">F {slotMacros.f.toFixed(1)}g</span>
         </div>
       )}
 
@@ -557,15 +557,15 @@ export default function ClientMealPlanEditor({
           <div className="flex items-center gap-3">
             <div>
               <span className="text-xs text-gray-400">Protein </span>
-              <span className="text-sm font-semibold text-blue-600">{totals.protein.toFixed(1)}g</span>
+              <span className="text-sm font-semibold text-purple-500">{totals.protein.toFixed(1)}g</span>
             </div>
             <div>
               <span className="text-xs text-gray-400">Carbs </span>
-              <span className="text-sm font-semibold text-yellow-600">{totals.carbs.toFixed(1)}g</span>
+              <span className="text-sm font-semibold text-green-500">{totals.carbs.toFixed(1)}g</span>
             </div>
             <div>
               <span className="text-xs text-gray-400">Fat </span>
-              <span className="text-sm font-semibold text-pink-500">{totals.fat.toFixed(1)}g</span>
+              <span className="text-sm font-semibold text-blue-400">{totals.fat.toFixed(1)}g</span>
             </div>
           </div>
           <div className="h-4 w-px bg-gray-200" />
