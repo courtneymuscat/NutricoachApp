@@ -584,6 +584,9 @@ export default function ProgramBuilderPage({ params }: { params: Promise<{ id: s
   // drag-and-drop day reordering within a week
   const [dragFrom, setDragFrom] = useState<[number, number] | null>(null)
   const [dragOver, setDragOver] = useState<[number, number] | null>(null)
+  // inline day rename
+  const [renamingDay, setRenamingDay] = useState<[number, number] | null>(null)
+  const [renameValue, setRenameValue] = useState('')
 
   useEffect(() => { params.then(({ id }) => setProgramId(id)) }, [params])
 
@@ -805,7 +808,37 @@ export default function ProgramBuilderPage({ params }: { params: Promise<{ id: s
                             {day ? (
                               <>
                                 <div className="flex items-start justify-between gap-1 mb-1.5">
-                                  <p className="text-[10px] font-bold text-blue-700 truncate flex-1">{day.name || 'Day'}</p>
+                                  {renamingDay?.[0] === wi && renamingDay?.[1] === di ? (
+                                    <input
+                                      autoFocus
+                                      value={renameValue}
+                                      onChange={(e) => setRenameValue(e.target.value)}
+                                      onClick={(e) => e.stopPropagation()}
+                                      onBlur={(e) => {
+                                        e.stopPropagation()
+                                        const name = renameValue.trim() || day.name
+                                        updateDay(wi, di, { ...day, name })
+                                        setRenamingDay(null)
+                                      }}
+                                      onKeyDown={(e) => {
+                                        e.stopPropagation()
+                                        if (e.key === 'Enter' || e.key === 'Escape') {
+                                          const name = renameValue.trim() || day.name
+                                          updateDay(wi, di, { ...day, name })
+                                          setRenamingDay(null)
+                                        }
+                                      }}
+                                      className="text-[10px] font-bold text-blue-700 flex-1 bg-transparent border-b border-blue-400 outline-none min-w-0 w-full"
+                                    />
+                                  ) : (
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); setRenameValue(day.name); setRenamingDay([wi, di]) }}
+                                      className="text-[10px] font-bold text-blue-700 truncate flex-1 text-left hover:text-blue-500 transition-colors"
+                                      title="Click to rename"
+                                    >
+                                      {day.name || 'Day'}
+                                    </button>
+                                  )}
                                   <button onClick={(e) => { e.stopPropagation(); deleteDay(wi, di) }}
                                     className="text-gray-200 hover:text-red-400 text-xs leading-none flex-shrink-0">×</button>
                                 </div>
