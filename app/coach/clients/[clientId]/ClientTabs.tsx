@@ -911,6 +911,8 @@ function AssignedProgramCard({
   )
   // selectedDay: [weekIndex, dayIndex] | null
   const [selectedDay, setSelectedDay] = useState<[number, number] | null>(null)
+  const [dragFrom, setDragFrom] = useState<[number, number] | null>(null)
+  const [dragOver, setDragOver] = useState<[number, number] | null>(null)
 
   function updateContent(next: PWeek[]) { setLocalContent(next); setDirty(true); setSaveStatus('idle') }
 
@@ -985,6 +987,17 @@ function AssignedProgramCard({
     if (!confirm('Remove this day?')) return
     updateContent(localContent.map((w, i) => i !== weekIdx ? w : { ...w, days: w.days.filter((_, di) => di !== dayIdx) }))
     if (selectedDay?.[0] === weekIdx && selectedDay?.[1] === dayIdx) setSelectedDay(null)
+  }
+
+  function moveDay(weekIdx: number, from: number, to: number) {
+    if (from === to) return
+    const week = localContent[weekIdx]
+    if (!week) return
+    const days = [...week.days]
+    const [moved] = days.splice(from, 1)
+    days.splice(to, 0, moved)
+    updateContent(localContent.map((w, i) => i === weekIdx ? { ...w, days } : w))
+    if (selectedDay?.[0] === weekIdx && selectedDay?.[1] === from) setSelectedDay([weekIdx, to])
   }
 
   const maxDays = Math.max(4, ...localContent.map((w) => w.days.length))
@@ -1089,15 +1102,33 @@ function AssignedProgramCard({
                       const day = week.days[di]
                       const exercises = (day?.items ?? []).filter((it) => it.type === 'exercise') as PExercise[]
                       const isSelected = selectedDay?.[0] === wi && selectedDay?.[1] === di
+                      const isDragging = dragFrom?.[0] === wi && dragFrom?.[1] === di
+                      const isDropTarget = dragOver?.[0] === wi && dragOver?.[1] === di && dragFrom?.[0] === wi && !isDragging
                       return (
                         <div key={di}
-                          onClick={() => day && setSelectedDay(isSelected ? null : [wi, di])}
+                          draggable={!!day}
+                          onDragStart={day ? (e) => { e.dataTransfer.effectAllowed = 'move'; setDragFrom([wi, di]) } : undefined}
+                          onDragOver={day ? (e) => { e.preventDefault(); setDragOver([wi, di]) } : (e) => e.preventDefault()}
+                          onDragEnter={dragFrom?.[0] === wi ? (e) => { e.preventDefault(); setDragOver([wi, di]) } : undefined}
+                          onDragEnd={() => { setDragFrom(null); setDragOver(null) }}
+                          onDrop={(e) => {
+                            e.preventDefault()
+                            if (dragFrom && dragFrom[0] === wi) moveDay(wi, dragFrom[1], di)
+                            setDragFrom(null); setDragOver(null)
+                          }}
+                          onClick={() => day && !dragFrom && setSelectedDay(isSelected ? null : [wi, di])}
                           className={`min-h-[80px] rounded-xl border p-2 transition-all ${
-                            day
-                              ? isSelected
-                                ? 'bg-blue-50 border-blue-400 shadow-sm cursor-pointer'
-                                : 'bg-white border-gray-200 hover:border-blue-300 hover:shadow-sm cursor-pointer'
-                              : 'bg-gray-50/40 border-dashed border-gray-100'
+                            isDragging
+                              ? 'opacity-40 border-blue-300 bg-blue-50 cursor-grabbing'
+                              : isDropTarget
+                                ? 'border-blue-500 bg-blue-50 shadow-md scale-[1.02]'
+                                : day
+                                  ? isSelected
+                                    ? 'bg-blue-50 border-blue-400 shadow-sm cursor-pointer'
+                                    : 'bg-white border-gray-200 hover:border-blue-300 hover:shadow-sm cursor-grab'
+                                  : dragFrom?.[0] === wi
+                                    ? 'bg-blue-50/30 border-dashed border-blue-200'
+                                    : 'bg-gray-50/40 border-dashed border-gray-100'
                           }`}>
                           {day ? (
                             <>
