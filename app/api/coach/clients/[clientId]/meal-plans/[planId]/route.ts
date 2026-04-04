@@ -33,11 +33,16 @@ export async function PATCH(
 
   const supabase = await createClient()
   const body = await req.json()
-  const { name, content, status } = body
+  const { name, content, status, total_calories } = body
+  const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  if (name !== undefined) updates.name = name
+  if (content !== undefined) updates.content = content
+  if (status !== undefined) updates.status = status
+  if (total_calories !== undefined) updates.total_calories = total_calories
 
   const { data, error } = await supabase
     .from('client_meal_plans')
-    .update({ name, content, status, updated_at: new Date().toISOString() })
+    .update(updates)
     .eq('id', planId)
     .eq('client_id', clientId)
     .eq('coach_id', coachId)

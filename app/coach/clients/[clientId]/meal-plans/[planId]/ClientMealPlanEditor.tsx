@@ -24,7 +24,7 @@ type MealSlot = {
 type ClientPlanRecord = {
   id: string
   name: string
-  total_calories: number
+  total_calories?: number | null
   content: MealSlot[] | null
   status: string
 }
@@ -374,6 +374,7 @@ export default function ClientMealPlanEditor({
 }) {
   const [plan, setPlan] = useState<ClientPlanRecord>({
     ...initialPlan,
+    total_calories: initialPlan.total_calories ?? 0,
     content: Array.isArray(initialPlan.content) ? initialPlan.content : [],
   })
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
@@ -571,12 +572,12 @@ export default function ClientMealPlanEditor({
           <div className="h-4 w-px bg-gray-200" />
           <div>
             <span className="text-xs text-gray-400">Target </span>
-            <span className="text-sm font-semibold text-gray-600">{plan.total_calories.toLocaleString()} kcal</span>
+            <span className="text-sm font-semibold text-gray-600">{(plan.total_calories ?? 0).toLocaleString()} kcal</span>
           </div>
-          {plan.total_calories > 0 && (
+          {(plan.total_calories ?? 0) > 0 && (
             <div>
-              <span className={`text-xs font-semibold ${Math.abs(totals.calories - plan.total_calories) <= 50 ? 'text-green-500' : 'text-orange-500'}`}>
-                {totals.calories >= plan.total_calories ? '+' : ''}{Math.round(totals.calories - plan.total_calories)} kcal
+              <span className={`text-xs font-semibold ${Math.abs(totals.calories - (plan.total_calories ?? 0)) <= 50 ? 'text-green-500' : 'text-orange-500'}`}>
+                {totals.calories >= (plan.total_calories ?? 0) ? '+' : ''}{Math.round(totals.calories - (plan.total_calories ?? 0))} kcal
               </span>
             </div>
           )}
@@ -592,7 +593,7 @@ export default function ClientMealPlanEditor({
             <div className="relative w-40">
               <input
                 type="number"
-                value={plan.total_calories || ''}
+                value={plan.total_calories ?? ''}
                 onChange={(e) => {
                   const updated = { ...plan, total_calories: parseInt(e.target.value) || 0 }
                   setPlan(updated)
