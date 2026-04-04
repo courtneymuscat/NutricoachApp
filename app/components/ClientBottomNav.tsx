@@ -29,6 +29,13 @@ function WorkoutsIcon({ active }: { active: boolean }) {
     </svg>
   )
 }
+function CalendarIcon({ active }: { active: boolean }) {
+  return (
+    <svg className={`w-6 h-6 ${active ? 'text-blue-600' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={active ? 2.25 : 1.75} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    </svg>
+  )
+}
 function MessagesIcon({ active }: { active: boolean }) {
   return (
     <svg className={`w-6 h-6 ${active ? 'text-blue-600' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -52,21 +59,22 @@ function buildTabs(sex: string | null, tier: string | null): Tab[] {
   const isCoached = tier === 'coached'
   const isFemale = sex !== 'male'
 
-  const home: Tab    = { href: '/dashboard', label: 'Home',     icon: (a) => <HomeIcon active={a} /> }
-  const cycle: Tab   = { href: '/cycle',     label: 'Cycle',    icon: (a) => <CycleIcon active={a} /> }
-  const workouts: Tab = { href: '/workouts', label: 'Workouts', icon: (a) => <WorkoutsIcon active={a} /> }
-  const messages: Tab = { href: '/messages', label: 'Messages', icon: (a) => <MessagesIcon active={a} /> }
-  const profile: Tab  = { href: '/settings', label: 'Profile',  icon: (a) => <ProfileIcon active={a} /> }
+  const home: Tab     = { href: '/dashboard', label: 'Home',     icon: (a) => <HomeIcon active={a} /> }
+  const cycle: Tab    = { href: '/cycle',     label: 'Cycle',    icon: (a) => <CycleIcon active={a} /> }
+  const workouts: Tab = { href: '/workouts',  label: 'Workouts', icon: (a) => <WorkoutsIcon active={a} /> }
+  const calendar: Tab = { href: '/calendar',  label: 'Calendar', icon: (a) => <CalendarIcon active={a} /> }
+  const messages: Tab = { href: '/messages',  label: 'Messages', icon: (a) => <MessagesIcon active={a} /> }
+  const profile: Tab  = { href: '/settings',  label: 'Profile',  icon: (a) => <ProfileIcon active={a} /> }
 
-  if (isFemale && isCoached)  return [home, cycle, workouts, messages, profile]
+  if (isFemale && isCoached)  return [home, cycle, calendar, messages, profile]
   if (isFemale && !isCoached) return [home, cycle, workouts, profile]
-  if (!isFemale && isCoached) return [home, workouts, messages, profile]
+  if (!isFemale && isCoached) return [home, calendar, messages, profile]
   return [home, workouts, profile]
 }
 
 // ── Pages where the nav should appear ─────────────────────────────────────────
 
-const SHOW_ON = ['/dashboard', '/workouts', '/progress', '/cycle', '/messages', '/settings']
+const SHOW_ON = ['/dashboard', '/workouts', '/calendar', '/progress', '/cycle', '/messages', '/settings']
 
 const HIDE_PREFIXES = ['/coach', '/onboarding', '/login', '/signup', '/forms', '/invite', '/pricing', '/checkout', '/subscribe']
 

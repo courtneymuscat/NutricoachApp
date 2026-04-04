@@ -12,7 +12,6 @@ import MealSection from './MealSection'
 import FormsSection from './FormsSection'
 import CoachBanner from './CoachBanner'
 import UpgradePrompt from '@/components/UpgradePrompt'
-import TrainingCalendar from './TrainingCalendar'
 import MealPlanView from './MealPlanView'
 import HabitsPanel from './HabitsPanel'
 import ScheduledCheckIns from './ScheduledCheckIns'
@@ -91,7 +90,7 @@ export default async function DashboardPage() {
           {/* Desktop-only nav links — bottom tab bar handles mobile */}
           <div className="hidden md:flex items-center gap-1">
             {[
-              { href: '/workouts', label: 'Workouts', id: undefined },
+              ...(isCoached ? [{ href: '/calendar', label: 'Calendar', id: undefined }] : [{ href: '/workouts', label: 'Workouts', id: undefined }]),
               ...(profile?.sex !== 'male' ? [{ href: '/cycle', label: 'Cycle', id: undefined }] : []),
               { href: '/progress', label: 'Progress Photos', id: undefined },
               ...(isCoach ? [{ href: '/coach/dashboard', label: 'Coach Dashboard', id: undefined }] : []),
@@ -172,14 +171,9 @@ export default async function DashboardPage() {
           />
         )}
 
-        {/* Coached-only sections: Calendar, Meal Plan, Habits */}
+        {/* Coached-only sections: Meal Plan, Habits */}
         {isCoached && (
           <>
-            <section>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Training Calendar</p>
-              <TrainingCalendar />
-            </section>
-
             <section>
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">My Meal Plan</p>
               <MealPlanView />
