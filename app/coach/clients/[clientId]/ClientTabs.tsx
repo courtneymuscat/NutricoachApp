@@ -1056,10 +1056,13 @@ function AssignedProgramCard({
             ) : (
               <button
                 onClick={() => setEditingStartDate(true)}
-                className="text-xs text-gray-400 hover:text-blue-600 hover:underline transition-colors"
+                className="flex items-center gap-1 text-xs text-gray-400 hover:text-blue-600 transition-colors group"
                 title="Edit start date"
               >
                 {fmtDate(startDateObj)}
+                <svg className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 012.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2a2 2 0 01.586-1.414z" />
+                </svg>
               </button>
             )}
             {numWeeks > 0 && (
@@ -1390,8 +1393,8 @@ function ProgramTab({ clientId }: { clientId: string }) {
     const d = await fetch(`/api/coach/clients/${clientId}/programs`).then((r) => r.json())
     const list: ClientProgram[] = Array.isArray(d) ? d : []
 
-    // Sort by start_date ascending
-    list.sort((a, b) => a.start_date.localeCompare(b.start_date))
+    // Sort by start_date descending (most recent first)
+    list.sort((a, b) => b.start_date.localeCompare(a.start_date))
 
     // Auto-complete expired programs
     const today = new Date().toISOString().slice(0, 10)
@@ -1422,7 +1425,7 @@ function ProgramTab({ clientId }: { clientId: string }) {
   }, [clientId])
 
   function handleAssigned(assignment: ClientProgram) {
-    setAssignments((prev) => [...prev, assignment].sort((a, b) => a.start_date.localeCompare(b.start_date)))
+    setAssignments((prev) => [...prev, assignment].sort((a, b) => b.start_date.localeCompare(a.start_date)))
   }
 
   function handleUnassign(id: string) {
@@ -1432,7 +1435,7 @@ function ProgramTab({ clientId }: { clientId: string }) {
   function handleUpdated(updated: ClientProgram) {
     setAssignments((prev) =>
       prev.map((a) => (a.id === updated.id ? updated : a))
-          .sort((a, b) => a.start_date.localeCompare(b.start_date))
+          .sort((a, b) => b.start_date.localeCompare(a.start_date))
     )
   }
 
