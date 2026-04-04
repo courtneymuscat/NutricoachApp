@@ -1039,7 +1039,7 @@ function AssignedProgramCard({
       <div className="flex items-start justify-between p-5">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
-            <p className="text-sm font-semibold text-gray-900">{assignment.name}</p>
+            <button onClick={() => setExpanded((v) => !v)} className="text-sm font-semibold text-gray-900 hover:text-blue-600 transition-colors text-left">{assignment.name}</button>
             <StatusBadge status={assignment.status} />
           </div>
           {/* Editable start date + computed date range */}
@@ -1060,7 +1060,7 @@ function AssignedProgramCard({
                 title="Edit start date"
               >
                 {fmtDate(startDateObj)}
-                <svg className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 012.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2a2 2 0 01.586-1.414z" />
                 </svg>
               </button>
