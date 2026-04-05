@@ -1580,12 +1580,36 @@ function addDays(date: Date, days: number) {
 
 function toDateStr(date: Date) { return date.toISOString().slice(0, 10) }
 
+type CalWorkoutItem = {
+  type: 'exercise' | 'section'
+  id: string
+  name?: string
+  title?: string
+  notes?: string
+  scoreType?: string
+  scoreValue?: string
+  sets?: Array<{ setNumber: number; reps: string; weight: string }>
+}
+
+type CalWorkoutForDate = {
+  programId: string
+  programName: string
+  dayName: string
+  weekIdx: number
+  dayIdx: number
+  exerciseCount: number
+  items: CalWorkoutItem[]
+  dateStr: string
+  result: CalendarEvent | null
+}
+
 // Handles both old format (exercises[]) and new format (items: DayItem[])
 function getWorkoutsForDate(
   programs: { id: string; name: string; start_date: string; content: unknown[] }[],
-  date: Date
+  date: Date,
+  events: CalendarEvent[]
 ) {
-  const results: { programName: string; dayName: string; exerciseCount: number }[] = []
+  const out: CalWorkoutForDate[] = []
   const dateStr = toDateStr(date)
   for (const prog of programs) {
     const start = new Date(prog.start_date); start.setHours(0, 0, 0, 0)
@@ -1597,17 +1621,123 @@ function getWorkoutsForDate(
     const week = (prog.content[weekIdx] ?? {}) as Record<string, unknown>
     const day = ((week.days ?? []) as Record<string, unknown>[])[dayIdx]
     if (!day) continue
-    // New format: items array
-    const items = day.items as { type: string }[] | undefined
+    const items = day.items as CalWorkoutItem[] | undefined
     const exes = day.exercises as unknown[] | undefined
     const count = Array.isArray(items)
       ? items.filter((it) => it.type === 'exercise').length
       : Array.isArray(exes) ? exes.length : 0
-    if (count > 0) {
-      results.push({ programName: prog.name, dayName: (day.name as string) || `Day ${dayIdx + 1}`, exerciseCount: count })
-    }
+    if (count === 0 && !Array.isArray(items)) continue
+    if (!count && (!Array.isArray(items) || items.length === 0)) continue
+    const result = events.find(
+      (e) =>
+        e.type === 'program_workout_result' &&
+        e.event_date === dateStr &&
+        (e.content as Record<string, unknown>).program_id === prog.id &&
+        (e.content as Record<string, unknown>).week_index === weekIdx &&
+        (e.content as Record<string, unknown>).day_index === dayIdx
+    ) ?? null
+    out.push({
+      programId: prog.id,
+      programName: prog.name,
+      dayName: (day.name as string) || `Day ${dayIdx + 1}`,
+      weekIdx,
+      dayIdx,
+      exerciseCount: count,
+      items: Array.isArray(items) ? items : [],
+      dateStr,
+      result,
+    })
   }
-  return results
+  return out
+}
+
+// ── Coach workout result viewer ───────────────────────────────────────────────
+
+function CoachWorkoutModal({ workout, onClose }: { workout: CalWorkoutForDate; onClose: () => void }) {
+  const result = workout.result
+  const savedSections = result
+    ? ((result.content.sections ?? []) as Array<{ id: string; title: string; scoreType: string; scoreValue: string }>)
+    : []
+  const savedExercises = result
+    ? ((result.content.exercises ?? []) as Array<{ id: string; name: string; sets: Array<{ weight: string; reps: string }> }>)
+    : []
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white w-full sm:rounded-2xl shadow-2xl sm:max-w-lg max-h-[90vh] flex flex-col rounded-t-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between px-5 pt-5 pb-3 border-b">
+          <div>
+            <p className="text-xs font-semibold text-indigo-600 uppercase tracking-wide">{workout.programName}</p>
+            <h2 className="text-base font-bold text-gray-900 mt-0.5">{workout.dayName}</h2>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {new Date(workout.dateStr + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}
+              {result && <span className="ml-2 text-green-600 font-semibold">· Completed</span>}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 mt-0.5">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+          {!result && (
+            <div className="bg-gray-50 rounded-xl px-4 py-3 text-sm text-gray-400 text-center">
+              Client hasn't logged this workout yet.
+            </div>
+          )}
+
+          {workout.items.map((item) => {
+            if (item.type === 'section') {
+              const hasScore = item.scoreType && item.scoreType !== 'none'
+              const savedScore = savedSections.find((s) => s.id === item.id)
+              return (
+                <div key={item.id} className="bg-indigo-50 rounded-xl px-4 py-3 space-y-1.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-bold text-indigo-700 uppercase tracking-wide">{item.title}</span>
+                    {hasScore && (
+                      <span className="text-[10px] font-semibold bg-indigo-600 text-white px-2 py-0.5 rounded-full uppercase">{item.scoreType}</span>
+                    )}
+                  </div>
+                  {item.notes && <p className="text-xs text-indigo-800 whitespace-pre-line leading-relaxed">{item.notes}</p>}
+                  {hasScore && result && (
+                    <div className="flex items-center gap-2 pt-1">
+                      <span className="text-xs text-gray-500">Client score:</span>
+                      <span className="text-sm font-bold text-indigo-700">{savedScore?.scoreValue || '—'}</span>
+                    </div>
+                  )}
+                </div>
+              )
+            }
+
+            const savedEx = savedExercises.find((e) => e.id === item.id)
+            return (
+              <div key={item.id} className="border border-gray-100 rounded-xl px-4 py-3 space-y-1.5">
+                <p className="text-sm font-semibold text-gray-800">{item.name}</p>
+                {item.notes && <p className="text-xs text-gray-400">{item.notes}</p>}
+                <p className="text-xs text-gray-400">Target: {item.sets?.length ?? 0} sets × {item.sets?.[0]?.reps ?? '—'}</p>
+                {savedEx && savedEx.sets.length > 0 && (
+                  <div className="space-y-1 pt-1">
+                    {savedEx.sets.map((s, si) => (
+                      <p key={si} className="text-xs text-gray-600">
+                        Set {si + 1}: {s.weight ? `${s.weight} kg × ` : ''}{s.reps} reps
+                      </p>
+                    ))}
+                  </div>
+                )}
+                {result && !savedEx && <p className="text-xs text-gray-300 italic">No sets logged</p>}
+              </div>
+            )
+          })}
+        </div>
+
+        <div className="px-5 py-4 border-t">
+          <button onClick={onClose} className="w-full border border-gray-200 text-gray-600 py-2.5 rounded-xl text-sm font-semibold hover:bg-gray-50">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function CalendarTab({ clientId }: { clientId: string }) {
@@ -1621,6 +1751,7 @@ function CalendarTab({ clientId }: { clientId: string }) {
   const [addingEvent, setAddingEvent] = useState<string | null>(null)
   const [newEvent, setNewEvent] = useState({ type: 'note', title: '', content: '' })
   const [saving, setSaving] = useState(false)
+  const [viewingWorkout, setViewingWorkout] = useState<CalWorkoutForDate | null>(null)
 
   const weekEnd = addDays(weekStart, 6)
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
@@ -1708,8 +1839,8 @@ function CalendarTab({ clientId }: { clientId: string }) {
             const dateStr = toDateStr(day)
             const isToday = dateStr === today
             const isPast = dateStr < today
-            const dayEvents = events.filter((e) => e.event_date === dateStr)
-            const workouts = getWorkoutsForDate(programs, day)
+            const dayEvents = events.filter((e) => e.event_date === dateStr && e.type !== 'program_workout_result')
+            const workouts = getWorkoutsForDate(programs, day, events)
             const macros = foodByDate[dateStr]
             const hasContent = workouts.length > 0 || dayEvents.length > 0 || macros
 
@@ -1730,10 +1861,16 @@ function CalendarTab({ clientId }: { clientId: string }) {
 
                 {/* Training plan workouts */}
                 {workouts.map((w, i) => (
-                  <div key={i} className="text-[10px] bg-blue-100 text-blue-700 rounded-md px-1.5 py-1 font-medium">
-                    <p className="truncate font-semibold">💪 {w.dayName}</p>
-                    <p className="opacity-70 truncate">{w.programName} · {w.exerciseCount} ex</p>
-                  </div>
+                  <button key={i} onClick={() => setViewingWorkout(w)}
+                    className={`w-full text-left text-[10px] rounded-md px-1.5 py-1 font-medium transition-colors hover:opacity-90 ${
+                      w.result ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-blue-100 text-blue-700 border border-blue-200'
+                    }`}>
+                    <div className="flex items-center gap-1">
+                      <p className="truncate font-semibold flex-1">💪 {w.dayName}</p>
+                      {w.result && <svg className="w-3 h-3 text-green-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>}
+                    </div>
+                    <p className="opacity-70 truncate">{w.programName}{w.result ? ' · logged' : ` · ${w.exerciseCount} ex`}</p>
+                  </button>
                 ))}
 
                 {/* Macros */}
@@ -1768,6 +1905,11 @@ function CalendarTab({ clientId }: { clientId: string }) {
             )
           })}
         </div>
+      )}
+
+      {/* Workout results modal */}
+      {viewingWorkout && (
+        <CoachWorkoutModal workout={viewingWorkout} onClose={() => setViewingWorkout(null)} />
       )}
 
       {/* Add event modal */}

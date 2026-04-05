@@ -5,29 +5,35 @@ import { createClient } from '@/lib/supabase/client'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type ProgramDayItem = {
+type ScoreType = 'time' | 'reps' | 'rounds' | 'weight' | 'distance' | 'calories' | 'custom' | 'none'
+
+type ProgramSet = { setNumber: number; reps: string; weight: string; duration?: string }
+
+type ProgramItem = {
   type: 'exercise' | 'section'
-  name?: string  // exercise
-  title?: string // section
-  scoreType?: string
-  sets?: unknown
+  id: string
+  name?: string        // exercise
+  title?: string       // section
+  notes?: string
+  scoreType?: ScoreType
+  scoreValue?: string
+  sets?: ProgramSet[]
+  metrics?: string
 }
 
 type ProgramDay = {
+  id?: string
   name?: string
-  // New format: items array (exercises + sections)
-  items?: ProgramDayItem[]
-  // Old format: flat exercises array
+  items?: ProgramItem[]
+  // Old flat format
   exercises?: Array<{ name: string; sets: number; reps: string; notes?: string }>
 }
-
-type ProgramWeek = { days: ProgramDay[] }
 
 type ClientProgram = {
   id: string
   name: string
   start_date: string
-  content: ProgramWeek[]
+  content: Array<{ id?: string; label?: string; days: ProgramDay[] }>
   status: string
 }
 
@@ -39,6 +45,20 @@ type CalendarEvent = {
   content: Record<string, unknown>
 }
 
+type WorkoutForDate = {
+  programId: string
+  programName: string
+  weekIdx: number
+  dayIdx: number
+  day: ProgramDay
+  dateStr: string
+  result: CalendarEvent | null
+}
+
+// Logged state per exercise: sets with actual weight/reps
+type LoggedExercises = Record<string, Array<{ weight: string; reps: string }>>
+type LoggedSections  = Record<string, string> // section id → score value
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function toDateStr(date: Date): string {
@@ -48,9 +68,7 @@ function toDateStr(date: Date): string {
 function startOfWeek(date: Date): Date {
   const d = new Date(date)
   const day = d.getDay()
-  // Monday = 0 offset
-  const diff = (day === 0 ? -6 : 1 - day)
-  d.setDate(d.getDate() + diff)
+  d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day))
   d.setHours(0, 0, 0, 0)
   return d
 }
@@ -62,37 +80,41 @@ function addDays(date: Date, n: number): Date {
 }
 
 function differenceInDays(a: Date, b: Date): number {
-  const msPerDay = 1000 * 60 * 60 * 24
-  return Math.floor((a.getTime() - b.getTime()) / msPerDay)
+  return Math.floor((a.getTime() - b.getTime()) / (1000 * 60 * 60 * 24))
 }
 
-interface WorkoutForDate {
-  programName: string
-  day: ProgramDay
-}
-
-function getWorkoutsForDate(programs: ClientProgram[], date: Date): WorkoutForDate[] {
-  const results: WorkoutForDate[] = []
-  for (const program of programs) {
-    const startDate = new Date(program.start_date)
-    startDate.setHours(0, 0, 0, 0)
-    const dayIndex = differenceInDays(date, startDate)
-    if (dayIndex < 0) continue
-    const weekIndex = Math.floor(dayIndex / 7)
-    const dayOfWeek = dayIndex % 7
-    const weeks = program.content ?? []
-    const week = weeks[weekIndex]
+function getWorkoutsForDate(
+  programs: ClientProgram[],
+  date: Date,
+  results: CalendarEvent[]
+): WorkoutForDate[] {
+  const out: WorkoutForDate[] = []
+  const dateStr = toDateStr(date)
+  for (const prog of programs) {
+    const start = new Date(prog.start_date)
+    start.setHours(0, 0, 0, 0)
+    const dayOffset = differenceInDays(date, start)
+    if (dayOffset < 0) continue
+    const weekIdx = Math.floor(dayOffset / 7)
+    const dayIdx = dayOffset % 7
+    const week = prog.content[weekIdx]
     if (!week) continue
-    const day = week.days?.[dayOfWeek]
-    const hasContent = (day?.items?.length ?? 0) > 0 || (day?.exercises?.length ?? 0) > 0
-    if (day && hasContent) {
-      results.push({ programName: program.name, day })
-    }
+    const day = week.days?.[dayIdx]
+    if (!day) continue
+    const hasContent = (day.items?.length ?? 0) > 0 || (day.exercises?.length ?? 0) > 0
+    if (!hasContent) continue
+    const result = results.find(
+      (e) =>
+        e.type === 'program_workout_result' &&
+        e.event_date === dateStr &&
+        (e.content as Record<string, unknown>).program_id === prog.id &&
+        (e.content as Record<string, unknown>).week_index === weekIdx &&
+        (e.content as Record<string, unknown>).day_index === dayIdx
+    ) ?? null
+    out.push({ programId: prog.id, programName: prog.name, weekIdx, dayIdx, day, dateStr, result })
   }
-  return results
+  return out
 }
-
-// ─── Event colour helpers ─────────────────────────────────────────────────────
 
 function eventColour(type: string): string {
   switch (type) {
@@ -103,93 +125,342 @@ function eventColour(type: string): string {
   }
 }
 
+// ─── Score input ──────────────────────────────────────────────────────────────
+
+function ScoreInput({ scoreType, value, onChange }: { scoreType: ScoreType; value: string; onChange: (v: string) => void }) {
+  if (scoreType === 'none') return null
+  if (scoreType === 'time') {
+    const [mm, ss] = value.split(':')
+    return (
+      <div className="flex items-center gap-1.5">
+        <input type="number" min={0} placeholder="00" value={mm ?? ''}
+          onChange={(e) => onChange(`${e.target.value}:${ss ?? '00'}`)}
+          className="w-14 border rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-1 focus:ring-indigo-400" />
+        <span className="text-gray-400 font-bold">:</span>
+        <input type="number" min={0} max={59} placeholder="00" value={ss ?? ''}
+          onChange={(e) => onChange(`${mm ?? '0'}:${e.target.value}`)}
+          className="w-14 border rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-1 focus:ring-indigo-400" />
+        <span className="text-xs text-gray-400">min : sec</span>
+      </div>
+    )
+  }
+  if (scoreType === 'rounds') {
+    const [r, rp] = value.split('+')
+    return (
+      <div className="flex items-center gap-1.5">
+        <input type="number" min={0} placeholder="0" value={r ?? ''}
+          onChange={(e) => onChange(`${e.target.value}+${rp ?? '0'}`)}
+          className="w-14 border rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-1 focus:ring-indigo-400" />
+        <span className="text-gray-400 font-bold">+</span>
+        <input type="number" min={0} placeholder="0" value={rp ?? ''}
+          onChange={(e) => onChange(`${r ?? '0'}+${e.target.value}`)}
+          className="w-14 border rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-1 focus:ring-indigo-400" />
+        <span className="text-xs text-gray-400">rounds + reps</span>
+      </div>
+    )
+  }
+  const units: Partial<Record<ScoreType, string>> = { reps: 'reps', weight: 'kg', distance: 'm', calories: 'cals' }
+  return (
+    <div className="flex items-center gap-2">
+      <input type={scoreType === 'custom' ? 'text' : 'number'} min={0} value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={scoreType === 'custom' ? 'e.g. Rx, scaled…' : '0'}
+        className="w-28 border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400" />
+      {units[scoreType] && <span className="text-xs text-gray-400">{units[scoreType]}</span>}
+    </div>
+  )
+}
+
+// ─── Workout modal ─────────────────────────────────────────────────────────────
+
+function WorkoutModal({ workout, onClose, onSaved }: {
+  workout: WorkoutForDate
+  onClose: () => void
+  onSaved: (result: CalendarEvent) => void
+}) {
+  const [logging, setLogging] = useState(!workout.result)
+  const [sectionScores, setSectionScores] = useState<LoggedSections>(() => {
+    // Pre-fill from existing result if present
+    if (workout.result) {
+      const saved = (workout.result.content.sections ?? []) as Array<{ id: string; scoreValue: string }>
+      return Object.fromEntries(saved.map((s) => [s.id, s.scoreValue ?? '']))
+    }
+    return {}
+  })
+  const [exSets, setExSets] = useState<LoggedExercises>(() => {
+    if (workout.result) {
+      const saved = (workout.result.content.exercises ?? []) as Array<{ id: string; sets: Array<{ weight: string; reps: string }> }>
+      return Object.fromEntries(saved.map((e) => [e.id, e.sets]))
+    }
+    return {}
+  })
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const items = workout.day.items ?? []
+
+  // Build initial exercise sets from program targets if not pre-filled
+  function getExSets(ex: ProgramItem): Array<{ weight: string; reps: string }> {
+    if (exSets[ex.id]) return exSets[ex.id]
+    return (ex.sets ?? []).map((s) => ({ weight: '', reps: s.reps ?? '' }))
+  }
+
+  async function handleSave() {
+    setSaving(true); setError(null)
+    try {
+      const sections = items
+        .filter((i) => i.type === 'section' && i.scoreType && i.scoreType !== 'none')
+        .map((i) => ({ id: i.id, title: i.title, scoreType: i.scoreType, scoreValue: sectionScores[i.id] ?? '' }))
+
+      const exercises = items
+        .filter((i) => i.type === 'exercise')
+        .map((i) => ({ id: i.id, name: i.name, sets: exSets[i.id] ?? getExSets(i) }))
+
+      const res = await fetch('/api/workouts/program-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          program_id: workout.programId,
+          program_name: workout.programName,
+          week_index: workout.weekIdx,
+          day_index: workout.dayIdx,
+          event_date: workout.dateStr,
+          day_name: workout.day.name ?? `Day ${workout.dayIdx + 1}`,
+          sections,
+          exercises,
+        }),
+      })
+      if (!res.ok) throw new Error(await res.text())
+      const saved = await res.json()
+      onSaved(saved)
+      setLogging(false)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to save')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const scoredSections = items.filter((i) => i.type === 'section' && i.scoreType && i.scoreType !== 'none')
+  const hasAnyScore = scoredSections.length > 0
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white w-full sm:rounded-2xl shadow-2xl sm:max-w-lg max-h-[90vh] flex flex-col rounded-t-2xl" onClick={(e) => e.stopPropagation()}>
+
+        {/* Header */}
+        <div className="flex items-start justify-between px-5 pt-5 pb-3 border-b">
+          <div>
+            <p className="text-xs font-semibold text-indigo-600 uppercase tracking-wide">{workout.programName}</p>
+            <h2 className="text-base font-bold text-gray-900 mt-0.5">{workout.day.name ?? `Day ${workout.dayIdx + 1}`}</h2>
+            <p className="text-xs text-gray-400 mt-0.5">{new Date(workout.dateStr + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 mt-0.5">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+          {items.length === 0 && (
+            <p className="text-sm text-gray-400 text-center py-4">No exercises scheduled.</p>
+          )}
+
+          {items.map((item) => {
+            if (item.type === 'section') {
+              const hasScore = item.scoreType && item.scoreType !== 'none'
+              return (
+                <div key={item.id} className="bg-indigo-50 rounded-xl px-4 py-3 space-y-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-bold text-indigo-700 uppercase tracking-wide">{item.title}</span>
+                    {hasScore && (
+                      <span className="text-[10px] font-semibold bg-indigo-600 text-white px-2 py-0.5 rounded-full uppercase">{item.scoreType}</span>
+                    )}
+                  </div>
+                  {item.notes && (
+                    <p className="text-xs text-indigo-800 whitespace-pre-line leading-relaxed">{item.notes}</p>
+                  )}
+                  {hasScore && (
+                    <div className="pt-1">
+                      {logging ? (
+                        <ScoreInput
+                          scoreType={item.scoreType as ScoreType}
+                          value={sectionScores[item.id] ?? ''}
+                          onChange={(v) => setSectionScores((prev) => ({ ...prev, [item.id]: v }))}
+                        />
+                      ) : workout.result ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-500">Score:</span>
+                          <span className="text-sm font-bold text-indigo-700">
+                            {(workout.result.content.sections as Array<{ id: string; scoreValue: string }>)?.find((s) => s.id === item.id)?.scoreValue || '—'}
+                          </span>
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
+              )
+            }
+
+            // Exercise
+            const sets = getExSets(item)
+            return (
+              <div key={item.id} className="border border-gray-100 rounded-xl px-4 py-3 space-y-2">
+                <p className="text-sm font-semibold text-gray-800">{item.name}</p>
+                {item.notes && <p className="text-xs text-gray-400">{item.notes}</p>}
+                {/* Target */}
+                <div className="text-xs text-gray-400">
+                  Target: {item.sets?.length ?? 0} sets × {item.sets?.[0]?.reps ?? '—'}
+                </div>
+                {/* Logged sets (in logging mode or if result exists) */}
+                {(logging || workout.result) && (
+                  <div className="space-y-1.5 pt-1">
+                    {sets.map((s, si) => (
+                      <div key={si} className="flex items-center gap-2">
+                        <span className="text-xs text-gray-400 w-8">Set {si + 1}</span>
+                        {logging ? (
+                          <>
+                            <input type="text" value={s.weight} placeholder="Weight"
+                              onChange={(e) => setExSets((prev) => {
+                                const copy = [...(prev[item.id] ?? sets)]
+                                copy[si] = { ...copy[si], weight: e.target.value }
+                                return { ...prev, [item.id]: copy }
+                              })}
+                              className="w-20 border rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300" />
+                            <span className="text-xs text-gray-300">kg ×</span>
+                            <input type="text" value={s.reps} placeholder="Reps"
+                              onChange={(e) => setExSets((prev) => {
+                                const copy = [...(prev[item.id] ?? sets)]
+                                copy[si] = { ...copy[si], reps: e.target.value }
+                                return { ...prev, [item.id]: copy }
+                              })}
+                              className="w-16 border rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300" />
+                            <span className="text-xs text-gray-300">reps</span>
+                          </>
+                        ) : (
+                          <span className="text-xs text-gray-600">{s.weight ? `${s.weight} kg × ` : ''}{s.reps} reps</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-4 border-t space-y-3">
+          {error && <p className="text-xs text-red-500">{error}</p>}
+          {logging ? (
+            <div className="flex gap-3">
+              {workout.result && (
+                <button onClick={() => setLogging(false)} className="flex-1 border border-gray-200 text-gray-600 py-2.5 rounded-xl text-sm font-semibold hover:bg-gray-50">
+                  Cancel
+                </button>
+              )}
+              <button onClick={handleSave} disabled={saving}
+                className="flex-1 bg-indigo-600 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+                {saving ? 'Saving…' : workout.result ? 'Update Workout' : 'Save Workout'}
+              </button>
+            </div>
+          ) : workout.result ? (
+            <div className="flex gap-3">
+              <div className="flex items-center gap-1.5 flex-1">
+                <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                <span className="text-sm font-semibold text-green-700">Logged</span>
+                {!hasAnyScore && <span className="text-xs text-gray-400">· {new Date((workout.result.content.completed_at as string) ?? '').toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })}</span>}
+              </div>
+              <button onClick={() => setLogging(true)} className="border border-gray-200 text-gray-600 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-gray-50">
+                Edit
+              </button>
+            </div>
+          ) : (
+            <button onClick={() => setLogging(true)}
+              className="w-full bg-indigo-600 text-white py-3 rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors">
+              Start Workout
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Day Cell ─────────────────────────────────────────────────────────────────
 
-interface DayCellProps {
+function DayCell({ date, workouts, events, isToday, isPast, compact, onWorkoutTap }: {
   date: Date
   workouts: WorkoutForDate[]
   events: CalendarEvent[]
   isToday: boolean
   isPast: boolean
   compact?: boolean
-}
-
-function DayCell({ date, workouts, events, isToday, isPast, compact }: DayCellProps) {
+  onWorkoutTap: (w: WorkoutForDate) => void
+}) {
   const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-  // date.getDay() Sunday=0, Mon=1..Sat=6 → remap to Mon=0..Sun=6
   const dayNameIndex = date.getDay() === 0 ? 6 : date.getDay() - 1
-  const dayName = dayNames[dayNameIndex]
-  const empty = workouts.length === 0 && events.length === 0
 
   return (
-    <div
-      className={[
-        'rounded-xl border p-3 flex flex-col gap-2 min-h-[120px] transition-all',
-        isToday
-          ? 'border-blue-400 bg-blue-50/60 shadow-sm'
-          : 'border-gray-200 bg-white',
-        isPast && !isToday ? 'opacity-50' : '',
-        compact ? 'min-h-[100px]' : '',
-      ].join(' ')}
-    >
+    <div className={[
+      'rounded-xl border p-3 flex flex-col gap-2 transition-all',
+      compact ? 'min-h-[100px]' : 'min-h-[120px]',
+      isToday ? 'border-blue-400 bg-blue-50/60 shadow-sm' : 'border-gray-200 bg-white',
+      isPast && !isToday ? 'opacity-60' : '',
+    ].join(' ')}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <span className={`text-xs font-medium ${isToday ? 'text-blue-600' : 'text-gray-400'}`}>
-          {dayName}
+          {dayNames[dayNameIndex]}
         </span>
-        <span
-          className={[
-            'w-7 h-7 flex items-center justify-center rounded-full text-sm font-semibold',
-            isToday ? 'bg-blue-500 text-white' : 'text-gray-700',
-          ].join(' ')}
-        >
+        <span className={[
+          'w-7 h-7 flex items-center justify-center rounded-full text-sm font-semibold',
+          isToday ? 'bg-blue-500 text-white' : 'text-gray-700',
+        ].join(' ')}>
           {date.getDate()}
         </span>
       </div>
 
-      {/* Content */}
+      {/* Program workouts */}
       <div className="flex flex-col gap-1.5 flex-1">
-        {empty && (
-          <span className="text-xs text-gray-300 italic mt-1">Rest day</span>
-        )}
+        {workouts.map((w, i) => {
+          const sections = (w.day.items ?? []).filter((it) => it.type === 'section' && it.title?.trim())
+          const exCount = (w.day.items ?? []).filter((it) => it.type === 'exercise').length
 
-        {workouts.map((w, i) => (
-          <div
-            key={i}
-            className="rounded-lg bg-indigo-50 border border-indigo-200 px-2 py-1.5"
-          >
-            <p className="text-xs font-semibold text-indigo-700 truncate">
-              {w.day.name ?? w.programName}
-            </p>
-            {(() => {
-              // New format: items array with sections + exercises
-              if (w.day.items && w.day.items.length > 0) {
-                const sections = w.day.items.filter((i) => i.type === 'section' && i.title?.trim())
-                const exCount = w.day.items.filter((i) => i.type === 'exercise').length
-                if (sections.length > 0) {
-                  return sections.map((s, si) => (
-                    <p key={si} className="text-[11px] text-indigo-500 truncate">
-                      {s.title}{s.scoreType && s.scoreType !== 'none' ? ` · ${s.scoreType}` : ''}
-                    </p>
-                  ))
-                }
-                return <p className="text-[11px] text-indigo-500 mt-0.5">{exCount} exercise{exCount !== 1 ? 's' : ''}</p>
-              }
-              // Old format: flat exercises array
-              const n = w.day.exercises?.length ?? 0
-              return <p className="text-[11px] text-indigo-500 mt-0.5">{n} exercise{n !== 1 ? 's' : ''}</p>
-            })()}
-          </div>
-        ))}
+          return (
+            <button key={i} onClick={() => onWorkoutTap(w)}
+              className={`w-full text-left rounded-lg px-2 py-1.5 transition-colors hover:opacity-90 active:scale-95 ${
+                w.result ? 'bg-green-100 border border-green-200' : 'bg-indigo-100 border border-indigo-200'
+              }`}>
+              <div className="flex items-start justify-between gap-1">
+                <p className="text-[11px] font-bold text-indigo-800 truncate leading-tight flex-1">
+                  {w.day.name ?? w.programName}
+                </p>
+                {w.result && (
+                  <svg className="w-3 h-3 text-green-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+              </div>
+              {sections.length > 0 ? (
+                <p className="text-[10px] text-indigo-600 truncate">{sections.map((s) => s.title).join(' · ')}</p>
+              ) : (
+                <p className="text-[10px] text-indigo-600">{exCount} exercise{exCount !== 1 ? 's' : ''}</p>
+              )}
+            </button>
+          )
+        })}
 
-        {events.map((ev) => (
-          <div
-            key={ev.id}
-            className={`rounded-lg border px-2 py-1 text-xs font-medium truncate ${eventColour(ev.type)}`}
-          >
+        {/* Other events */}
+        {events.filter((e) => e.type !== 'program_workout_result').map((ev) => (
+          <div key={ev.id} className={`rounded-lg border px-2 py-1 text-[10px] font-medium truncate ${eventColour(ev.type)}`}>
             {ev.title}
           </div>
         ))}
+
+        {workouts.length === 0 && events.filter((e) => e.type !== 'program_workout_result').length === 0 && (
+          <span className="text-xs text-gray-300 italic mt-1 self-center">Rest</span>
+        )}
       </div>
     </div>
   )
@@ -203,19 +474,19 @@ export default function TrainingCalendar() {
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [viewingWorkout, setViewingWorkout] = useState<WorkoutForDate | null>(null)
 
   const weekEnd = addDays(weekStart, 6)
 
   const fetchData = useCallback(async (wStart: Date, wEnd: Date) => {
-    setLoading(true)
-    setError(null)
+    setLoading(true); setError(null)
     try {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
 
-      const weekStartStr = toDateStr(wStart)
-      const weekEndStr = toDateStr(wEnd)
+      const startStr = toDateStr(wStart)
+      const endStr = toDateStr(wEnd)
 
       const [programsResult, eventsResult] = await Promise.all([
         supabase
@@ -227,8 +498,8 @@ export default function TrainingCalendar() {
           .from('calendar_events')
           .select('*')
           .eq('client_id', user.id)
-          .gte('event_date', weekStartStr)
-          .lte('event_date', weekEndStr),
+          .gte('event_date', startStr)
+          .lte('event_date', endStr),
       ])
 
       setPrograms(programsResult.data ?? [])
@@ -245,17 +516,26 @@ export default function TrainingCalendar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekStart])
 
-  const goToPrevWeek = () => setWeekStart(prev => addDays(prev, -7))
-  const goToNextWeek = () => setWeekStart(prev => addDays(prev, 7))
+  const goToPrevWeek = () => setWeekStart((d) => addDays(d, -7))
+  const goToNextWeek = () => setWeekStart((d) => addDays(d, 7))
   const goToThisWeek = () => setWeekStart(startOfWeek(new Date()))
 
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
-
   const monthLabel = weekStart.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
   const isCurrentWeek = toDateStr(weekStart) === toDateStr(startOfWeek(new Date()))
+
+  function handleSaved(result: CalendarEvent) {
+    setEvents((prev) => {
+      const filtered = prev.filter((e) => e.id !== result.id)
+      return [...filtered, result]
+    })
+    // Update the viewing workout to reflect the saved result
+    if (viewingWorkout) {
+      setViewingWorkout({ ...viewingWorkout, result })
+    }
+  }
 
   return (
     <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
@@ -267,39 +547,22 @@ export default function TrainingCalendar() {
         </div>
         <div className="flex items-center gap-1">
           {!isCurrentWeek && (
-            <button
-              onClick={goToThisWeek}
-              className="text-xs px-2.5 py-1 rounded-lg text-blue-600 hover:bg-blue-50 font-medium transition-colors"
-            >
+            <button onClick={goToThisWeek} className="text-xs px-2.5 py-1 rounded-lg text-blue-600 hover:bg-blue-50 font-medium transition-colors">
               Today
             </button>
           )}
-          <button
-            onClick={goToPrevWeek}
-            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
-            aria-label="Previous week"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
+          <button onClick={goToPrevWeek} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500 transition-colors" aria-label="Previous week">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
           </button>
-          <button
-            onClick={goToNextWeek}
-            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
-            aria-label="Next week"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
+          <button onClick={goToNextWeek} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500 transition-colors" aria-label="Next week">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
           </button>
         </div>
       </div>
 
       {/* Body */}
       <div className="p-4">
-        {error && (
-          <div className="text-sm text-red-500 text-center py-6">{error}</div>
-        )}
+        {error && <div className="text-sm text-red-500 text-center py-6">{error}</div>}
 
         {loading && !error && (
           <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
@@ -311,51 +574,42 @@ export default function TrainingCalendar() {
 
         {!loading && !error && (
           <>
-            {/* Desktop: 7-column week grid */}
             <div className="hidden md:grid md:grid-cols-7 gap-3">
               {weekDays.map((date) => {
                 const dateStr = toDateStr(date)
-                const dayWorkouts = getWorkoutsForDate(programs, date)
-                const dayEvents = events.filter(e => e.event_date === dateStr)
-                const isToday = toDateStr(date) === toDateStr(today)
-                const isPast = date < today && !isToday
+                const dayWorkouts = getWorkoutsForDate(programs, date, events)
+                const dayEvents = events.filter((e) => e.event_date === dateStr)
                 return (
-                  <DayCell
-                    key={dateStr}
-                    date={date}
-                    workouts={dayWorkouts}
-                    events={dayEvents}
-                    isToday={isToday}
-                    isPast={isPast}
-                  />
+                  <DayCell key={dateStr} date={date} workouts={dayWorkouts} events={dayEvents}
+                    isToday={toDateStr(date) === toDateStr(today)} isPast={date < today && toDateStr(date) !== toDateStr(today)}
+                    onWorkoutTap={setViewingWorkout} />
                 )
               })}
             </div>
-
-            {/* Mobile: vertical day list */}
             <div className="md:hidden flex flex-col gap-3">
               {weekDays.map((date) => {
                 const dateStr = toDateStr(date)
-                const dayWorkouts = getWorkoutsForDate(programs, date)
-                const dayEvents = events.filter(e => e.event_date === dateStr)
-                const isToday = toDateStr(date) === toDateStr(today)
-                const isPast = date < today && !isToday
+                const dayWorkouts = getWorkoutsForDate(programs, date, events)
+                const dayEvents = events.filter((e) => e.event_date === dateStr)
                 return (
-                  <DayCell
-                    key={dateStr}
-                    date={date}
-                    workouts={dayWorkouts}
-                    events={dayEvents}
-                    isToday={isToday}
-                    isPast={isPast}
-                    compact
-                  />
+                  <DayCell key={dateStr} date={date} workouts={dayWorkouts} events={dayEvents}
+                    isToday={toDateStr(date) === toDateStr(today)} isPast={date < today && toDateStr(date) !== toDateStr(today)}
+                    compact onWorkoutTap={setViewingWorkout} />
                 )
               })}
             </div>
           </>
         )}
       </div>
+
+      {/* Workout modal */}
+      {viewingWorkout && (
+        <WorkoutModal
+          workout={viewingWorkout}
+          onClose={() => setViewingWorkout(null)}
+          onSaved={handleSaved}
+        />
+      )}
     </div>
   )
 }
