@@ -39,8 +39,10 @@ function makeEx(resolve: ExResolver, displayName: string, sets: number, reps: st
   }
 }
 
-function section(title: string, notes = '') {
-  return { type: 'section' as const, id: uid(), title, notes }
+type ScoreType = 'time' | 'reps' | 'rounds' | 'weight' | 'distance' | 'calories' | 'custom'
+
+function section(title: string, notes = '', scoreType: ScoreType | 'none' = 'none', scoreValue = '') {
+  return { type: 'section' as const, id: uid(), title, notes, scoreType, scoreValue }
 }
 
 type DayItem = ReturnType<typeof makeEx> | ReturnType<typeof section>
@@ -58,7 +60,7 @@ function week(label: string, days: ReturnType<typeof day>[]) {
 function buildPrograms(resolve: ExResolver) {
   const ex = (name: string, sets: number, reps: string, rest = 90, notes = '') =>
     makeEx(resolve, name, sets, reps, rest, notes)
-  const sec = (title: string, notes = '') => section(title, notes)
+  const sec = (title: string, notes = '', scoreType: ScoreType | 'none' = 'none', scoreValue = '') => section(title, notes, scoreType, scoreValue)
 
   return [
     // ── 1. Full Body — Beginner 3 Day ────────────────────────────────────────
@@ -245,7 +247,67 @@ function buildPrograms(resolve: ExResolver) {
       ],
     },
 
-    // ── 4. Strength Foundation — 3 Day (linear progression, 4 weeks) ─────────
+    // ── 4. CrossFit Foundations — 5 Day (WOD-style sections with scoring) ────
+    {
+      name: 'CrossFit Foundations — 5 Day',
+      description: '5-day CrossFit program structured around WOD-style sessions. Each day is broken into Warm Up, Skill/Strength, and Metcon sections — every section has a score type so clients can log their result.',
+      content: [
+        week('Week 1', [
+          day('Day 1 — Squat & Conditioning', [
+            sec('Warm Up', '3 rounds: 10 air squats, 10 hip circles each side, 5 inchworms, 200m easy row or bike', 'none'),
+            sec('Strength — Back Squat', '5 sets of 5 reps\nBuild to a heavy set of 5. Rest 2–3 min between sets.\nRecord your heaviest set.', 'weight'),
+            ex('Barbell Squat', 5, '5', 180, 'Build to a heavy 5 — add weight each set'),
+            sec('Metcon — AMRAP 12', 'AMRAP 12 min:\n• 10 Goblet Squats (32/24 kg)\n• 10 Hand-Release Push-Ups\n• 5 Pullups\n\nScore = total rounds + reps completed.', 'rounds'),
+            ex('Goblet Squat', 3, '10', 0),
+            ex('Pullups', 3, '5', 0),
+            sec('Cool Down', '400m easy walk, couch stretch 2 min each side, pigeon pose 90 sec each side', 'none'),
+          ]),
+          day('Day 2 — Deadlift & Sprint', [
+            sec('Warm Up', '2 rounds: 10 Romanian deadlifts (empty bar), 10 banded good mornings, 10 hip hinges, 30 sec dead hang', 'none'),
+            sec('Strength — Deadlift', '5–3–1+ progression:\n• Set 1: 5 reps @ 65%\n• Set 2: 3 reps @ 75%\n• Set 3: max reps @ 85%+\n\nScore = reps on final set.', 'reps'),
+            ex('Barbell Deadlift', 3, '5/3/max', 180, '65 → 75 → 85% of 1RM — go for broke on the last set'),
+            sec('Metcon — For Time', '21-15-9 reps for time:\n• Barbell Deadlifts (100/70 kg)\n• Box Jumps (60/50 cm)\n\nTime cap: 10 min. Score = finish time or reps completed at cap.', 'time'),
+            ex('Barbell Deadlift', 3, '21-15-9', 0, 'Moderate weight — unbroken sets if possible'),
+            ex('Barbell Hip Thrust', 3, '21-15-9', 0, 'Sub for box jumps — full hip extension'),
+            sec('Cool Down', 'Foam roll hamstrings and glutes, 90/90 hip stretch, cat-cow 1 min', 'none'),
+          ]),
+          day('Day 3 — Gymnastics & Row', [
+            sec('Warm Up', 'EMOM 6 min (alternating):\nOdd: 5 scapular pull-ups + 5 ring rows\nEven: 10 banded pull-aparts + 10 shoulder circles', 'none'),
+            sec('Skill — Strict Pull-Up Ladder', 'Every 2 min for 10 min (5 rounds):\nMax strict pull-ups per round.\n\nScore = total reps across all 5 rounds.', 'reps'),
+            ex('Pullups', 5, 'max', 120, 'Strict — no kipping. Rest remainder of 2 min window.'),
+            ex('Bent Over Barbell Row', 3, '8–10', 90, 'Horizontal pulling accessory'),
+            sec('Metcon — Row / Run Intervals', '5 rounds for time:\n• 400m row (or 400m run)\n• 15 Kettlebell Swings (32/24 kg)\n• 10 Toes to Bar\n\nScore = total time.', 'time'),
+            ex('Toes to Bar', 3, '10', 0),
+            sec('Cool Down', 'Lat stretch on rig 60 sec each side, thoracic foam roll, doorway chest opener', 'none'),
+          ]),
+          day('Day 4 — Press & Chipper', [
+            sec('Warm Up', '3 rounds: 10 PVC overhead squats, 10 band pull-aparts, 5 wall slides, 10 scap push-ups', 'none'),
+            sec('Strength — Push Press', '4 sets of 5 reps\nBuild to a tough set of 5 push press.\nScore = heaviest set completed.', 'weight'),
+            ex('Barbell Shoulder Press', 4, '5', 120, 'Push press — use legs to drive the bar overhead'),
+            ex('Side Lateral Raise', 3, '15', 60, 'Shoulder health accessory'),
+            sec('Metcon — Chipper', 'For time:\n• 50 Double-Unders (or 100 singles)\n• 40 Wall Balls (9/6 kg to 10 ft target)\n• 30 Hand-Release Push-Ups\n• 20 Dumbbell Thrusters (2×22.5/15 kg)\n• 10 Pullups\n\nScore = total time. Cap: 18 min.', 'time'),
+            ex('Dumbbell Shoulder Press', 3, '20', 0, 'Sub for dumbbell thrusters'),
+            ex('Pullups', 1, '10', 0),
+            sec('Cool Down', 'Wrist and shoulder mobility, pigeon stretch, 5 min easy bike or walk', 'none'),
+          ]),
+          day('Day 5 — Total & Hero WOD', [
+            sec('Warm Up', '10 min general warm-up: 500m row, then 2 rounds of 10 air squats, 10 push-ups, 10 sit-ups, 5 pull-ups', 'none'),
+            sec('Skill — Handstand / Gymnastics Practice', '10 min EMOM:\nOdd: 30 sec handstand hold (or wall walk)\nEven: 8 ring dips (or dips)\n\nScore = custom note (e.g. "unassisted HS hold", "scaled")', 'custom'),
+            ex('Dips - Triceps Version', 5, '8', 60, 'Strict ring dips or bar dips'),
+            sec('WOD — "Cindy"', 'AMRAP 20 min:\n• 5 Pull-Ups\n• 10 Push-Ups\n• 15 Air Squats\n\nScore = total rounds + reps. Rx goal: 20+ rounds.', 'rounds'),
+            ex('Pullups', 4, '5', 0),
+            ex('Barbell Squat', 4, '15', 0, 'Air squat — bodyweight only'),
+            sec('Cool Down', '10 min: full-body stretch focusing on hips, hamstrings, and shoulders. Log your Cindy score!', 'none'),
+          ]),
+          day('Day 6 — Active Recovery', [
+            sec('Active Recovery', '30–45 min easy activity: walking, swimming, yoga, or light cycling.\n\nFocus on movement quality, not intensity.\nLog distance or duration as your score.', 'distance'),
+          ]),
+          day('Day 7 — Rest', []),
+        ]),
+      ],
+    },
+
+    // ── 5. Strength Foundation — 3 Day (linear progression, 4 weeks) ─────────
     {
       name: 'Strength Foundation — 3 Day',
       description: '4-week linear progression program focused on the big compound lifts. Add weight each week. Ideal for strength-focused clients.',
@@ -468,6 +530,7 @@ const SEEDED_NAMES = [
   'Full Body — Beginner 3 Day',
   'Push Pull Legs — 6 Day',
   'Upper Lower — 4 Day',
+  'CrossFit Foundations — 5 Day',
   'Strength Foundation — 3 Day',
 ]
 

@@ -56,11 +56,15 @@ type ProgramExercise = {
   notes: string
 }
 
+type ScoreType = 'time' | 'reps' | 'rounds' | 'weight' | 'distance' | 'calories' | 'custom'
+
 type ProgramSection = {
   type: 'section'
   id: string
   title: string
   notes: string
+  scoreType: ScoreType | 'none'
+  scoreValue: string
 }
 
 type DayItem = ProgramExercise | ProgramSection
@@ -114,12 +118,25 @@ function migrateOldEx(ex: Record<string, unknown>): ProgramExercise {
 }
 
 function migrateDay(raw: Record<string, unknown>): Day {
-  if (Array.isArray(raw.items)) return raw as unknown as Day
+  if (Array.isArray(raw.items)) {
+    // Backfill scoreType/scoreValue on existing section items that predate the field
+    const items = (raw.items as DayItem[]).map((item) => {
+      if (item.type === 'section') {
+        return {
+          ...item,
+          scoreType: item.scoreType ?? 'none',
+          scoreValue: item.scoreValue ?? '',
+        } as ProgramSection
+      }
+      return item
+    })
+    return { ...(raw as unknown as Day), items }
+  }
   const items: DayItem[] = []
   if (Array.isArray(raw.sections)) {
     for (const sec of raw.sections as Record<string, unknown>[]) {
       if ((sec.title as string)?.trim()) {
-        items.push({ type: 'section', id: crypto.randomUUID(), title: sec.title as string, notes: '' })
+        items.push({ type: 'section', id: crypto.randomUUID(), title: sec.title as string, notes: '', scoreType: 'none', scoreValue: '' })
       }
       for (const ex of (sec.exercises as Record<string, unknown>[]) || []) {
         items.push(migrateOldEx(ex))
@@ -163,7 +180,7 @@ function newExerciseItem(lib?: LibraryExercise): ProgramExercise {
 }
 
 function newSectionItem(): ProgramSection {
-  return { type: 'section', id: crypto.randomUUID(), title: '', notes: '' }
+  return { type: 'section', id: crypto.randomUUID(), title: '', notes: '', scoreType: 'none', scoreValue: '' }
 }
 
 function newDay(): Day {
@@ -305,6 +322,51 @@ function ExercisePicker({ onSelect, onClose }: { onSelect: (ex: LibraryExercise)
 
 // ── Section block ─────────────────────────────────────────────────────────────
 
+const SCORE_TYPES: Array<ScoreType | 'none'> = ['none', 'time', 'rounds', 'reps', 'weight', 'distance', 'calories', 'custom']
+const SCORE_LABEL: Record<ScoreType | 'none', string> = {
+  none: 'No score', time: 'Time', rounds: 'Rounds+Reps', reps: 'Reps', weight: 'Weight', distance: 'Distance', calories: 'Calories', custom: 'Custom',
+}
+
+function SectionScoreInput({ scoreType, value, onChange }: { scoreType: ScoreType | 'none'; value: string; onChange: (v: string) => void }) {
+  if (scoreType === 'none') return null
+  if (scoreType === 'time') {
+    const [mm, ss] = value.split(':')
+    return (
+      <div className="flex items-center gap-1.5">
+        <input type="number" min={0} placeholder="00" value={mm ?? ''} onChange={(e) => onChange(`${e.target.value}:${ss ?? '00'}`)}
+          className="w-16 border rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-1 focus:ring-purple-300" />
+        <span className="text-gray-400 font-medium">:</span>
+        <input type="number" min={0} max={59} placeholder="00" value={ss ?? ''} onChange={(e) => onChange(`${mm ?? '0'}:${e.target.value}`)}
+          className="w-16 border rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-1 focus:ring-purple-300" />
+        <span className="text-xs text-gray-400">min : sec (target / cap)</span>
+      </div>
+    )
+  }
+  if (scoreType === 'rounds') {
+    const [r, reps] = value.split('+')
+    return (
+      <div className="flex items-center gap-1.5">
+        <input type="number" min={0} placeholder="0" value={r ?? ''} onChange={(e) => onChange(`${e.target.value}+${reps ?? '0'}`)}
+          className="w-16 border rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-1 focus:ring-purple-300" />
+        <span className="text-gray-400 font-medium">+</span>
+        <input type="number" min={0} placeholder="0" value={reps ?? ''} onChange={(e) => onChange(`${r ?? '0'}+${e.target.value}`)}
+          className="w-16 border rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-1 focus:ring-purple-300" />
+        <span className="text-xs text-gray-400">rounds + reps (target)</span>
+      </div>
+    )
+  }
+  const units: Record<ScoreType, string> = { reps: 'reps', weight: 'kg / lbs', distance: 'm', calories: 'cals', custom: '', time: '', rounds: '' }
+  return (
+    <div className="flex items-center gap-2">
+      <input type={scoreType === 'custom' ? 'text' : 'number'} min={0} value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={scoreType === 'custom' ? 'e.g. Rx, scaled, 21-15-9…' : '0'}
+        className="w-36 border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-purple-300" />
+      {units[scoreType] && <span className="text-xs text-gray-400">{units[scoreType]} (target)</span>}
+    </div>
+  )
+}
+
 function SectionBlock({ section, canUp, canDown, onChange, onRemove, onMoveUp, onMoveDown }: {
   section: ProgramSection; canUp: boolean; canDown: boolean
   onChange: (s: ProgramSection) => void; onRemove: () => void; onMoveUp: () => void; onMoveDown: () => void
@@ -315,14 +377,28 @@ function SectionBlock({ section, canUp, canDown, onChange, onRemove, onMoveUp, o
         <MoveButtons onUp={onMoveUp} onDown={onMoveDown} canUp={canUp} canDown={canDown} />
         <span className="text-xs font-semibold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full uppercase tracking-wide flex-shrink-0">Section</span>
         <input value={section.title} onChange={(e) => onChange({ ...section, title: e.target.value })}
-          placeholder="Section title (e.g. Warm Up, Metcon, Notes)"
+          placeholder="Section title (e.g. Warm Up, Metcon, WOD)"
           className="flex-1 text-sm font-semibold text-gray-900 bg-transparent outline-none border-b border-transparent focus:border-gray-300 min-w-0" />
         <button onClick={onRemove} className="text-gray-300 hover:text-red-400 text-xl leading-none flex-shrink-0">×</button>
       </div>
       <textarea value={section.notes} onChange={(e) => onChange({ ...section, notes: e.target.value })}
-        placeholder="Add notes, instructions, or reminders..."
+        placeholder="Add notes, WOD description, or instructions…"
         rows={3}
         className="w-full text-sm text-gray-700 border rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-purple-300 placeholder:text-gray-300" />
+      {/* Score type */}
+      <div className="space-y-2">
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Score type</p>
+        <div className="flex gap-1.5 flex-wrap">
+          {SCORE_TYPES.map((t) => (
+            <button key={t} onClick={() => onChange({ ...section, scoreType: t, scoreValue: '' })}
+              className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${section.scoreType === t ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+              {SCORE_LABEL[t]}
+            </button>
+          ))}
+        </div>
+        <SectionScoreInput scoreType={section.scoreType} value={section.scoreValue}
+          onChange={(v) => onChange({ ...section, scoreValue: v })} />
+      </div>
     </div>
   )
 }

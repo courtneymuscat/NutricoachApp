@@ -5,9 +5,20 @@ import { createClient } from '@/lib/supabase/client'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+type ProgramDayItem = {
+  type: 'exercise' | 'section'
+  name?: string  // exercise
+  title?: string // section
+  scoreType?: string
+  sets?: unknown
+}
+
 type ProgramDay = {
   name?: string
-  exercises: Array<{ name: string; sets: number; reps: string; notes?: string }>
+  // New format: items array (exercises + sections)
+  items?: ProgramDayItem[]
+  // Old format: flat exercises array
+  exercises?: Array<{ name: string; sets: number; reps: string; notes?: string }>
 }
 
 type ProgramWeek = { days: ProgramDay[] }
@@ -73,7 +84,8 @@ function getWorkoutsForDate(programs: ClientProgram[], date: Date): WorkoutForDa
     const week = weeks[weekIndex]
     if (!week) continue
     const day = week.days?.[dayOfWeek]
-    if (day && day.exercises && day.exercises.length > 0) {
+    const hasContent = (day?.items?.length ?? 0) > 0 || (day?.exercises?.length ?? 0) > 0
+    if (day && hasContent) {
       results.push({ programName: program.name, day })
     }
   }
@@ -149,9 +161,24 @@ function DayCell({ date, workouts, events, isToday, isPast, compact }: DayCellPr
             <p className="text-xs font-semibold text-indigo-700 truncate">
               {w.day.name ?? w.programName}
             </p>
-            <p className="text-[11px] text-indigo-500 mt-0.5">
-              {w.day.exercises.length} exercise{w.day.exercises.length !== 1 ? 's' : ''}
-            </p>
+            {(() => {
+              // New format: items array with sections + exercises
+              if (w.day.items && w.day.items.length > 0) {
+                const sections = w.day.items.filter((i) => i.type === 'section' && i.title?.trim())
+                const exCount = w.day.items.filter((i) => i.type === 'exercise').length
+                if (sections.length > 0) {
+                  return sections.map((s, si) => (
+                    <p key={si} className="text-[11px] text-indigo-500 truncate">
+                      {s.title}{s.scoreType && s.scoreType !== 'none' ? ` · ${s.scoreType}` : ''}
+                    </p>
+                  ))
+                }
+                return <p className="text-[11px] text-indigo-500 mt-0.5">{exCount} exercise{exCount !== 1 ? 's' : ''}</p>
+              }
+              // Old format: flat exercises array
+              const n = w.day.exercises?.length ?? 0
+              return <p className="text-[11px] text-indigo-500 mt-0.5">{n} exercise{n !== 1 ? 's' : ''}</p>
+            })()}
           </div>
         ))}
 
