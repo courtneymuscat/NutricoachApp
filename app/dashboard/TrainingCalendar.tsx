@@ -426,7 +426,7 @@ function WorkoutModal({ workout, onClose, onSaved }: {
                         <span className="text-xs text-gray-400 w-8">Set {si + 1}</span>
                         {logging ? (
                           <>
-                            <input type="text" value={s.weight} placeholder="Weight"
+                            <input type="number" inputMode="decimal" value={s.weight} placeholder="Weight"
                               onChange={(e) => setExSets((prev) => {
                                 const copy = [...(prev[item.id] ?? sets)]
                                 copy[si] = { ...copy[si], weight: e.target.value }
@@ -434,7 +434,7 @@ function WorkoutModal({ workout, onClose, onSaved }: {
                               })}
                               className="w-20 border rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300" />
                             <span className="text-xs text-gray-300">kg ×</span>
-                            <input type="text" value={s.reps} placeholder="Reps"
+                            <input type="number" inputMode="numeric" value={s.reps} placeholder="Reps"
                               onChange={(e) => setExSets((prev) => {
                                 const copy = [...(prev[item.id] ?? sets)]
                                 copy[si] = { ...copy[si], reps: e.target.value }
