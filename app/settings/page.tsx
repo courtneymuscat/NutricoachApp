@@ -63,7 +63,7 @@ export default async function SettingsPage() {
                 <p className="text-xs text-blue-400">fat</p>
               </div>
             </div>
-            {profile.tdee && (
+            {profile.tdee && profile.subscription_tier !== 'coached' && (
               <p className="text-xs text-gray-400">TDEE estimate: {profile.tdee} kcal/day</p>
             )}
             {profile.subscription_tier === 'coached' ? (
