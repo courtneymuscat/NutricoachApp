@@ -24,63 +24,53 @@ function computeMacros(content: unknown) {
   }
 }
 
-export async function GET(
-  _req: NextRequest,
-  { params }: { params: Promise<{ clientId: string }> }
-) {
-  const { clientId } = await params
-  const coachId = await requireCoach()
-  if (!coachId) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const supabase = await createClient()
-  const { data } = await supabase
-    .from('client_meal_plans')
-    .select('*')
-    .eq('client_id', clientId)
-    .eq('coach_id', coachId)
-    .order('created_at', { ascending: false })
-
-  return Response.json(data ?? [])
-}
-
 export async function POST(
   req: NextRequest,
-  { params }: { params: Promise<{ clientId: string }> }
+  { params }: { params: Promise<{ clientId: string; planId: string }> }
 ) {
-  const { clientId } = await params
+  const { clientId, planId } = await params
   const coachId = await requireCoach()
   if (!coachId) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
   const supabase = await createClient()
-  const body = await req.json()
-  const { meal_plan_id, name, content, start_date, end_date, total_calories } = body
+
+  const { data: original, error: fetchError } = await supabase
+    .from('client_meal_plans')
+    .select('*')
+    .eq('id', planId)
+    .eq('client_id', clientId)
+    .eq('coach_id', coachId)
+    .single()
+
+  if (fetchError || !original) return Response.json({ error: 'Not found' }, { status: 404 })
+
+  let body: { name?: string; start_date?: string; end_date?: string } = {}
+  try { body = await req.json() } catch { /* no body */ }
+
+  const { id: _id, created_at: _c, updated_at: _u, ...rest } = original
+  const duplicate = {
+    ...rest,
+    name: body.name ?? `Copy of ${original.name}`,
+    start_date: body.start_date ?? original.start_date,
+    end_date: body.end_date ?? null,
+    status: 'active',
+  }
 
   const { data, error } = await supabase
     .from('client_meal_plans')
-    .insert({
-      meal_plan_id: meal_plan_id ?? null,
-      name,
-      content,
-      start_date,
-      end_date: end_date ?? null,
-      total_calories: total_calories ?? 0,
-      client_id: clientId,
-      coach_id: coachId,
-    })
+    .insert(duplicate)
     .select()
     .single()
 
   if (error) return Response.json({ error: error.message }, { status: 400 })
 
-  // Sync client's daily targets to match this meal plan
-  const macros = computeMacros(content)
+  // Sync client's daily targets to match the duplicated plan
+  const macros = computeMacros(data.content)
   const admin = createAdminClient()
   if (macros.target_calories > 0) {
-    // Full sync from food items (calories + all macros)
     await admin.from('profiles').update(macros).eq('id', clientId)
-  } else if ((total_calories ?? 0) > 0) {
-    // Sync calorie target only (no food items yet, macros unknown)
-    await admin.from('profiles').update({ target_calories: total_calories }).eq('id', clientId)
+  } else if ((data.total_calories ?? 0) > 0) {
+    await admin.from('profiles').update({ target_calories: data.total_calories }).eq('id', clientId)
   }
 
   return Response.json(data)

@@ -27,6 +27,8 @@ type ClientPlanRecord = {
   total_calories?: number | null
   content: MealSlot[] | null
   status: string
+  start_date?: string | null
+  end_date?: string | null
 }
 
 type FoodSearchResult = {
@@ -389,13 +391,17 @@ export default function ClientMealPlanEditor({
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
     setSaveStatus('saving')
     saveTimerRef.current = setTimeout(async () => {
+      const foodSum = Math.round(totals.calories)
       const res = await fetch(`/api/coach/clients/${clientId}/meal-plans/${updated.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: updated.name,
-          total_calories: Math.round(totals.calories),
+          // Use food sum if foods exist, otherwise use manually-set calorie target
+          total_calories: foodSum > 0 ? foodSum : (updated.total_calories ?? 0),
           content: updated.content,
+          start_date: updated.start_date ?? undefined,
+          end_date: updated.end_date ?? null,
         }),
       })
       setSaveStatus(res.ok ? 'saved' : 'error')
@@ -442,13 +448,16 @@ export default function ClientMealPlanEditor({
   async function saveNow() {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
     setSaveStatus('saving')
+    const foodSum = Math.round(totals.calories)
     const res = await fetch(`/api/coach/clients/${clientId}/meal-plans/${plan.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: plan.name,
-        total_calories: Math.round(totals.calories),
+        total_calories: foodSum > 0 ? foodSum : (plan.total_calories ?? 0),
         content: plan.content,
+        start_date: plan.start_date ?? undefined,
+        end_date: plan.end_date ?? null,
       }),
     })
     setSaveStatus(res.ok ? 'saved' : 'error')
@@ -587,23 +596,53 @@ export default function ClientMealPlanEditor({
       {/* Main content */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto p-6 space-y-4">
-          {/* Calorie target */}
-          <div className="bg-white rounded-2xl border p-5">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Calorie target</p>
-            <div className="relative w-40">
-              <input
-                type="number"
-                value={plan.total_calories ?? ''}
-                onChange={(e) => {
-                  const updated = { ...plan, total_calories: parseInt(e.target.value) || 0 }
-                  setPlan(updated)
-                  scheduleSave(updated)
-                }}
-                placeholder="0"
-                min={0}
-                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10"
-              />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">kcal</span>
+          {/* Calorie target + dates */}
+          <div className="bg-white rounded-2xl border p-5 space-y-4">
+            <div>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Calorie target</p>
+              <div className="relative w-40">
+                <input
+                  type="number"
+                  value={plan.total_calories ?? ''}
+                  onChange={(e) => {
+                    const updated = { ...plan, total_calories: parseInt(e.target.value) || 0 }
+                    setPlan(updated)
+                    scheduleSave(updated)
+                  }}
+                  placeholder="0"
+                  min={0}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">kcal</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Start date</p>
+                <input
+                  type="date"
+                  value={plan.start_date ?? ''}
+                  onChange={(e) => {
+                    const updated = { ...plan, start_date: e.target.value || null }
+                    setPlan(updated)
+                    scheduleSave(updated)
+                  }}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">End date</p>
+                <input
+                  type="date"
+                  value={plan.end_date ?? ''}
+                  onChange={(e) => {
+                    const updated = { ...plan, end_date: e.target.value || null }
+                    setPlan(updated)
+                    scheduleSave(updated)
+                  }}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
             </div>
           </div>
 

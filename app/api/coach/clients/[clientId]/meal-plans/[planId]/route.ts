@@ -55,12 +55,14 @@ export async function PATCH(
 
   const supabase = await createClient()
   const body = await req.json()
-  const { name, content, status, total_calories } = body
+  const { name, content, status, total_calories, start_date, end_date } = body
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
   if (name !== undefined) updates.name = name
   if (content !== undefined) updates.content = content
   if (status !== undefined) updates.status = status
   if (total_calories !== undefined) updates.total_calories = total_calories
+  if (start_date !== undefined) updates.start_date = start_date
+  if (end_date !== undefined) updates.end_date = end_date ?? null
 
   const { data, error } = await supabase
     .from('client_meal_plans')
@@ -73,12 +75,17 @@ export async function PATCH(
 
   if (error || !data) return Response.json({ error: error?.message ?? 'Not found' }, { status: 400 })
 
-  // If content changed and plan is still active, sync client's daily targets
-  if (content !== undefined && (status ?? data.status) === 'active') {
-    const macros = computeMacros(content)
+  // Sync client's daily targets whenever content or calorie target changes on an active plan
+  const planIsActive = (status ?? data.status) === 'active'
+  if (planIsActive && (content !== undefined || total_calories !== undefined)) {
+    const macros = computeMacros(data.content)
+    const admin = createAdminClient()
     if (macros.target_calories > 0) {
-      const admin = createAdminClient()
+      // Full sync from food items
       await admin.from('profiles').update(macros).eq('id', clientId)
+    } else if ((data.total_calories ?? 0) > 0) {
+      // No food items yet — sync calorie target only
+      await admin.from('profiles').update({ target_calories: data.total_calories }).eq('id', clientId)
     }
   }
 

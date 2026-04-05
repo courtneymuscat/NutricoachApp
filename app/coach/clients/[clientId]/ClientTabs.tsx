@@ -1816,6 +1816,7 @@ type ClientMealPlan = {
   name: string
   content: { id: string; label: string; foods: { food_name: string; grams: number; calories: number; protein: number; carbs: number; fat: number }[] }[]
   start_date: string
+  end_date: string | null
   status: string
 }
 
@@ -1835,20 +1836,30 @@ function MealPlanTab({ clientId }: { clientId: string }) {
   const [assigning, setAssigning] = useState(false)
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10))
+  const [endDate, setEndDate] = useState('')
   const [expanded, setExpanded] = useState<string | null>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [creating, setCreating] = useState(false)
   const [createName, setCreateName] = useState('')
   const [createCalories, setCreateCalories] = useState('')
+  const [createStartDate, setCreateStartDate] = useState(new Date().toISOString().slice(0, 10))
+  const [createEndDate, setCreateEndDate] = useState('')
   const [savingTemplateId, setSavingTemplateId] = useState<string | null>(null)
   const [savedTemplateId, setSavedTemplateId] = useState<string | null>(null)
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null)
+  const [editingDatesId, setEditingDatesId] = useState<string | null>(null)
+  const [editStartDate, setEditStartDate] = useState('')
+  const [editEndDate, setEditEndDate] = useState('')
+  const [savingDatesId, setSavingDatesId] = useState<string | null>(null)
 
   async function loadPlans() {
     const [plans, tmpl] = await Promise.all([
       fetch(`/api/coach/clients/${clientId}/meal-plans`).then((r) => r.json()),
       fetch('/api/coach/meal-plans').then((r) => r.json()),
     ])
-    setAssignments(Array.isArray(plans) ? plans : [])
+    const list: ClientMealPlan[] = Array.isArray(plans) ? plans : []
+    list.sort((a, b) => b.start_date.localeCompare(a.start_date))
+    setAssignments(list)
     setTemplates(Array.isArray(tmpl) ? tmpl : [])
   }
 
@@ -1868,13 +1879,16 @@ function MealPlanTab({ clientId }: { clientId: string }) {
         name: createName.trim(),
         content: [],
         total_calories: parseInt(createCalories) || 0,
-        start_date: new Date().toISOString().split('T')[0],
+        start_date: createStartDate,
+        end_date: createEndDate || null,
       }),
     })
     if (res.ok) {
       setShowCreateModal(false)
       setCreateName('')
       setCreateCalories('')
+      setCreateStartDate(new Date().toISOString().slice(0, 10))
+      setCreateEndDate('')
       await loadPlans()
     }
     setCreating(false)
@@ -1900,20 +1914,62 @@ function MealPlanTab({ clientId }: { clientId: string }) {
         name: template?.name ?? 'Meal Plan',
         content: template?.content ?? [],
         start_date: startDate,
+        end_date: endDate || null,
       }),
     })
     if (res.ok) {
       const created = await res.json()
-      setAssignments((prev) => [created, ...prev])
+      setAssignments((prev) => [...prev, created].sort((a, b) => b.start_date.localeCompare(a.start_date)))
       setShowAssign(false)
+      setEndDate('')
     }
     setAssigning(false)
+  }
+
+  async function handleDuplicate(plan: ClientMealPlan) {
+    setDuplicatingId(plan.id)
+    const res = await fetch(`/api/coach/clients/${clientId}/meal-plans/${plan.id}/duplicate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: `Copy of ${plan.name}` }),
+    })
+    if (res.ok) {
+      const created = await res.json()
+      setAssignments((prev) => [...prev, created].sort((a, b) => b.start_date.localeCompare(a.start_date)))
+    }
+    setDuplicatingId(null)
   }
 
   async function handleRemove(id: string) {
     if (!confirm('Remove this meal plan from client?')) return
     await fetch(`/api/coach/clients/${clientId}/meal-plans/${id}`, { method: 'DELETE' })
     setAssignments((prev) => prev.filter((a) => a.id !== id))
+  }
+
+  function openDateEditor(plan: ClientMealPlan) {
+    setEditingDatesId(plan.id)
+    setEditStartDate(plan.start_date)
+    setEditEndDate(plan.end_date ?? '')
+  }
+
+  async function handleSaveDates(planId: string) {
+    setSavingDatesId(planId)
+    const res = await fetch(`/api/coach/clients/${clientId}/meal-plans/${planId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        start_date: editStartDate,
+        end_date: editEndDate || null,
+      }),
+    })
+    if (res.ok) {
+      setAssignments((prev) =>
+        prev.map((a) => a.id === planId ? { ...a, start_date: editStartDate, end_date: editEndDate || null } : a)
+            .sort((a, b) => b.start_date.localeCompare(a.start_date))
+      )
+      setEditingDatesId(null)
+    }
+    setSavingDatesId(null)
   }
 
   if (loading) return <p className="text-sm text-gray-400 text-center py-10">Loading meal plans…</p>
@@ -1957,15 +2013,28 @@ function MealPlanTab({ clientId }: { clientId: string }) {
 
       {assignments.map((plan) => {
         const totalCals = plan.content.reduce((a, slot) => a + slot.foods.reduce((b, f) => b + f.calories, 0), 0)
+        const isEditingDates = editingDatesId === plan.id
         return (
           <div key={plan.id} className="bg-white rounded-2xl border overflow-hidden">
             <div className="flex items-center justify-between p-4">
               <div>
                 <p className="text-sm font-semibold text-gray-900">{plan.name}</p>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  From {new Date(plan.start_date).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
-                  {' · '}{Math.round(totalCals)} kcal/day
-                </p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <p className="text-xs text-gray-400">
+                    {new Date(plan.start_date).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    {plan.end_date ? ` – ${new Date(plan.end_date).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
+                    {' · '}{Math.round(totalCals)} kcal/day
+                  </p>
+                  <button
+                    onClick={() => isEditingDates ? setEditingDatesId(null) : openDateEditor(plan)}
+                    className="text-gray-300 hover:text-blue-500 transition-colors"
+                    title="Edit dates"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </button>
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -1981,6 +2050,54 @@ function MealPlanTab({ clientId }: { clientId: string }) {
                 </button>
               </div>
             </div>
+
+            {/* Inline date editor */}
+            {isEditingDates && (
+              <div className="px-4 pb-4 pt-0 border-t border-gray-100">
+                <div className="flex items-end gap-3 pt-3">
+                  <div>
+                    <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Start date</label>
+                    <input
+                      type="date"
+                      value={editStartDate}
+                      onChange={(e) => setEditStartDate(e.target.value)}
+                      className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">End date <span className="font-normal">(optional)</span></label>
+                    <input
+                      type="date"
+                      value={editEndDate}
+                      onChange={(e) => setEditEndDate(e.target.value)}
+                      className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  {editEndDate && (
+                    <button
+                      onClick={() => setEditEndDate('')}
+                      className="text-xs text-gray-400 hover:text-red-400 transition-colors pb-2"
+                    >
+                      Clear end
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleSaveDates(plan.id)}
+                    disabled={savingDatesId === plan.id || !editStartDate}
+                    className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  >
+                    {savingDatesId === plan.id ? 'Saving…' : 'Save'}
+                  </button>
+                  <button
+                    onClick={() => setEditingDatesId(null)}
+                    className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
             {expanded === plan.id && (
               <div className="border-t border-gray-100 divide-y divide-gray-50">
                 {plan.content.map((slot) => (
@@ -2009,6 +2126,14 @@ function MealPlanTab({ clientId }: { clientId: string }) {
               >
                 Edit Plan →
               </a>
+              <span className="text-gray-200">|</span>
+              <button
+                onClick={() => handleDuplicate(plan)}
+                disabled={duplicatingId === plan.id}
+                className="text-xs font-semibold text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-50"
+              >
+                {duplicatingId === plan.id ? 'Duplicating…' : 'Duplicate'}
+              </button>
               <span className="text-gray-200">|</span>
               <button
                 onClick={() => handleSaveAsTemplate(plan.id)}
@@ -2059,14 +2184,25 @@ function MealPlanTab({ clientId }: { clientId: string }) {
                   ))}
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Start date</label>
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Start date</label>
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">End date <span className="font-normal text-gray-400">(optional)</span></label>
+                    <input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
                 </div>
 
                 <div className="flex gap-3">
@@ -2127,6 +2263,26 @@ function MealPlanTab({ clientId }: { clientId: string }) {
                     className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 pr-12"
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">kcal</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Start date</label>
+                  <input
+                    type="date"
+                    value={createStartDate}
+                    onChange={(e) => setCreateStartDate(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">End date <span className="font-normal text-gray-400">(optional)</span></label>
+                  <input
+                    type="date"
+                    value={createEndDate}
+                    onChange={(e) => setCreateEndDate(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
                 </div>
               </div>
               <div className="flex gap-3 pt-1">
