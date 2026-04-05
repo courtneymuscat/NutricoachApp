@@ -493,7 +493,7 @@ export default function TrainingCalendar() {
           .from('client_programs')
           .select('id, name, start_date, content, status')
           .eq('client_id', user.id)
-          .eq('status', 'active'),
+          .in('status', ['active', 'complete']),
         supabase
           .from('calendar_events')
           .select('*')
