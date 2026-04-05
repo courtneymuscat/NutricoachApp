@@ -1897,8 +1897,22 @@ function CoachWorkoutModal({ workout, clientId, onClose }: {
   )
 }
 
+function getMonthGridDays(monthStart: Date): Date[] {
+  const firstDay = new Date(monthStart.getFullYear(), monthStart.getMonth(), 1)
+  const lastDay  = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0)
+  const gridStart = getWeekStart(firstDay)
+  const lastDow = lastDay.getDay()
+  const gridEnd = addDays(lastDay, lastDow === 0 ? 0 : 7 - lastDow)
+  const days: Date[] = []
+  let cur = new Date(gridStart)
+  while (cur <= gridEnd) { days.push(new Date(cur)); cur = addDays(cur, 1) }
+  return days
+}
+
 function CalendarTab({ clientId }: { clientId: string }) {
+  const [calView, setCalView] = useState<'week' | 'month'>('week')
   const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()))
+  const [monthStart, setMonthStart] = useState(() => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), 1) })
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [programs, setPrograms] = useState<{ id: string; name: string; start_date: string; content: unknown[] }[]>([])
   const [foodByDate, setFoodByDate] = useState<Record<string, MacroDay>>({})
@@ -1911,7 +1925,9 @@ function CalendarTab({ clientId }: { clientId: string }) {
   const [viewingWorkout, setViewingWorkout] = useState<CalWorkoutForDate | null>(null)
 
   const weekEnd = addDays(weekStart, 6)
-  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
+  const monthGridDays = getMonthGridDays(monthStart)
+  const rangeStart = calView === 'week' ? weekStart : monthGridDays[0]
+  const rangeEnd   = calView === 'week' ? weekEnd   : monthGridDays[monthGridDays.length - 1]
 
   async function loadData(start: Date, end: Date) {
     setLoading(true); setError(null)
@@ -1932,11 +1948,26 @@ function CalendarTab({ clientId }: { clientId: string }) {
     }
   }
 
-  useEffect(() => { loadData(weekStart, weekEnd) }, [weekStart]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadData(rangeStart, rangeEnd) }, [calView, weekStart, monthStart]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  function prevWeek() { setWeekStart((d) => addDays(d, -7)) }
-  function nextWeek() { setWeekStart((d) => addDays(d, 7)) }
-  function thisWeek() { setWeekStart(getWeekStart(new Date())) }
+  function prevPeriod() {
+    if (calView === 'week') setWeekStart((d) => addDays(d, -7))
+    else setMonthStart((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1))
+  }
+  function nextPeriod() {
+    if (calView === 'week') setWeekStart((d) => addDays(d, 7))
+    else setMonthStart((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1))
+  }
+  function goToToday() {
+    const now = new Date()
+    setWeekStart(getWeekStart(now))
+    setMonthStart(new Date(now.getFullYear(), now.getMonth(), 1))
+  }
+  function switchView(v: 'week' | 'month') {
+    if (v === 'month') setMonthStart(new Date(weekStart.getFullYear(), weekStart.getMonth(), 1))
+    else setWeekStart(getWeekStart(monthStart))
+    setCalView(v)
+  }
 
   async function saveEvent(date: string) {
     if (!newEvent.title.trim()) return
@@ -1957,22 +1988,37 @@ function CalendarTab({ clientId }: { clientId: string }) {
 
   const today = toDateStr(new Date())
 
+  const periodLabel = calView === 'week'
+    ? `${weekStart.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })} – ${weekEnd.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}`
+    : monthStart.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })
+
+  const DAY_HEADERS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
   return (
     <div className="space-y-4">
-      {/* Week nav */}
+      {/* Nav bar */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
-          <button onClick={prevWeek} className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50">
+          <button onClick={prevPeriod} className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50">
             <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
           </button>
-          <button onClick={thisWeek} className="text-xs font-semibold text-blue-600 px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100">Today</button>
-          <button onClick={nextWeek} className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50">
+          <button onClick={goToToday} className="text-xs font-semibold text-blue-600 px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100">Today</button>
+          <button onClick={nextPeriod} className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50">
             <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
           </button>
+          <p className="text-sm font-semibold text-gray-700 ml-1">{periodLabel}</p>
         </div>
-        <p className="text-sm font-semibold text-gray-700">
-          {weekStart.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })} – {weekEnd.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
-        </p>
+        {/* View toggle */}
+        <div className="flex items-center rounded-lg border border-gray-200 overflow-hidden text-xs font-semibold">
+          <button onClick={() => switchView('week')}
+            className={`px-3 py-1.5 transition-colors ${calView === 'week' ? 'bg-gray-900 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>
+            Week
+          </button>
+          <button onClick={() => switchView('month')}
+            className={`px-3 py-1.5 transition-colors ${calView === 'month' ? 'bg-gray-900 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>
+            Month
+          </button>
+        </div>
       </div>
 
       {/* Habits legend */}
@@ -1990,9 +2036,10 @@ function CalendarTab({ clientId }: { clientId: string }) {
         <p className="text-sm text-gray-400 text-center py-10">Loading calendar…</p>
       ) : error ? (
         <p className="text-sm text-red-500 text-center py-10">{error}</p>
-      ) : (
+      ) : calView === 'week' ? (
+        /* ── Week grid ── */
         <div className="grid grid-cols-7 gap-1.5">
-          {weekDays.map((day) => {
+          {Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)).map((day) => {
             const dateStr = toDateStr(day)
             const isToday = dateStr === today
             const isPast = dateStr < today
@@ -2005,7 +2052,6 @@ function CalendarTab({ clientId }: { clientId: string }) {
               <div key={dateStr} className={`rounded-xl border p-2 min-h-[150px] flex flex-col gap-1 ${
                 isToday ? 'border-blue-400 bg-blue-50/40' : isPast ? 'bg-gray-50/50 border-gray-100' : 'bg-white border-gray-100'
               }`}>
-                {/* Day header */}
                 <div className="flex items-center justify-between mb-0.5">
                   <div>
                     <p className="text-[10px] font-semibold text-gray-400 uppercase">{day.toLocaleDateString('en-AU', { weekday: 'short' })}</p>
@@ -2015,8 +2061,6 @@ function CalendarTab({ clientId }: { clientId: string }) {
                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
                   </button>
                 </div>
-
-                {/* Training plan workouts */}
                 {workouts.map((w, i) => (
                   <button key={i} onClick={() => setViewingWorkout(w)}
                     className={`w-full text-left text-[10px] rounded-md px-1.5 py-1 font-medium transition-colors hover:opacity-90 ${
@@ -2029,23 +2073,17 @@ function CalendarTab({ clientId }: { clientId: string }) {
                     <p className="opacity-70 truncate">{w.programName}{w.result ? ' · logged' : ` · ${w.exerciseCount} ex`}</p>
                   </button>
                 ))}
-
-                {/* Macros */}
                 {macros && (
                   <div className="text-[10px] bg-orange-50 text-orange-700 border border-orange-100 rounded-md px-1.5 py-1 space-y-0.5">
                     <p className="font-semibold">{Math.round(macros.cal)} kcal</p>
                     <p className="opacity-80">P {Math.round(macros.protein)}g · C {Math.round(macros.carbs)}g · F {Math.round(macros.fat)}g</p>
                   </div>
                 )}
-
-                {/* Habits — shown as reminders on every day */}
                 {habits.length > 0 && (
                   <div className="text-[10px] bg-purple-50 text-purple-600 border border-purple-100 rounded-md px-1.5 py-0.5 font-medium">
                     {habits.length} habit{habits.length !== 1 ? 's' : ''}
                   </div>
                 )}
-
-                {/* Custom events */}
                 {dayEvents.map((evt) => (
                   <div key={evt.id} className={`text-[10px] rounded-md px-1.5 py-0.5 font-medium truncate border flex items-center justify-between gap-0.5 group ${EVENT_COLORS[evt.type] ?? EVENT_COLORS.custom}`}>
                     <span className="truncate">{evt.title}</span>
@@ -2054,13 +2092,75 @@ function CalendarTab({ clientId }: { clientId: string }) {
                     </button>
                   </div>
                 ))}
-
                 {!hasContent && habits.length === 0 && (
                   <p className="text-[10px] text-gray-300 mt-auto text-center pb-1">Rest</p>
                 )}
               </div>
             )
           })}
+        </div>
+      ) : (
+        /* ── Month grid ── */
+        <div>
+          {/* Day-of-week header */}
+          <div className="grid grid-cols-7 gap-px mb-1">
+            {DAY_HEADERS.map((d) => (
+              <p key={d} className="text-[10px] font-semibold text-gray-400 uppercase text-center py-1">{d}</p>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-px bg-gray-100 border border-gray-100 rounded-xl overflow-hidden">
+            {monthGridDays.map((day) => {
+              const dateStr = toDateStr(day)
+              const isToday = dateStr === today
+              const isCurrentMonth = day.getMonth() === monthStart.getMonth()
+              const dayEvents = events.filter((e) => e.event_date === dateStr && e.type !== 'program_workout_result')
+              const workouts = getWorkoutsForDate(programs, day, events)
+              const macros = foodByDate[dateStr]
+
+              return (
+                <div key={dateStr} className={`min-h-[90px] p-1.5 flex flex-col gap-0.5 ${
+                  isToday ? 'bg-blue-50' : isCurrentMonth ? 'bg-white' : 'bg-gray-50/60'
+                }`}>
+                  {/* Date number + add button */}
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className={`text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full ${
+                      isToday ? 'bg-blue-500 text-white' : isCurrentMonth ? 'text-gray-700' : 'text-gray-300'
+                    }`}>{day.getDate()}</span>
+                    <button onClick={() => setAddingEvent(dateStr)} className="w-4 h-4 flex items-center justify-center text-gray-200 hover:text-gray-400">
+                      <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                    </button>
+                  </div>
+
+                  {/* Workouts */}
+                  {workouts.map((w, i) => (
+                    <button key={i} onClick={() => setViewingWorkout(w)}
+                      className={`w-full text-left text-[9px] leading-tight rounded px-1 py-0.5 font-semibold truncate transition-colors hover:opacity-80 ${
+                        w.result ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-700'
+                      }`}>
+                      {w.result ? '✓ ' : ''}{w.dayName}
+                    </button>
+                  ))}
+
+                  {/* Macros dot */}
+                  {macros && (
+                    <div className="text-[9px] bg-orange-50 text-orange-600 rounded px-1 py-0.5 font-semibold truncate">
+                      {Math.round(macros.cal)} kcal
+                    </div>
+                  )}
+
+                  {/* Custom events */}
+                  {dayEvents.slice(0, 2).map((evt) => (
+                    <div key={evt.id} className={`text-[9px] rounded px-1 py-0.5 font-medium truncate ${EVENT_COLORS[evt.type] ?? EVENT_COLORS.custom}`}>
+                      {evt.title}
+                    </div>
+                  ))}
+                  {dayEvents.length > 2 && (
+                    <p className="text-[9px] text-gray-400 px-1">+{dayEvents.length - 2} more</p>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 
