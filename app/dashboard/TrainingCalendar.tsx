@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -58,6 +58,8 @@ type WorkoutForDate = {
 // Logged state per exercise: sets with actual weight/reps
 type LoggedExercises = Record<string, Array<{ weight: string; reps: string }>>
 type LoggedSections  = Record<string, string> // section id → score value
+type LoggedVideos    = Record<string, string>  // exercise id → storage path
+type LoggedNotes     = Record<string, string>  // exercise id → client note text
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -171,6 +173,88 @@ function ScoreInput({ scoreType, value, onChange }: { scoreType: ScoreType; valu
   )
 }
 
+// ─── Video upload + player ────────────────────────────────────────────────────
+
+function VideoUploadButton({ videoPath, onUploaded }: {
+  videoPath?: string
+  onUploaded: (path: string) => void
+}) {
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 200 * 1024 * 1024) { setUploadError('Video must be under 200 MB'); return }
+    setUploading(true); setUploadError(null)
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setUploadError('Not signed in'); setUploading(false); return }
+    const ext = file.name.split('.').pop()?.toLowerCase() ?? 'mp4'
+    const path = `${user.id}/${crypto.randomUUID()}.${ext}`
+    const { error } = await supabase.storage.from('workout-videos').upload(path, file, { contentType: file.type })
+    if (error) { setUploadError(error.message); setUploading(false); return }
+    onUploaded(path)
+    setUploading(false)
+  }
+
+  return (
+    <div className="mt-2">
+      <input ref={fileRef} type="file" accept="video/*" capture="environment" className="hidden" onChange={handleFile} />
+      <button
+        type="button"
+        onClick={() => fileRef.current?.click()}
+        disabled={uploading}
+        className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${
+          videoPath
+            ? 'border-green-200 text-green-700 bg-green-50 hover:bg-green-100'
+            : 'border-indigo-200 text-indigo-600 bg-indigo-50 hover:bg-indigo-100'
+        } disabled:opacity-50`}
+      >
+        {uploading ? (
+          <>
+            <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+            </svg>
+            Uploading…
+          </>
+        ) : videoPath ? (
+          <>
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+            Video uploaded · Replace
+          </>
+        ) : (
+          <>
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.89L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+            Upload video
+          </>
+        )}
+      </button>
+      {uploadError && <p className="text-[10px] text-red-500 mt-1">{uploadError}</p>}
+    </div>
+  )
+}
+
+function VideoPlayer({ path }: { path: string }) {
+  const [url, setUrl] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch(`/api/workouts/video-url?path=${encodeURIComponent(path)}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((j) => { if (j?.url) setUrl(j.url) })
+      .finally(() => setLoading(false))
+  }, [path])
+
+  if (loading) return <div className="h-10 flex items-center text-xs text-gray-400">Loading video…</div>
+  if (!url) return <div className="text-xs text-red-400">Could not load video</div>
+  return (
+    <video src={url} controls playsInline className="w-full rounded-lg mt-2 max-h-48 bg-black" />
+  )
+}
+
 // ─── Workout modal ─────────────────────────────────────────────────────────────
 
 function WorkoutModal({ workout, onClose, onSaved }: {
@@ -180,7 +264,6 @@ function WorkoutModal({ workout, onClose, onSaved }: {
 }) {
   const [logging, setLogging] = useState(!workout.result)
   const [sectionScores, setSectionScores] = useState<LoggedSections>(() => {
-    // Pre-fill from existing result if present
     if (workout.result) {
       const saved = (workout.result.content.sections ?? []) as Array<{ id: string; scoreValue: string }>
       return Object.fromEntries(saved.map((s) => [s.id, s.scoreValue ?? '']))
@@ -190,7 +273,21 @@ function WorkoutModal({ workout, onClose, onSaved }: {
   const [exSets, setExSets] = useState<LoggedExercises>(() => {
     if (workout.result) {
       const saved = (workout.result.content.exercises ?? []) as Array<{ id: string; sets: Array<{ weight: string; reps: string }> }>
-      return Object.fromEntries(saved.map((e) => [e.id, e.sets]))
+      return Object.fromEntries(saved.map((e) => [e.id, e.sets ?? []]))
+    }
+    return {}
+  })
+  const [exVideos, setExVideos] = useState<LoggedVideos>(() => {
+    if (workout.result) {
+      const saved = (workout.result.content.exercises ?? []) as Array<{ id: string; videoPath?: string }>
+      return Object.fromEntries(saved.filter((e) => e.videoPath).map((e) => [e.id, e.videoPath!]))
+    }
+    return {}
+  })
+  const [exNotes, setExNotes] = useState<LoggedNotes>(() => {
+    if (workout.result) {
+      const saved = (workout.result.content.exercises ?? []) as Array<{ id: string; clientNote?: string }>
+      return Object.fromEntries(saved.filter((e) => e.clientNote).map((e) => [e.id, e.clientNote!]))
     }
     return {}
   })
@@ -214,7 +311,13 @@ function WorkoutModal({ workout, onClose, onSaved }: {
 
       const exercises = items
         .filter((i) => i.type === 'exercise')
-        .map((i) => ({ id: i.id, name: i.name, sets: exSets[i.id] ?? getExSets(i) }))
+        .map((i) => ({
+          id: i.id,
+          name: i.name,
+          sets: exSets[i.id] ?? getExSets(i),
+          ...(exVideos[i.id] ? { videoPath: exVideos[i.id] } : {}),
+          ...(exNotes[i.id]?.trim() ? { clientNote: exNotes[i.id].trim() } : {}),
+        }))
 
       const res = await fetch('/api/workouts/program-session', {
         method: 'POST',
@@ -304,15 +407,18 @@ function WorkoutModal({ workout, onClose, onSaved }: {
 
             // Exercise
             const sets = getExSets(item)
+            const savedResult = workout.result
+              ? ((workout.result.content.exercises ?? []) as Array<{ id: string; coachNote?: string; videoPath?: string; clientNote?: string }>).find((e) => e.id === item.id)
+              : null
             return (
               <div key={item.id} className="border border-gray-100 rounded-xl px-4 py-3 space-y-2">
                 <p className="text-sm font-semibold text-gray-800">{item.name}</p>
                 {item.notes && <p className="text-xs text-gray-400">{item.notes}</p>}
-                {/* Target */}
                 <div className="text-xs text-gray-400">
                   Target: {item.sets?.length ?? 0} sets × {item.sets?.[0]?.reps ?? '—'}
                 </div>
-                {/* Logged sets (in logging mode or if result exists) */}
+
+                {/* Logged sets */}
                 {(logging || workout.result) && (
                   <div className="space-y-1.5 pt-1">
                     {sets.map((s, si) => (
@@ -342,6 +448,44 @@ function WorkoutModal({ workout, onClose, onSaved }: {
                         )}
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {/* Video + notes — logging mode */}
+                {logging && (
+                  <div className="pt-1 space-y-2 border-t border-gray-50 mt-2">
+                    <VideoUploadButton
+                      videoPath={exVideos[item.id]}
+                      onUploaded={(path) => setExVideos((prev) => ({ ...prev, [item.id]: path }))}
+                    />
+                    <textarea
+                      value={exNotes[item.id] ?? ''}
+                      onChange={(e) => setExNotes((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                      placeholder="Add a note (e.g. how it felt, any issues…)"
+                      rows={2}
+                      className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-indigo-300 placeholder:text-gray-300"
+                    />
+                  </div>
+                )}
+
+                {/* Video + notes — result view mode */}
+                {!logging && workout.result && (
+                  <div className="space-y-2">
+                    {(savedResult?.videoPath || exVideos[item.id]) && (
+                      <VideoPlayer path={savedResult?.videoPath ?? exVideos[item.id]} />
+                    )}
+                    {savedResult?.clientNote && (
+                      <div className="bg-gray-50 rounded-lg px-3 py-2">
+                        <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wide mb-0.5">Your note</p>
+                        <p className="text-xs text-gray-600">{savedResult.clientNote}</p>
+                      </div>
+                    )}
+                    {savedResult?.coachNote && (
+                      <div className="bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                        <p className="text-[10px] text-amber-600 font-semibold uppercase tracking-wide mb-0.5">Coach feedback</p>
+                        <p className="text-xs text-amber-900">{savedResult.coachNote}</p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

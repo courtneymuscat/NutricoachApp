@@ -1721,14 +1721,63 @@ function getWorkoutsForDate(
 
 // ── Coach workout result viewer ───────────────────────────────────────────────
 
-function CoachWorkoutModal({ workout, onClose }: { workout: CalWorkoutForDate; onClose: () => void }) {
+type SavedExercise = {
+  id: string
+  name: string
+  sets: Array<{ weight: string; reps: string }>
+  videoPath?: string
+  clientNote?: string
+  coachNote?: string
+}
+
+function CoachVideoPlayer({ path, clientId }: { path: string; clientId: string }) {
+  const [url, setUrl] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    fetch(`/api/workouts/video-url?path=${encodeURIComponent(path)}&clientId=${clientId}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((j) => { if (j?.url) setUrl(j.url) })
+      .finally(() => setLoading(false))
+  }, [path, clientId])
+  if (loading) return <div className="h-8 flex items-center text-xs text-gray-400">Loading video…</div>
+  if (!url) return <div className="text-xs text-red-400">Could not load video</div>
+  return <video src={url} controls playsInline className="w-full rounded-lg mt-1 max-h-48 bg-black" />
+}
+
+function CoachWorkoutModal({ workout, clientId, onClose }: {
+  workout: CalWorkoutForDate
+  clientId: string
+  onClose: () => void
+}) {
   const result = workout.result
   const savedSections = result
-    ? ((result.content.sections ?? []) as Array<{ id: string; title: string; scoreType: string; scoreValue: string }>)
+    ? ((result.content.sections ?? []) as Array<{ id: string; title: string; scoreType: string; scoreValue: string; coachNote?: string }>)
     : []
   const savedExercises = result
-    ? ((result.content.exercises ?? []) as Array<{ id: string; name: string; sets: Array<{ weight: string; reps: string }> }>)
+    ? ((result.content.exercises ?? []) as SavedExercise[])
     : []
+
+  const [coachNotes, setCoachNotes] = useState<Record<string, string>>(() =>
+    Object.fromEntries(savedExercises.filter((e) => e.coachNote).map((e) => [e.id, e.coachNote!]))
+  )
+  const [savingFeedback, setSavingFeedback] = useState(false)
+  const [feedbackSaved, setFeedbackSaved] = useState(false)
+
+  async function saveFeedback() {
+    if (!result) return
+    setSavingFeedback(true)
+    const exerciseFeedback = Object.entries(coachNotes).map(([id, coachNote]) => ({ id, coachNote }))
+    await fetch(`/api/workouts/program-session/${result.id}/feedback`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ exerciseFeedback }),
+    })
+    setSavingFeedback(false)
+    setFeedbackSaved(true)
+    setTimeout(() => setFeedbackSaved(false), 2500)
+  }
+
+  const hasFeedbackChanges = result && Object.keys(coachNotes).length > 0
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
@@ -1773,6 +1822,12 @@ function CoachWorkoutModal({ workout, onClose }: { workout: CalWorkoutForDate; o
                       <span className="text-sm font-bold text-indigo-700">{savedScore?.scoreValue || '—'}</span>
                     </div>
                   )}
+                  {savedScore?.coachNote && (
+                    <div className="bg-amber-50 border border-amber-100 rounded-lg px-3 py-1.5 mt-1">
+                      <p className="text-[10px] text-amber-600 font-semibold uppercase tracking-wide mb-0.5">Your feedback</p>
+                      <p className="text-xs text-amber-900">{savedScore.coachNote}</p>
+                    </div>
+                  )}
                 </div>
               )
             }
@@ -1783,6 +1838,7 @@ function CoachWorkoutModal({ workout, onClose }: { workout: CalWorkoutForDate; o
                 <p className="text-sm font-semibold text-gray-800">{item.name}</p>
                 {item.notes && <p className="text-xs text-gray-400">{item.notes}</p>}
                 <p className="text-xs text-gray-400">Target: {item.sets?.length ?? 0} sets × {item.sets?.[0]?.reps ?? '—'}</p>
+
                 {savedEx && savedEx.sets.length > 0 && (
                   <div className="space-y-1 pt-1">
                     {savedEx.sets.map((s, si) => (
@@ -1793,15 +1849,48 @@ function CoachWorkoutModal({ workout, onClose }: { workout: CalWorkoutForDate; o
                   </div>
                 )}
                 {result && !savedEx && <p className="text-xs text-gray-300 italic">No sets logged</p>}
+
+                {/* Client uploaded video */}
+                {savedEx?.videoPath && (
+                  <CoachVideoPlayer path={savedEx.videoPath} clientId={clientId} />
+                )}
+
+                {/* Client note */}
+                {savedEx?.clientNote && (
+                  <div className="bg-gray-50 rounded-lg px-3 py-1.5">
+                    <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wide mb-0.5">Client note</p>
+                    <p className="text-xs text-gray-600">{savedEx.clientNote}</p>
+                  </div>
+                )}
+
+                {/* Coach feedback input */}
+                {result && (
+                  <div className="pt-1">
+                    <p className="text-[10px] text-amber-600 font-semibold uppercase tracking-wide mb-1">Technique feedback</p>
+                    <textarea
+                      value={coachNotes[item.id] ?? savedEx?.coachNote ?? ''}
+                      onChange={(e) => setCoachNotes((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                      placeholder="Add technique feedback for this exercise…"
+                      rows={2}
+                      className="w-full text-xs border border-amber-100 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-amber-300 placeholder:text-gray-300 bg-amber-50"
+                    />
+                  </div>
+                )}
               </div>
             )
           })}
         </div>
 
-        <div className="px-5 py-4 border-t">
-          <button onClick={onClose} className="w-full border border-gray-200 text-gray-600 py-2.5 rounded-xl text-sm font-semibold hover:bg-gray-50">
+        <div className="px-5 py-4 border-t flex gap-3">
+          <button onClick={onClose} className="flex-1 border border-gray-200 text-gray-600 py-2.5 rounded-xl text-sm font-semibold hover:bg-gray-50">
             Close
           </button>
+          {result && hasFeedbackChanges && (
+            <button onClick={saveFeedback} disabled={savingFeedback}
+              className="flex-1 bg-amber-500 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-amber-600 disabled:opacity-50 transition-colors">
+              {savingFeedback ? 'Saving…' : feedbackSaved ? 'Saved ✓' : 'Save Feedback'}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -1977,7 +2066,7 @@ function CalendarTab({ clientId }: { clientId: string }) {
 
       {/* Workout results modal */}
       {viewingWorkout && (
-        <CoachWorkoutModal workout={viewingWorkout} onClose={() => setViewingWorkout(null)} />
+        <CoachWorkoutModal workout={viewingWorkout} clientId={clientId} onClose={() => setViewingWorkout(null)} />
       )}
 
       {/* Add event modal */}
