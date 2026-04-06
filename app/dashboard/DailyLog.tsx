@@ -105,6 +105,7 @@ export default function DailyLog({
   // Copy from (copy FROM another date INTO current date)
   const [copyFromOpen, setCopyFromOpen] = useState(false)
   const [copyFromDate, setCopyFromDate] = useState('')
+  const [copyFromMeal, setCopyFromMeal] = useState<MealKey | 'all'>('all')
   const [isCopyingFrom, setIsCopyingFrom] = useState(false)
 
   const fetchLogs = useCallback(async () => {
@@ -264,11 +265,15 @@ export default function DailyLog({
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) { setIsCopyingFrom(false); return }
 
-    const { data: sourceLogs } = await supabase
+    let query = supabase
       .from('food_logs')
       .select('food_name, calories, protein, carbs, fat, meal_type, notes')
       .eq('user_id', session.user.id)
       .eq('log_date', copyFromDate)
+
+    if (copyFromMeal !== 'all') query = query.eq('meal_type', copyFromMeal)
+
+    const { data: sourceLogs } = await query
 
     if (sourceLogs?.length) {
       const rows = sourceLogs.map((log) => ({
@@ -288,8 +293,10 @@ export default function DailyLog({
     setIsCopyingFrom(false)
     setCopyFromOpen(false)
     setCopyFromDate('')
+    setCopyFromMeal('all')
     const count = sourceLogs?.length ?? 0
-    setCopiedMsg(count > 0 ? `Copied ${count} item${count !== 1 ? 's' : ''} from ${copyFromDate}` : `No food logged on ${copyFromDate}`)
+    const mealLabel = copyFromMeal === 'all' ? 'all meals' : MEALS.find((m) => m.key === copyFromMeal)?.label ?? copyFromMeal
+    setCopiedMsg(count > 0 ? `Copied ${count} item${count !== 1 ? 's' : ''} (${mealLabel}) from ${copyFromDate}` : `No food logged for ${mealLabel} on ${copyFromDate}`)
     setTimeout(() => setCopiedMsg(null), 3000)
     if (sourceLogs?.length) fetchLogs()
   }
@@ -441,24 +448,40 @@ export default function DailyLog({
 
       {/* Copy from panel */}
       {copyFromOpen && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-center gap-3 flex-wrap">
-          <span className="text-sm font-medium text-green-800">Copy all meals from:</span>
-          <input
-            type="date"
-            value={copyFromDate}
-            max={undefined}
-            onChange={(e) => setCopyFromDate(e.target.value)}
-            className="border border-green-200 rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-green-400"
-          />
-          <button
-            type="button"
-            onClick={handleCopyFrom}
-            disabled={!copyFromDate || isCopyingFrom}
-            className="text-xs font-semibold px-4 py-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-40 text-white rounded-lg transition-colors"
-          >
-            {isCopyingFrom ? 'Copying…' : `Copy into ${date}`}
-          </button>
-          <button type="button" onClick={() => setCopyFromOpen(false)} className="text-xs text-green-600 hover:text-green-800">Cancel</button>
+        <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 space-y-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="text-sm font-medium text-green-800">Copy from:</span>
+            <input
+              type="date"
+              value={copyFromDate}
+              onChange={(e) => setCopyFromDate(e.target.value)}
+              className="border border-green-200 rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-green-400"
+            />
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-medium text-green-700">Meal:</span>
+            {([{ key: 'all', label: 'All meals' }, ...MEALS] as { key: MealKey | 'all'; label: string }[]).map((m) => (
+              <button
+                key={m.key}
+                type="button"
+                onClick={() => setCopyFromMeal(m.key)}
+                className={`text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${copyFromMeal === m.key ? 'bg-green-600 border-green-600 text-white' : 'bg-white border-green-200 text-green-700 hover:bg-green-100'}`}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleCopyFrom}
+              disabled={!copyFromDate || isCopyingFrom}
+              className="text-xs font-semibold px-4 py-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-40 text-white rounded-lg transition-colors"
+            >
+              {isCopyingFrom ? 'Copying…' : `Copy into ${date}`}
+            </button>
+            <button type="button" onClick={() => setCopyFromOpen(false)} className="text-xs text-green-600 hover:text-green-800">Cancel</button>
+          </div>
         </div>
       )}
 
