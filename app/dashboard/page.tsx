@@ -47,22 +47,10 @@ export default async function DashboardPage() {
   const canAdvancedAnalytics  = sub.canAccess(FEATURES.ADVANCED_ANALYTICS)
 
   const isCoach   = sub.userType === 'coach'
-  // Only show check-in banner for coached users (they have a coach waiting)
   const isCoached = sub.tier === 'coached'
-  let showCheckInBanner = false
   let coachEmail: string | null = null
 
   if (isCoached) {
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-    const { data: recentCheckIn } = await supabase
-      .from('check_ins')
-      .select('id')
-      .eq('user_id', user.id)
-      .gte('created_at', sevenDaysAgo)
-      .limit(1)
-      .maybeSingle()
-    showCheckInBanner = !recentCheckIn
-
     const { data: coachRel } = await supabase
       .from('coach_clients')
       .select('coach_id')
@@ -228,22 +216,6 @@ export default async function DashboardPage() {
           </div>
         )}
 
-        {/* Check-in reminder banner — only for coached users */}
-        {showCheckInBanner && (
-          <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4">
-            <svg className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-            </svg>
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-amber-800">Weekly check-in due</p>
-              <p className="text-xs text-amber-700 mt-0.5">You haven&apos;t submitted your weekly check-in yet. Your coach is waiting on your update.</p>
-            </div>
-            <a href="#daily-checkin" className="flex-shrink-0 text-xs font-semibold bg-amber-500 text-white px-3 py-1.5 rounded-lg hover:bg-amber-600 transition-colors">
-              Check in now
-            </a>
-          </div>
-        )}
-
         {/* Weight — log + chart */}
         <section id="tour-weight" className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-stretch">
           <WeightLog />
@@ -301,13 +273,15 @@ export default async function DashboardPage() {
           </div>
         )}
 
-        {/* Coach Forms */}
-        <FormsSection />
+        {/* Coach Forms — coached clients use ScheduledCheckIns instead */}
+        {!isCoached && <FormsSection />}
 
-        {/* Daily Check-In */}
-        <div id="daily-checkin">
-          <DailyCheckIn fullAccess={canFullCheckin} />
-        </div>
+        {/* Daily Check-In — hidden for coached clients (they use coach-assigned check-in forms) */}
+        {!isCoached && (
+          <div id="daily-checkin">
+            <DailyCheckIn fullAccess={canFullCheckin} />
+          </div>
+        )}
       </main>
     </div>
   )

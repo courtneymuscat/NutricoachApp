@@ -270,6 +270,7 @@ export default function FoodSearch({ onSelect }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
+    if (selected) return // food already selected — don't reopen dropdown
     if (query.length < 2) { setResults([]); setOpen(false); return }
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(async () => {
@@ -288,7 +289,7 @@ export default function FoodSearch({ onSelect }: Props) {
       }
     }, 300)
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
-  }, [query])
+  }, [query, selected])
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {

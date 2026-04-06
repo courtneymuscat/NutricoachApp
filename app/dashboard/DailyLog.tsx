@@ -97,6 +97,15 @@ export default function DailyLog({
   const [mealNoteOpen, setMealNoteOpen] = useState<MealKey | null>(null)
   const [mealNoteDraft, setMealNoteDraft] = useState('')
   const [uploadingMealNote, setUploadingMealNote] = useState<MealKey | null>(null)
+  // Copy meal (copy current day/meal TO another date)
+  const [copyingMeal, setCopyingMeal] = useState<MealKey | 'all' | null>(null)
+  const [copyTargetDate, setCopyTargetDate] = useState('')
+  const [isCopying, setIsCopying] = useState(false)
+  const [copiedMsg, setCopiedMsg] = useState<string | null>(null)
+  // Copy from (copy FROM another date INTO current date)
+  const [copyFromOpen, setCopyFromOpen] = useState(false)
+  const [copyFromDate, setCopyFromDate] = useState('')
+  const [isCopyingFrom, setIsCopyingFrom] = useState(false)
 
   const fetchLogs = useCallback(async () => {
     setLoading(true)
@@ -203,6 +212,86 @@ export default function DailyLog({
     const supabase = createClient()
     await supabase.from('food_logs').delete().eq('id', id)
     fetchLogs()
+  }
+
+  async function handleCopyMeal(mealKey: MealKey | 'all') {
+    if (!copyTargetDate) return
+    setIsCopying(true)
+    const supabase = createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) { setIsCopying(false); return }
+
+    const logsToInsert = mealKey === 'all'
+      ? Object.entries(logsByMeal).flatMap(([mk, logs]) =>
+          logs.map((log) => ({
+            user_id: session.user.id,
+            food_name: log.food_name,
+            calories: log.calories,
+            protein: log.protein,
+            carbs: log.carbs,
+            fat: log.fat,
+            meal_type: mk,
+            log_date: copyTargetDate,
+            notes: log.notes,
+          }))
+        )
+      : logsByMeal[mealKey].map((log) => ({
+          user_id: session.user.id,
+          food_name: log.food_name,
+          calories: log.calories,
+          protein: log.protein,
+          carbs: log.carbs,
+          fat: log.fat,
+          meal_type: mealKey,
+          log_date: copyTargetDate,
+          notes: log.notes,
+        }))
+
+    if (logsToInsert.length) await supabase.from('food_logs').insert(logsToInsert)
+    setIsCopying(false)
+    setCopyingMeal(null)
+    setCopyTargetDate('')
+    const label = mealKey === 'all' ? 'Day' : MEALS.find((m) => m.key === mealKey)?.label ?? mealKey
+    setCopiedMsg(`${label} copied to ${copyTargetDate}`)
+    setTimeout(() => setCopiedMsg(null), 3000)
+    if (copyTargetDate === date) fetchLogs()
+  }
+
+  async function handleCopyFrom() {
+    if (!copyFromDate) return
+    setIsCopyingFrom(true)
+    const supabase = createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) { setIsCopyingFrom(false); return }
+
+    const { data: sourceLogs } = await supabase
+      .from('food_logs')
+      .select('food_name, calories, protein, carbs, fat, meal_type, notes')
+      .eq('user_id', session.user.id)
+      .eq('log_date', copyFromDate)
+
+    if (sourceLogs?.length) {
+      const rows = sourceLogs.map((log) => ({
+        user_id: session.user.id,
+        food_name: log.food_name,
+        calories: log.calories,
+        protein: log.protein,
+        carbs: log.carbs,
+        fat: log.fat,
+        meal_type: log.meal_type,
+        log_date: date,
+        notes: log.notes,
+      }))
+      await supabase.from('food_logs').insert(rows)
+    }
+
+    setIsCopyingFrom(false)
+    setCopyFromOpen(false)
+    setCopyFromDate('')
+    const count = sourceLogs?.length ?? 0
+    setCopiedMsg(count > 0 ? `Copied ${count} item${count !== 1 ? 's' : ''} from ${copyFromDate}` : `No food logged on ${copyFromDate}`)
+    setTimeout(() => setCopiedMsg(null), 3000)
+    if (sourceLogs?.length) fetchLogs()
   }
 
   async function handleUpdate() {
@@ -317,14 +406,88 @@ export default function DailyLog({
               Today
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => { setCopyFromOpen((o) => !o); setCopyFromDate(''); setCopyingMeal(null) }}
+            title="Copy from another day into this day"
+            className={`flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg border transition-colors ${copyFromOpen ? 'bg-green-100 border-green-300 text-green-700' : 'border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-700'}`}
+          >
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            Copy from
+          </button>
+          {allLogs.length > 0 && (
+            <button
+              type="button"
+              onClick={() => { setCopyingMeal(copyingMeal === 'all' ? null : 'all'); setCopyTargetDate(''); setCopyFromOpen(false) }}
+              title="Copy entire day to another date"
+              className={`flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg border transition-colors ${copyingMeal === 'all' ? 'bg-blue-100 border-blue-300 text-blue-700' : 'border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-700'}`}
+            >
+              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 002 2v8a2 2 0 002 2z" />
+              </svg>
+              Copy day
+            </button>
+          )}
           <input
             type="date"
             value={date}
-            onChange={(e) => { setDate(e.target.value); setAddingTo(null); setPendingEntry(null) }}
+            onChange={(e) => { setDate(e.target.value); setAddingTo(null); setPendingEntry(null); setCopyingMeal(null); setCopyFromOpen(false) }}
             className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
       </div>
+
+      {/* Copy from panel */}
+      {copyFromOpen && (
+        <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-center gap-3 flex-wrap">
+          <span className="text-sm font-medium text-green-800">Copy all meals from:</span>
+          <input
+            type="date"
+            value={copyFromDate}
+            max={undefined}
+            onChange={(e) => setCopyFromDate(e.target.value)}
+            className="border border-green-200 rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-green-400"
+          />
+          <button
+            type="button"
+            onClick={handleCopyFrom}
+            disabled={!copyFromDate || isCopyingFrom}
+            className="text-xs font-semibold px-4 py-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-40 text-white rounded-lg transition-colors"
+          >
+            {isCopyingFrom ? 'Copying…' : `Copy into ${date}`}
+          </button>
+          <button type="button" onClick={() => setCopyFromOpen(false)} className="text-xs text-green-600 hover:text-green-800">Cancel</button>
+        </div>
+      )}
+
+      {/* Copy day panel */}
+      {copyingMeal === 'all' && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex items-center gap-3 flex-wrap">
+          <span className="text-sm font-medium text-blue-800">Copy all meals to:</span>
+          <input
+            type="date"
+            value={copyTargetDate}
+            min={undefined}
+            onChange={(e) => setCopyTargetDate(e.target.value)}
+            className="border border-blue-200 rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+          />
+          <button
+            type="button"
+            onClick={() => handleCopyMeal('all')}
+            disabled={!copyTargetDate || isCopying}
+            className="text-xs font-semibold px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white rounded-lg transition-colors"
+          >
+            {isCopying ? 'Copying…' : 'Copy'}
+          </button>
+          <button type="button" onClick={() => setCopyingMeal(null)} className="text-xs text-blue-500 hover:text-blue-700">Cancel</button>
+        </div>
+      )}
+
+      {copiedMsg && (
+        <p className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-xl px-4 py-2 font-medium">{copiedMsg}</p>
+      )}
 
       {/* Daily totals */}
       {allLogs.length > 0 && (
@@ -466,6 +629,18 @@ export default function DailyLog({
                             </svg>
                           </button>
                         )}
+                        {logs.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => { setCopyingMeal(copyingMeal === meal.key ? null : meal.key); setCopyTargetDate('') }}
+                            title={`Copy ${meal.label} to another day`}
+                            className={`p-1.5 rounded-lg transition-colors ${copyingMeal === meal.key ? 'bg-blue-100 text-blue-600' : 'text-gray-400 hover:text-gray-600 bg-gray-50 hover:bg-gray-100'}`}
+                          >
+                            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => { setAddingTo(meal.key); setPendingEntry(null) }}
@@ -536,6 +711,28 @@ export default function DailyLog({
                         Cancel
                       </button>
                     </div>
+                  </div>
+                )}
+
+                {/* Copy meal panel */}
+                {copyingMeal === meal.key && (
+                  <div className="border-t border-gray-100 bg-blue-50/60 px-4 py-3 flex items-center gap-3 flex-wrap">
+                    <span className="text-sm font-medium text-blue-800">Copy {meal.label} to:</span>
+                    <input
+                      type="date"
+                      value={copyTargetDate}
+                      onChange={(e) => setCopyTargetDate(e.target.value)}
+                      className="border border-blue-200 rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleCopyMeal(meal.key)}
+                      disabled={!copyTargetDate || isCopying}
+                      className="text-xs font-semibold px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white rounded-lg transition-colors"
+                    >
+                      {isCopying ? 'Copying…' : 'Copy'}
+                    </button>
+                    <button type="button" onClick={() => setCopyingMeal(null)} className="text-xs text-blue-500 hover:text-blue-700">Cancel</button>
                   </div>
                 )}
 
