@@ -315,12 +315,21 @@ export default function DailyLog({
     fetchLogs()
   }
 
-  async function saveNote(id: string, text: string) {
+  // Returns true on success so callers can close the panel reliably
+  async function saveNote(id: string, text: string): Promise<boolean> {
     setNoteError(null)
-    const supabase = createClient()
-    const { error } = await supabase.from('food_logs').update({ meal_notes: text.trim() || null }).eq('id', id)
-    if (error) { setNoteError(error.message); return }
+    const res = await fetch('/api/food-logs/note', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ food_log_id: id, meal_notes: text }),
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      setNoteError(body?.error ?? `Save failed (${res.status})`)
+      return false
+    }
     fetchLogs()
+    return true
   }
 
   async function uploadMealPhoto(id: string, file: File) {
@@ -331,11 +340,11 @@ export default function DailyLog({
     if (!session) { setUploadingPhotoId(null); return }
 
     const ext = file.name.split('.').pop() ?? 'jpg'
-    const path = `${session.user.id}/${id}.${ext}`
+    const storagePath = `${session.user.id}/${id}.${ext}`
 
     const { error: uploadError } = await supabase.storage
       .from('meal-photos')
-      .upload(path, file, { upsert: true })
+      .upload(storagePath, file, { upsert: true })
 
     if (uploadError) {
       setNoteError(`Photo upload failed: ${uploadError.message}`)
@@ -343,55 +352,72 @@ export default function DailyLog({
       return
     }
 
-    const { data: signed } = await supabase.storage
-      .from('meal-photos')
-      .createSignedUrl(path, 315360000)
-
-    if (signed?.signedUrl) {
-      const { error: dbError } = await supabase.from('food_logs').update({ meal_photo_url: signed.signedUrl }).eq('id', id)
-      if (dbError) { setNoteError(dbError.message); setUploadingPhotoId(null); return }
+    // Save the URL via API (admin client handles signed URL creation + DB write)
+    const res = await fetch('/api/food-logs/photo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ food_log_id: id, photo_path: storagePath }),
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      setNoteError(body?.error ?? 'Failed to save photo')
+      setUploadingPhotoId(null)
+      return
     }
 
     setUploadingPhotoId(null)
     fetchLogs()
   }
 
-  async function saveMealNote(mealKey: MealKey, text: string) {
-    const supabase = createClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) return
-    await supabase.from('meal_notes').upsert({
-      user_id: session.user.id,
-      log_date: date,
-      meal_type: mealKey,
-      note: text.trim() || null,
-    }, { onConflict: 'user_id,log_date,meal_type' })
+  const [mealNoteError, setMealNoteError] = useState<string | null>(null)
+
+  // Returns true on success
+  async function saveMealNote(mealKey: MealKey, text: string): Promise<boolean> {
+    setMealNoteError(null)
+    const res = await fetch('/api/food-logs/meal-notes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ log_date: date, meal_type: mealKey, note: text }),
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      setMealNoteError(body?.error ?? `Save failed (${res.status})`)
+      return false
+    }
     fetchLogs()
+    return true
   }
 
   async function uploadMealNotePhoto(mealKey: MealKey, file: File) {
+    setMealNoteError(null)
     setUploadingMealNote(mealKey)
     const supabase = createClient()
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) { setUploadingMealNote(null); return }
 
     const ext = file.name.split('.').pop() ?? 'jpg'
-    const path = `${session.user.id}/meal-${date}-${mealKey}.${ext}`
+    const storagePath = `${session.user.id}/meal-${date}-${mealKey}.${ext}`
 
-    const { error } = await supabase.storage.from('meal-photos').upload(path, file, { upsert: true })
-    if (!error) {
-      const { data: signed } = await supabase.storage.from('meal-photos').createSignedUrl(path, 315360000)
-      if (signed?.signedUrl) {
-        await supabase.from('meal_notes').upsert({
-          user_id: session.user.id,
-          log_date: date,
-          meal_type: mealKey,
-          photo_url: signed.signedUrl,
-        }, { onConflict: 'user_id,log_date,meal_type' })
-      }
+    const { error: uploadError } = await supabase.storage.from('meal-photos').upload(storagePath, file, { upsert: true })
+    if (uploadError) {
+      setMealNoteError(`Photo upload failed: ${uploadError.message}`)
+      setUploadingMealNote(null)
+      return
+    }
+
+    // Save signed URL via API
+    const res = await fetch('/api/food-logs/meal-notes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ log_date: date, meal_type: mealKey, photo_path: storagePath }),
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      setMealNoteError(body?.error ?? 'Failed to save photo')
+    } else {
+      fetchLogs()
     }
     setUploadingMealNote(null)
-    fetchLogs()
   }
 
   const allLogs = Object.values(logsByMeal).flat()
@@ -718,17 +744,20 @@ export default function DailyLog({
                         </a>
                       )}
                     </div>
+                    {mealNoteError && (
+                      <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{mealNoteError}</p>
+                    )}
                     <div className="flex gap-2">
                       <button
                         type="button"
-                        onClick={() => { saveMealNote(meal.key, mealNoteDraft); setMealNoteOpen(null) }}
+                        onClick={async () => { const ok = await saveMealNote(meal.key, mealNoteDraft); if (ok) { setMealNoteOpen(null); setMealNoteError(null) } }}
                         className="flex-1 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-colors"
                       >
                         Save note
                       </button>
                       <button
                         type="button"
-                        onClick={() => setMealNoteOpen(null)}
+                        onClick={() => { setMealNoteOpen(null); setMealNoteError(null) }}
                         className="px-3 py-1.5 text-gray-500 hover:text-gray-700 text-xs rounded-lg hover:bg-gray-100 transition-colors"
                       >
                         Cancel
@@ -931,7 +960,7 @@ export default function DailyLog({
                                   <div className="flex gap-2">
                                     <button
                                       type="button"
-                                      onClick={() => { saveNote(log.id, noteDraft).then(() => { if (!noteError) setNoteOpenId(null) }) }}
+                                      onClick={async () => { const ok = await saveNote(log.id, noteDraft); if (ok) setNoteOpenId(null) }}
                                       className="flex-1 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-colors"
                                     >
                                       Save note
