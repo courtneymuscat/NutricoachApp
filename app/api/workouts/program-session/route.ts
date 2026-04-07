@@ -29,13 +29,12 @@ export async function POST(req: NextRequest) {
 
   const coach_id = prog?.coach_id ?? null
 
-  // Check if a result already exists for this program day
+  // Check if a result already exists for this program day (ignoring event_date — handles moved workouts)
   const { data: existing } = await admin
     .from('calendar_events')
     .select('id')
     .eq('client_id', user.id)
     .eq('type', 'program_workout_result')
-    .eq('event_date', event_date)
     .contains('content', { program_id, week_index, day_index })
     .maybeSingle()
 

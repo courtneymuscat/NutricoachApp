@@ -92,6 +92,7 @@ function getWorkoutsForDate(
 ): WorkoutForDate[] {
   const out: WorkoutForDate[] = []
   const dateStr = toDateStr(date)
+
   for (const prog of programs) {
     const start = new Date(prog.start_date)
     start.setHours(0, 0, 0, 0)
@@ -105,27 +106,61 @@ function getWorkoutsForDate(
     if (!day) continue
     const hasContent = (day.items?.length ?? 0) > 0 || (day.exercises?.length ?? 0) > 0
     if (!hasContent) continue
+    // Match result by program+week+day only (event_date may differ if workout was moved)
     const result = results.find(
       (e) =>
         e.type === 'program_workout_result' &&
-        e.event_date === dateStr &&
         (e.content as Record<string, unknown>).program_id === prog.id &&
         (e.content as Record<string, unknown>).week_index === weekIdx &&
         (e.content as Record<string, unknown>).day_index === dayIdx
     ) ?? null
+    // If the result was moved to a different date, skip this scheduled date
+    // — the workout will appear on the date it was actually done (handled below)
+    if (result && result.event_date !== dateStr) continue
     out.push({ programId: prog.id, programName: prog.name, weekIdx, dayIdx, day, dateStr, result })
   }
+
+  // Show any moved workout results that land on this date but were scheduled on a different date
+  for (const evt of results) {
+    if (evt.type !== 'program_workout_result' || evt.event_date !== dateStr) continue
+    const c = evt.content as Record<string, unknown>
+    const prog = programs.find((p) => p.id === c.program_id)
+    if (!prog) continue
+    const weekIdx = c.week_index as number
+    const dayIdx  = c.day_index  as number
+    const progStart = new Date(prog.start_date)
+    progStart.setHours(0, 0, 0, 0)
+    const scheduledDate = addDays(progStart, weekIdx * 7 + dayIdx)
+    if (toDateStr(scheduledDate) === dateStr) continue // not moved, already handled above
+    const week = prog.content[weekIdx]
+    if (!week) continue
+    const day = week.days?.[dayIdx]
+    if (!day) continue
+    out.push({ programId: prog.id, programName: prog.name, weekIdx, dayIdx, day, dateStr, result: evt })
+  }
+
   return out
 }
 
 function eventColour(type: string): string {
   switch (type) {
-    case 'workout': return 'bg-blue-100 text-blue-800 border-blue-200'
-    case 'steps':   return 'bg-green-100 text-green-800 border-green-200'
-    case 'note':    return 'bg-yellow-100 text-yellow-800 border-yellow-200'
-    default:        return 'bg-purple-100 text-purple-800 border-purple-200'
+    case 'workout':        return 'bg-blue-100 text-blue-800 border-blue-200'
+    case 'steps':          return 'bg-green-100 text-green-800 border-green-200'
+    case 'note':           return 'bg-yellow-100 text-yellow-800 border-yellow-200'
+    case 'personal':       return 'bg-orange-100 text-orange-800 border-orange-200'
+    case 'travel':         return 'bg-teal-100 text-teal-800 border-teal-200'
+    case 'extra_activity': return 'bg-emerald-100 text-emerald-800 border-emerald-200'
+    default:               return 'bg-purple-100 text-purple-800 border-purple-200'
   }
 }
+
+const CLIENT_EVENT_TYPES = [
+  { value: 'personal',       label: 'Personal / Social', icon: '🎉', placeholder: 'Birthday dinner, date night…' },
+  { value: 'travel',         label: 'Travel / Away',     icon: '✈️', placeholder: 'Holiday, trip, going away…' },
+  { value: 'extra_activity', label: 'Extra Activity',    icon: '🏃', placeholder: 'Walk, swim, bike ride…' },
+  { value: 'note',           label: 'Note',              icon: '📝', placeholder: 'Anything else…' },
+] as const
+type ClientEventType = 'personal' | 'travel' | 'extra_activity' | 'note'
 
 // ─── Score input ──────────────────────────────────────────────────────────────
 
@@ -490,10 +525,11 @@ function VideoPlayer({ path }: { path: string }) {
 
 // ─── Workout modal ─────────────────────────────────────────────────────────────
 
-function WorkoutModal({ workout, onClose, onSaved }: {
+function WorkoutModal({ workout, onClose, onSaved, onMoved }: {
   workout: WorkoutForDate
   onClose: () => void
   onSaved: (result: CalendarEvent) => void
+  onMoved?: (updated: CalendarEvent) => void
 }) {
   const [logging, setLogging] = useState(!workout.result)
   const [sectionScores, setSectionScores] = useState<LoggedSections>(() => {
@@ -526,6 +562,10 @@ function WorkoutModal({ workout, onClose, onSaved }: {
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showMove, setShowMove] = useState(false)
+  const [moveDate, setMoveDate] = useState(workout.result?.event_date ?? workout.dateStr)
+  const [moving, setMoving] = useState(false)
+  const [moveError, setMoveError] = useState<string | null>(null)
 
   const items = workout.day.items ?? []
 
@@ -574,6 +614,26 @@ function WorkoutModal({ workout, onClose, onSaved }: {
       setError(e instanceof Error ? e.message : 'Failed to save')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleMove() {
+    if (!moveDate || !workout.result || moveDate === workout.result.event_date) return
+    setMoving(true); setMoveError(null)
+    try {
+      const res = await fetch(`/api/client/calendar/${workout.result.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event_date: moveDate }),
+      })
+      if (!res.ok) throw new Error(await res.text())
+      const updated = await res.json()
+      onMoved?.(updated)
+      setShowMove(false)
+    } catch (e) {
+      setMoveError(e instanceof Error ? e.message : 'Failed to move workout')
+    } finally {
+      setMoving(false)
     }
   }
 
@@ -742,15 +802,50 @@ function WorkoutModal({ workout, onClose, onSaved }: {
               </button>
             </div>
           ) : workout.result ? (
-            <div className="flex gap-3">
-              <div className="flex items-center gap-1.5 flex-1">
-                <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                <span className="text-sm font-semibold text-green-700">Logged</span>
-                {!hasAnyScore && <span className="text-xs text-gray-400">· {new Date((workout.result.content.completed_at as string) ?? '').toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })}</span>}
+            <div className="space-y-2.5">
+              <div className="flex gap-2">
+                <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                  <svg className="w-4 h-4 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                  <span className="text-sm font-semibold text-green-700 whitespace-nowrap">Logged</span>
+                  {workout.result.event_date !== workout.dateStr && (
+                    <span className="text-[10px] text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 whitespace-nowrap">
+                      Moved · {new Date(workout.result.event_date + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={() => { setShowMove((v) => !v); setMoveDate(workout.result!.event_date) }}
+                  className="border border-gray-200 text-gray-500 px-3 py-2 rounded-xl text-xs font-medium hover:bg-gray-50 transition-colors flex-shrink-0"
+                  title="Move to another day"
+                >
+                  Move
+                </button>
+                <button onClick={() => setLogging(true)} className="border border-gray-200 text-gray-600 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-gray-50 flex-shrink-0">
+                  Edit
+                </button>
               </div>
-              <button onClick={() => setLogging(true)} className="border border-gray-200 text-gray-600 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-gray-50">
-                Edit
-              </button>
+
+              {showMove && (
+                <div className="bg-gray-50 rounded-xl px-4 py-3 space-y-2 border border-gray-100">
+                  <p className="text-xs font-semibold text-gray-600">Move to a different day</p>
+                  <div className="flex gap-2">
+                    <input
+                      type="date"
+                      value={moveDate}
+                      onChange={(e) => setMoveDate(e.target.value)}
+                      className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-300"
+                    />
+                    <button
+                      onClick={handleMove}
+                      disabled={moving || !moveDate || moveDate === workout.result.event_date}
+                      className="px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 disabled:opacity-40 transition-colors"
+                    >
+                      {moving ? '…' : 'Move'}
+                    </button>
+                  </div>
+                  {moveError && <p className="text-xs text-red-500">{moveError}</p>}
+                </div>
+              )}
             </div>
           ) : (
             <button onClick={() => setLogging(true)}
@@ -764,9 +859,107 @@ function WorkoutModal({ workout, onClose, onSaved }: {
   )
 }
 
+// ─── Add Event Modal ──────────────────────────────────────────────────────────
+
+function AddEventModal({ dateStr, onClose, onCreated }: {
+  dateStr: string
+  onClose: () => void
+  onCreated: (event: CalendarEvent) => void
+}) {
+  const [type, setType] = useState<ClientEventType>('personal')
+  const [title, setTitle] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const displayDate = new Date(dateStr + 'T00:00:00').toLocaleDateString('en-AU', {
+    weekday: 'long', day: 'numeric', month: 'long',
+  })
+
+  async function handleSave() {
+    if (!title.trim()) { setError('Please add a title'); return }
+    setSaving(true); setError(null)
+    try {
+      const res = await fetch('/api/client/calendar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event_date: dateStr, type, title: title.trim() }),
+      })
+      if (!res.ok) throw new Error(await res.text())
+      onCreated(await res.json())
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to save')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const placeholder = CLIENT_EVENT_TYPES.find((t) => t.value === type)?.placeholder ?? 'Add a title…'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white w-full sm:rounded-2xl shadow-2xl sm:max-w-sm rounded-t-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b">
+          <div>
+            <p className="text-base font-bold text-gray-900">Add event</p>
+            <p className="text-xs text-gray-400 mt-0.5">{displayDate}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+
+        <div className="px-5 py-4 space-y-4">
+          <div className="grid grid-cols-2 gap-2">
+            {CLIENT_EVENT_TYPES.map((t) => (
+              <button
+                key={t.value}
+                type="button"
+                onClick={() => setType(t.value)}
+                className={`rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                  type === t.value ? 'border-indigo-400 bg-indigo-50' : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <div className="text-base leading-none mb-1">{t.icon}</div>
+                <p className="text-[11px] font-semibold text-gray-800">{t.label}</p>
+                <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">{t.placeholder}</p>
+              </button>
+            ))}
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-gray-500 mb-1.5 block">Title</label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder={placeholder}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+              onKeyDown={(e) => e.key === 'Enter' && handleSave()}
+              autoFocus
+            />
+          </div>
+
+          {error && <p className="text-xs text-red-500">{error}</p>}
+        </div>
+
+        <div className="px-5 pb-5">
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving || !title.trim()}
+            className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors"
+          >
+            {saving ? 'Adding…' : 'Add event'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Day Cell ─────────────────────────────────────────────────────────────────
 
-function DayCell({ date, workouts, events, isToday, isPast, compact, onWorkoutTap }: {
+function DayCell({ date, workouts, events, isToday, isPast, compact, onWorkoutTap, onAddEvent, onDeleteEvent }: {
   date: Date
   workouts: WorkoutForDate[]
   events: CalendarEvent[]
@@ -774,6 +967,8 @@ function DayCell({ date, workouts, events, isToday, isPast, compact, onWorkoutTa
   isPast: boolean
   compact?: boolean
   onWorkoutTap: (w: WorkoutForDate) => void
+  onAddEvent?: (dateStr: string) => void
+  onDeleteEvent?: (id: string) => void
 }) {
   const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
   const dayNameIndex = date.getDay() === 0 ? 6 : date.getDay() - 1
@@ -790,12 +985,26 @@ function DayCell({ date, workouts, events, isToday, isPast, compact, onWorkoutTa
         <span className={`text-xs font-medium ${isToday ? 'text-blue-600' : 'text-gray-400'}`}>
           {dayNames[dayNameIndex]}
         </span>
-        <span className={[
-          'w-7 h-7 flex items-center justify-center rounded-full text-sm font-semibold',
-          isToday ? 'bg-blue-500 text-white' : 'text-gray-700',
-        ].join(' ')}>
-          {date.getDate()}
-        </span>
+        <div className="flex items-center gap-1">
+          {onAddEvent && (
+            <button
+              type="button"
+              onClick={() => onAddEvent(toDateStr(date))}
+              className="w-5 h-5 flex items-center justify-center rounded-full text-gray-300 hover:text-gray-500 hover:bg-gray-100 transition-colors"
+              title="Add event"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+              </svg>
+            </button>
+          )}
+          <span className={[
+            'w-7 h-7 flex items-center justify-center rounded-full text-sm font-semibold',
+            isToday ? 'bg-blue-500 text-white' : 'text-gray-700',
+          ].join(' ')}>
+            {date.getDate()}
+          </span>
+        </div>
       </div>
 
       {/* Program workouts */}
@@ -829,11 +1038,26 @@ function DayCell({ date, workouts, events, isToday, isPast, compact, onWorkoutTa
         })}
 
         {/* Other events */}
-        {events.filter((e) => e.type !== 'program_workout_result').map((ev) => (
-          <div key={ev.id} className={`rounded-lg border px-2 py-1 text-[10px] font-medium truncate ${eventColour(ev.type)}`}>
-            {ev.title}
-          </div>
-        ))}
+        {events.filter((e) => e.type !== 'program_workout_result').map((ev) => {
+          const isClientEvent = ['personal', 'travel', 'extra_activity', 'note'].includes(ev.type)
+          return (
+            <div key={ev.id} className={`rounded-lg border px-2 py-1 text-[10px] font-medium flex items-center gap-1 ${eventColour(ev.type)}`}>
+              <span className="truncate flex-1">{ev.title}</span>
+              {isClientEvent && onDeleteEvent && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onDeleteEvent(ev.id) }}
+                  className="flex-shrink-0 opacity-40 hover:opacity-100 transition-opacity"
+                  title="Remove"
+                >
+                  <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          )
+        })}
 
         {workouts.length === 0 && events.filter((e) => e.type !== 'program_workout_result').length === 0 && (
           <span className="text-xs text-gray-300 italic mt-1 self-center">Rest</span>
@@ -852,6 +1076,7 @@ export default function TrainingCalendar() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [viewingWorkout, setViewingWorkout] = useState<WorkoutForDate | null>(null)
+  const [addingEventDate, setAddingEventDate] = useState<string | null>(null)
 
   const weekEnd = addDays(weekStart, 6)
 
@@ -904,14 +1129,27 @@ export default function TrainingCalendar() {
   const isCurrentWeek = toDateStr(weekStart) === toDateStr(startOfWeek(new Date()))
 
   function handleSaved(result: CalendarEvent) {
-    setEvents((prev) => {
-      const filtered = prev.filter((e) => e.id !== result.id)
-      return [...filtered, result]
-    })
-    // Update the viewing workout to reflect the saved result
+    setEvents((prev) => [...prev.filter((e) => e.id !== result.id), result])
     if (viewingWorkout) {
       setViewingWorkout({ ...viewingWorkout, result })
     }
+  }
+
+  function handleWorkoutMoved(updated: CalendarEvent) {
+    setEvents((prev) => [...prev.filter((e) => e.id !== updated.id), updated])
+    if (viewingWorkout?.result?.id === updated.id) {
+      setViewingWorkout({ ...viewingWorkout, result: updated })
+    }
+  }
+
+  function handleEventCreated(event: CalendarEvent) {
+    setEvents((prev) => [...prev, event])
+    setAddingEventDate(null)
+  }
+
+  async function handleDeleteEvent(id: string) {
+    const res = await fetch(`/api/client/calendar/${id}`, { method: 'DELETE' })
+    if (res.ok) setEvents((prev) => prev.filter((e) => e.id !== id))
   }
 
   return (
@@ -959,7 +1197,9 @@ export default function TrainingCalendar() {
                 return (
                   <DayCell key={dateStr} date={date} workouts={dayWorkouts} events={dayEvents}
                     isToday={toDateStr(date) === toDateStr(today)} isPast={date < today && toDateStr(date) !== toDateStr(today)}
-                    onWorkoutTap={setViewingWorkout} />
+                    onWorkoutTap={setViewingWorkout}
+                    onAddEvent={setAddingEventDate}
+                    onDeleteEvent={handleDeleteEvent} />
                 )
               })}
             </div>
@@ -971,7 +1211,9 @@ export default function TrainingCalendar() {
                 return (
                   <DayCell key={dateStr} date={date} workouts={dayWorkouts} events={dayEvents}
                     isToday={toDateStr(date) === toDateStr(today)} isPast={date < today && toDateStr(date) !== toDateStr(today)}
-                    compact onWorkoutTap={setViewingWorkout} />
+                    compact onWorkoutTap={setViewingWorkout}
+                    onAddEvent={setAddingEventDate}
+                    onDeleteEvent={handleDeleteEvent} />
                 )
               })}
             </div>
@@ -985,6 +1227,16 @@ export default function TrainingCalendar() {
           workout={viewingWorkout}
           onClose={() => setViewingWorkout(null)}
           onSaved={handleSaved}
+          onMoved={handleWorkoutMoved}
+        />
+      )}
+
+      {/* Add event modal */}
+      {addingEventDate && (
+        <AddEventModal
+          dateStr={addingEventDate}
+          onClose={() => setAddingEventDate(null)}
+          onCreated={handleEventCreated}
         />
       )}
     </div>
