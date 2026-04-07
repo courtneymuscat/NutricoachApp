@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, use } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
 type QuestionType = 'text' | 'textarea' | 'number' | 'radio' | 'checkbox' | 'dropdown' | 'file_upload' | 'image'
@@ -38,6 +38,8 @@ const TYPE_LABELS: Record<QuestionType, string> = {
 export default function FormBuilderPage({ params }: { params: Promise<{ formId: string }> }) {
   const { formId } = use(params)
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const clientId = searchParams.get('clientId')
   const isNew = formId === 'new'
 
   const [meta, setMeta] = useState<FormMeta>({ title: '', description: '', type: 'weekly_checkin', is_active: true })
@@ -47,6 +49,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ formId: 
   const [savedId, setSavedId] = useState<string | null>(isNew ? null : formId)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
+  const [isClientCopy, setIsClientCopy] = useState(false)
 
   useEffect(() => {
     if (isNew) return
@@ -54,6 +57,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ formId: 
       .then((r) => r.json())
       .then((d) => {
         setMeta({ title: d.title, description: d.description ?? '', type: d.type, is_active: d.is_active })
+        setIsClientCopy(!!d.is_client_copy)
         // Normalise questions from DB: convert legacy 'select' → 'radio', ensure options is always array|null
         const qs = (d.questions ?? []).map((q: Question) => ({
           ...q,
@@ -155,12 +159,22 @@ export default function FormBuilderPage({ params }: { params: Promise<{ formId: 
     <div className="flex-1 flex flex-col">
       <div className="bg-white border-b px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <a href="/coach/forms" className="text-gray-400 hover:text-gray-600">
+          <a
+            href={clientId ? `/coach/clients/${clientId}` : '/coach/forms'}
+            className="text-gray-400 hover:text-gray-600"
+          >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </a>
-          <h1 className="text-lg font-bold text-gray-900">{isNew ? 'New form' : 'Edit form'}</h1>
+          <div>
+            <h1 className="text-lg font-bold text-gray-900">{isNew ? 'New form' : 'Edit form'}</h1>
+            {isClientCopy && (
+              <p className="text-xs text-amber-600 font-medium mt-0.5">
+                Client-specific copy — changes here only affect this client
+              </p>
+            )}
+          </div>
         </div>
         <button
           onClick={handleSave}
@@ -173,6 +187,17 @@ export default function FormBuilderPage({ params }: { params: Promise<{ formId: 
 
       <main className="max-w-2xl mx-auto w-full p-6 space-y-6">
         {error && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-4 py-3">{error}</p>}
+
+        {isClientCopy && (
+          <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+            <svg className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p className="text-xs text-amber-800">
+              This is a <strong>client-specific copy</strong> of the check-in form. Any changes you make here only apply to this client — the original template in your Forms library is untouched.
+            </p>
+          </div>
+        )}
 
         {/* Form metadata */}
         <div className="bg-white rounded-2xl border p-6 space-y-4">

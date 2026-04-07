@@ -18,7 +18,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
 
   const { data: form } = await admin
     .from('forms')
-    .select('id, title, description, type, is_active, coach_id')
+    .select('id, title, description, type, is_active, coach_id, is_client_copy, client_id')
     .eq('id', formId)
     .single()
 

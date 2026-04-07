@@ -2938,6 +2938,34 @@ const REPEAT_OPTIONS = [
   { value: 'once', label: 'One-time' },
 ]
 
+// Ensures the schedule's form is a client-specific copy, then opens the editor
+function EditFormButton({ scheduleId, clientId }: { scheduleId: string; clientId: string }) {
+  const [loading, setLoading] = useState(false)
+
+  async function handleClick() {
+    setLoading(true)
+    const res = await fetch(
+      `/api/coach/clients/${clientId}/checkin-schedules/${scheduleId}/ensure-copy`,
+      { method: 'POST' }
+    )
+    setLoading(false)
+    if (!res.ok) { alert('Could not open form editor'); return }
+    const { form_id } = await res.json()
+    window.open(`/coach/forms/${form_id}/edit?clientId=${clientId}`, '_blank')
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={loading}
+      className="text-xs text-amber-600 hover:text-amber-800 px-2 py-1 rounded-lg hover:bg-white transition-colors disabled:opacity-50"
+    >
+      {loading ? 'Opening…' : 'Edit Form'}
+    </button>
+  )
+}
+
 function CheckinSchedulesPanel({ clientId }: { clientId: string }) {
   const [schedules, setSchedules] = useState<CheckinSchedule[]>([])
   const [coachForms, setCoachForms] = useState<ScheduleForm[]>([])
@@ -3102,14 +3130,7 @@ function CheckinSchedulesPanel({ clientId }: { clientId: string }) {
                 Edit
               </button>
               {s.form_id && (
-                <a
-                  href={`/coach/forms/${s.form_id}/edit`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs text-blue-500 hover:text-blue-700 px-2 py-1 rounded-lg hover:bg-white transition-colors"
-                >
-                  Edit Form
-                </a>
+                <EditFormButton scheduleId={s.id} clientId={clientId} />
               )}
               <button
                 onClick={() => handleToggleActive(s)}
