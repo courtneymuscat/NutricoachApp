@@ -30,7 +30,18 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     .eq('form_id', formId)
     .order('order_index')
 
-  return Response.json({ ...form, questions: questions ?? [] })
+  // Attach client name when this is a client-specific copy
+  let clientName: string | null = null
+  if (form.is_client_copy && form.client_id) {
+    const { data: clientProfile } = await admin
+      .from('profiles')
+      .select('full_name, email')
+      .eq('id', form.client_id)
+      .single()
+    clientName = clientProfile?.full_name ?? clientProfile?.email ?? null
+  }
+
+  return Response.json({ ...form, questions: questions ?? [], client_name: clientName })
 }
 
 export async function PUT(req: NextRequest, { params }: Ctx) {

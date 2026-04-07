@@ -13,6 +13,7 @@ type Schedule = {
 }
 
 type Submission = {
+  id: string
   form_id: string
   submitted_at: string
 }
@@ -29,25 +30,31 @@ function repeatLabel(repeatType: string): string {
   }
 }
 
+function lookbackMs(repeatType: string): number {
+  const day = 24 * 60 * 60 * 1000
+  if (repeatType === 'biweekly') return 14 * day
+  if (repeatType === 'monthly') return 28 * day
+  return 7 * day
+}
+
 function isDue(schedule: Schedule, submissions: Submission[], todayDow: number, todayStr: string): boolean {
   const { day_of_week, repeat_type, start_date, form_id } = schedule
-  const submissionsForForm = submissions
-    .filter((s) => s.form_id === form_id)
-    .map((s) => new Date(s.submitted_at).getTime())
+  const subs = submissions.filter((s) => s.form_id === form_id).map((s) => new Date(s.submitted_at).getTime())
   const now = Date.now()
-  const day = 24 * 60 * 60 * 1000
 
   if (repeat_type === 'once') {
-    return todayStr === start_date && submissionsForForm.length === 0
+    return todayStr === start_date && subs.length === 0
   }
   if (todayDow !== day_of_week) return false
+  return !subs.find((t) => now - t < lookbackMs(repeat_type))
+}
 
-  const lookback =
-    repeat_type === 'biweekly' ? 14 * day :
-    repeat_type === 'monthly' ? 28 * day :
-    7 * day
-
-  return !submissionsForForm.find((t) => now - t < lookback)
+function getRecentSubmission(schedule: Schedule, submissions: Submission[]): Submission | null {
+  const now = Date.now()
+  const lb = lookbackMs(schedule.repeat_type)
+  return submissions.find(
+    (s) => s.form_id === schedule.form_id && now - new Date(s.submitted_at).getTime() < lb
+  ) ?? null
 }
 
 function getNextDueDate(schedule: Schedule, submissions: Submission[], today: Date): Date | null {
@@ -60,14 +67,8 @@ function getNextDueDate(schedule: Schedule, submissions: Submission[], today: Da
     return new Date(start_date + 'T00:00:00')
   }
 
-  const lookback =
-    repeat_type === 'biweekly' ? 14 * day :
-    repeat_type === 'monthly' ? 28 * day :
-    7 * day
-
-  const submissionsForForm = submissions
-    .filter((s) => s.form_id === form_id)
-    .map((s) => new Date(s.submitted_at).getTime())
+  const lb = lookbackMs(repeat_type)
+  const subs = submissions.filter((s) => s.form_id === form_id).map((s) => new Date(s.submitted_at).getTime())
 
   const todayMidnight = new Date(today)
   todayMidnight.setHours(0, 0, 0, 0)
@@ -75,7 +76,7 @@ function getNextDueDate(schedule: Schedule, submissions: Submission[], today: Da
   for (let i = 1; i <= 90; i++) {
     const d = new Date(todayMidnight.getTime() + i * day)
     if (d.getDay() === day_of_week) {
-      const recentSub = submissionsForForm.find((t) => d.getTime() - t < lookback)
+      const recentSub = subs.find((t) => d.getTime() - t < lb)
       if (!recentSub) return d
     }
   }
@@ -86,7 +87,6 @@ function formatDate(d: Date): string {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const diff = Math.round((d.getTime() - today.getTime()) / (24 * 60 * 60 * 1000))
-
   if (diff === 1) return 'Tomorrow'
   if (diff <= 6) return DAY_NAMES[d.getDay()]
   return d.toLocaleDateString('en-AU', { weekday: 'short', month: 'short', day: 'numeric' })
@@ -95,6 +95,7 @@ function formatDate(d: Date): string {
 export default function ScheduledCheckIns() {
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [due, setDue] = useState<Set<string>>(new Set())
+  const [completed, setCompleted] = useState<Record<string, Submission>>({}) // scheduleId → recent submission
   const [nextDates, setNextDates] = useState<Record<string, Date | null>>({})
   const [ready, setReady] = useState(false)
 
@@ -111,10 +112,11 @@ export default function ScheduledCheckIns() {
         const { data: { session } } = await supabase.auth.getSession()
         if (!session) { setReady(true); return }
 
+        // Fix: column is client_id, not user_id
         const { data: subs } = await supabase
           .from('form_submissions')
-          .select('form_id, submitted_at')
-          .eq('user_id', session.user.id)
+          .select('id, form_id, submitted_at')
+          .eq('client_id', session.user.id)
           .in('form_id', formIds)
           .order('submitted_at', { ascending: false })
 
@@ -124,21 +126,30 @@ export default function ScheduledCheckIns() {
         const todayStr = today.toISOString().split('T')[0]
 
         const dueSet = new Set<string>()
+        const completedMap: Record<string, Submission> = {}
         const nextMap: Record<string, Date | null> = {}
 
         for (const s of allSchedules) {
           if (isDue(s, submissions, todayDow, todayStr)) {
             dueSet.add(s.id)
           } else {
-            nextMap[s.id] = getNextDueDate(s, submissions, today)
+            const recent = getRecentSubmission(s, submissions)
+            if (recent) {
+              completedMap[s.id] = recent
+            } else {
+              nextMap[s.id] = getNextDueDate(s, submissions, today)
+            }
           }
         }
 
-        // Filter out once-type schedules that are completed and have no next date
-        const visible = allSchedules.filter((s) => dueSet.has(s.id) || nextMap[s.id] !== null)
+        // Hide once-type schedules that are completed (no next date and not due)
+        const visible = allSchedules.filter((s) =>
+          dueSet.has(s.id) || completedMap[s.id] || nextMap[s.id] !== null
+        )
 
         setSchedules(visible)
         setDue(dueSet)
+        setCompleted(completedMap)
         setNextDates(nextMap)
       } finally {
         setReady(true)
@@ -154,6 +165,7 @@ export default function ScheduledCheckIns() {
       <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Check-ins</p>
       {schedules.map((s) => {
         const isDueToday = due.has(s.id)
+        const recentSub = completed[s.id]
         const next = nextDates[s.id]
 
         if (isDueToday) {
@@ -176,6 +188,34 @@ export default function ScheduledCheckIns() {
               </div>
               <span className="text-xs font-semibold bg-amber-500 text-white px-3 py-1.5 rounded-lg flex-shrink-0">Fill in →</span>
             </a>
+          )
+        }
+
+        if (recentSub) {
+          const submittedAt = new Date(recentSub.submitted_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
+          return (
+            <div
+              key={s.id}
+              className="flex items-center justify-between bg-green-50 border border-green-200 rounded-2xl px-5 py-4 mb-3"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">{s.title}</p>
+                  <p className="text-xs text-green-700 mt-0.5">Completed · {submittedAt}</p>
+                </div>
+              </div>
+              <a
+                href={`/forms/${s.form_id}`}
+                className="text-xs font-medium text-green-700 hover:text-green-900 underline underline-offset-2 flex-shrink-0 ml-3"
+              >
+                Edit response
+              </a>
+            </div>
           )
         }
 

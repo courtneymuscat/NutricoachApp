@@ -50,6 +50,9 @@ export default function FormBuilderPage({ params }: { params: Promise<{ formId: 
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [isClientCopy, setIsClientCopy] = useState(false)
+  const [clientName, setClientName] = useState<string | null>(null)
+  const [dragIdx, setDragIdx] = useState<number | null>(null)
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null)
 
   useEffect(() => {
     if (isNew) return
@@ -58,6 +61,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ formId: 
       .then((d) => {
         setMeta({ title: d.title, description: d.description ?? '', type: d.type, is_active: d.is_active })
         setIsClientCopy(!!d.is_client_copy)
+        setClientName(d.client_name ?? null)
         // Normalise questions from DB: convert legacy 'select' → 'radio', ensure options is always array|null
         const qs = (d.questions ?? []).map((q: Question) => ({
           ...q,
@@ -86,12 +90,31 @@ export default function FormBuilderPage({ params }: { params: Promise<{ formId: 
     setQuestions((prev) => prev.filter((_, i) => i !== idx).map((q, i) => ({ ...q, order_index: i })))
   }
 
-  function moveQuestion(idx: number, dir: -1 | 1) {
+  function reorderQuestion(from: number, to: number) {
+    if (from === to) return
     const next = [...questions]
-    const swap = idx + dir
-    if (swap < 0 || swap >= next.length) return
-    ;[next[idx], next[swap]] = [next[swap], next[idx]]
+    const [moved] = next.splice(from, 1)
+    next.splice(to, 0, moved)
     setQuestions(next.map((q, i) => ({ ...q, order_index: i, _dirty: true })))
+  }
+
+  function handleDragStart(idx: number) {
+    setDragIdx(idx)
+  }
+
+  function handleDragOver(idx: number) {
+    setDragOverIdx(idx)
+  }
+
+  function handleDrop(idx: number) {
+    if (dragIdx !== null) reorderQuestion(dragIdx, idx)
+    setDragIdx(null)
+    setDragOverIdx(null)
+  }
+
+  function handleDragEnd() {
+    setDragIdx(null)
+    setDragOverIdx(null)
   }
 
   async function handleSave() {
@@ -194,7 +217,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ formId: 
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <p className="text-xs text-amber-800">
-              This is a <strong>client-specific copy</strong> of the check-in form. Any changes you make here only apply to this client — the original template in your Forms library is untouched.
+              This is a <strong>client-specific copy</strong>{clientName ? <> for <strong>{clientName}</strong></> : null}. Any changes you make here only apply to {clientName ? <strong>{clientName}</strong> : 'this client'} — the original template in your Forms library is untouched.
             </p>
           </div>
         )}
@@ -251,13 +274,17 @@ export default function FormBuilderPage({ params }: { params: Promise<{ formId: 
         <div className="space-y-3">
           {questions.map((q, idx) => (
             <QuestionCard
-              key={idx}
+              key={q.id ?? `new-${idx}`}
               q={q}
               idx={idx}
-              total={questions.length}
               onChange={(patch) => updateQuestion(idx, patch)}
               onDelete={() => handleDeleteQuestion(idx)}
-              onMove={(dir) => moveQuestion(idx, dir)}
+              isDragOver={dragOverIdx === idx}
+              isDragging={dragIdx === idx}
+              onDragStart={() => handleDragStart(idx)}
+              onDragOver={() => handleDragOver(idx)}
+              onDrop={() => handleDrop(idx)}
+              onDragEnd={handleDragEnd}
             />
           ))}
         </div>
@@ -282,14 +309,18 @@ export default function FormBuilderPage({ params }: { params: Promise<{ formId: 
 }
 
 function QuestionCard({
-  q, idx, total, onChange, onDelete, onMove,
+  q, idx, onChange, onDelete, isDragOver, isDragging, onDragStart, onDragOver, onDrop, onDragEnd,
 }: {
   q: Question
   idx: number
-  total: number
   onChange: (patch: Partial<Question>) => void
   onDelete: () => void
-  onMove: (dir: -1 | 1) => void
+  isDragOver: boolean
+  isDragging: boolean
+  onDragStart: () => void
+  onDragOver: () => void
+  onDrop: () => void
+  onDragEnd: () => void
 }) {
   const [optionInput, setOptionInput] = useState('')
   const [uploading, setUploading] = useState(false)
@@ -326,15 +357,28 @@ function QuestionCard({
   const inputClass = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white'
 
   return (
-    <div className="bg-white rounded-2xl border p-4 space-y-3">
+    <div
+      draggable
+      onDragStart={onDragStart}
+      onDragOver={(e) => { e.preventDefault(); onDragOver() }}
+      onDrop={(e) => { e.preventDefault(); onDrop() }}
+      onDragEnd={onDragEnd}
+      className={[
+        'bg-white rounded-2xl border p-4 space-y-3 transition-all select-none',
+        isDragOver ? 'border-blue-400 shadow-md scale-[1.01]' : '',
+        isDragging ? 'opacity-40' : '',
+      ].join(' ')}
+    >
       <div className="flex items-start gap-2">
-        <div className="flex flex-col gap-1 pt-1">
-          <button onClick={() => onMove(-1)} disabled={idx === 0} className="text-gray-300 hover:text-gray-500 disabled:opacity-30">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
-          </button>
-          <button onClick={() => onMove(1)} disabled={idx === total - 1} className="text-gray-300 hover:text-gray-500 disabled:opacity-30">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-          </button>
+        <div className="pt-1.5 cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 transition-colors flex-shrink-0" title="Drag to reorder">
+          <svg className="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
+            <circle cx="5.5" cy="4" r="1.5" />
+            <circle cx="10.5" cy="4" r="1.5" />
+            <circle cx="5.5" cy="8" r="1.5" />
+            <circle cx="10.5" cy="8" r="1.5" />
+            <circle cx="5.5" cy="12" r="1.5" />
+            <circle cx="10.5" cy="12" r="1.5" />
+          </svg>
         </div>
 
         <div className="flex-1 space-y-2">

@@ -32,20 +32,43 @@ export async function POST(req: NextRequest, { params }: Ctx) {
 
   if (!rel) return Response.json({ error: 'Not authorised to submit this form' }, { status: 403 })
 
-  const { answers }: { answers: Record<string, string> } = await req.json()
+  const { answers, submission_id: existingSubmissionId }: { answers: Record<string, string>; submission_id?: string } = await req.json()
 
-  // Create submission
-  const { data: submission, error: subError } = await admin
-    .from('form_submissions')
-    .insert({ form_id: formId, client_id: session.user.id, coach_id: form.coach_id, submitted_at: new Date().toISOString() })
-    .select('id')
-    .single()
+  let submissionId: string
 
-  if (subError) return Response.json({ error: subError.message }, { status: 500 })
+  if (existingSubmissionId) {
+    // Verify this submission belongs to the current user
+    const { data: existing } = await admin
+      .from('form_submissions')
+      .select('id')
+      .eq('id', existingSubmissionId)
+      .eq('client_id', session.user.id)
+      .single()
+    if (!existing) return Response.json({ error: 'Submission not found' }, { status: 404 })
+
+    // Update submitted_at timestamp
+    await admin
+      .from('form_submissions')
+      .update({ submitted_at: new Date().toISOString() })
+      .eq('id', existingSubmissionId)
+
+    // Delete old answers and re-insert
+    await admin.from('form_answers').delete().eq('submission_id', existingSubmissionId)
+    submissionId = existingSubmissionId
+  } else {
+    // Create new submission
+    const { data: submission, error: subError } = await admin
+      .from('form_submissions')
+      .insert({ form_id: formId, client_id: session.user.id, coach_id: form.coach_id, submitted_at: new Date().toISOString() })
+      .select('id')
+      .single()
+    if (subError) return Response.json({ error: subError.message }, { status: 500 })
+    submissionId = submission.id
+  }
 
   // Insert answers
   const answerRows = Object.entries(answers).map(([question_id, value]) => ({
-    submission_id: submission.id,
+    submission_id: submissionId,
     question_id,
     value: String(value),
   }))
@@ -61,5 +84,5 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     .eq('id', session.user.id)
     .eq('subscription_tier', 'coached')
 
-  return Response.json({ id: submission.id })
+  return Response.json({ id: submissionId })
 }

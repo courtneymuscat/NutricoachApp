@@ -34,16 +34,44 @@ export default function FormFillPage({ params }: { params: Promise<{ formId: str
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [existingSubmissionId, setExistingSubmissionId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch(`/api/forms/${formId}`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.error) { setError(d.error); setLoading(false); return }
-        setForm(d)
+    async function load() {
+      try {
+        const [formRes, subRes] = await Promise.all([
+          fetch(`/api/forms/${formId}`),
+          fetch(`/api/forms/${formId}/my-submission`),
+        ])
+        const formData = await formRes.json()
+        if (formData.error) { setError(formData.error); return }
+        setForm(formData)
+
+        if (subRes.ok) {
+          const subData = await subRes.json()
+          if (subData.submission_id) {
+            setExistingSubmissionId(subData.submission_id)
+            setIsEditing(true)
+            const preAnswers: Record<string, string> = {}
+            const preCheckbox: Record<string, string[]> = {}
+            for (const [qId, val] of Object.entries(subData.answers as Record<string, string>)) {
+              try {
+                const parsed = JSON.parse(val)
+                if (Array.isArray(parsed)) { preCheckbox[qId] = parsed; continue }
+              } catch { /* not JSON */ }
+              preAnswers[qId] = val
+            }
+            setAnswers(preAnswers)
+            setCheckboxAnswers(preCheckbox)
+          }
+        }
+      } finally {
         setLoading(false)
-      })
+      }
+    }
+    load()
   }, [formId])
 
   async function handleSubmit(e: React.FormEvent) {
@@ -96,7 +124,7 @@ export default function FormFillPage({ params }: { params: Promise<{ formId: str
     const res = await fetch(`/api/forms/${formId}/submit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ answers: finalAnswers }),
+      body: JSON.stringify({ answers: finalAnswers, submission_id: existingSubmissionId }),
     })
     const json = await res.json()
     if (!res.ok) {
@@ -125,7 +153,7 @@ export default function FormFillPage({ params }: { params: Promise<{ formId: str
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-gray-900">Submitted!</h2>
+          <h2 className="text-xl font-bold text-gray-900">{isEditing ? 'Response updated!' : 'Submitted!'}</h2>
           <p className="text-gray-500 text-sm">Your response has been sent to your coach.</p>
           <a href="/dashboard" className="inline-block mt-2 text-sm font-medium text-blue-600 hover:underline">
             Back to dashboard
@@ -154,6 +182,14 @@ export default function FormFillPage({ params }: { params: Promise<{ formId: str
           <h1 className="text-2xl font-bold text-gray-900">{form.title}</h1>
           {form.description && (
             <p className="text-gray-500 text-sm mt-2">{form.description}</p>
+          )}
+          {isEditing && (
+            <div className="mt-3 flex items-center gap-2 text-xs text-blue-700 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+              <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+              Editing your previous response — submit to update it.
+            </div>
           )}
         </div>
 
@@ -305,7 +341,7 @@ export default function FormFillPage({ params }: { params: Promise<{ formId: str
             disabled={submitting}
             className="w-full bg-blue-600 text-white py-3 rounded-2xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
-            {submitting ? 'Submitting…' : 'Submit'}
+            {submitting ? (isEditing ? 'Updating…' : 'Submitting…') : (isEditing ? 'Update response' : 'Submit')}
           </button>
         </form>
       </div>
