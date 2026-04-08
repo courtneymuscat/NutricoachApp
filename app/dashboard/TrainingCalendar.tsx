@@ -148,6 +148,7 @@ function eventColour(type: string): string {
     case 'steps':          return 'bg-green-100 text-green-800 border-green-200'
     case 'note':           return 'bg-yellow-100 text-yellow-800 border-yellow-200'
     case 'personal':       return 'bg-orange-100 text-orange-800 border-orange-200'
+    case 'birthday':       return 'bg-pink-100 text-pink-800 border-pink-200'
     case 'travel':         return 'bg-teal-100 text-teal-800 border-teal-200'
     case 'extra_activity': return 'bg-emerald-100 text-emerald-800 border-emerald-200'
     default:               return 'bg-purple-100 text-purple-800 border-purple-200'
@@ -1091,7 +1092,7 @@ function DayCell({ date, workouts, events, isToday, isPast, compact, onWorkoutTa
           const isClientEvent = ['personal', 'travel', 'extra_activity', 'note'].includes(ev.type)
           return (
             <div key={ev.id} className={`rounded-lg border px-2 py-1 text-[10px] font-medium flex items-center gap-1 ${eventColour(ev.type)}`}>
-              <span className="truncate flex-1">{ev.title}</span>
+              <span className="truncate flex-1">{ev.type === 'birthday' ? '🎂 ' : ''}{ev.title}</span>
               {isClientEvent && onDeleteEvent && (
                 <button
                   type="button"

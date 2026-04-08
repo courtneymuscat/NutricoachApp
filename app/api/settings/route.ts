@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import type { NextRequest } from 'next/server'
 
 export async function GET() {
@@ -43,5 +44,40 @@ export async function PATCH(req: NextRequest) {
     .eq('id', session.user.id)
 
   if (error) return Response.json({ error: error.message }, { status: 500 })
+
+  // Sync birthday calendar events when date_of_birth changes
+  if ('date_of_birth' in body) {
+    const admin = createAdminClient()
+    // Remove any existing birthday events for this user
+    await admin
+      .from('calendar_events')
+      .delete()
+      .eq('client_id', session.user.id)
+      .eq('type', 'birthday')
+
+    const dob = body.date_of_birth
+    if (dob) {
+      const [, month, day] = (dob as string).split('-').map(Number)
+      const now = new Date()
+      const thisYear = now.getFullYear()
+      const dates: string[] = []
+      // Create for current year and next 2 years so it shows ahead in the calendar
+      for (let y = thisYear; y <= thisYear + 2; y++) {
+        const d = new Date(y, month - 1, day)
+        dates.push(`${y}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`)
+      }
+      await admin.from('calendar_events').insert(
+        dates.map((event_date) => ({
+          event_date,
+          type: 'birthday',
+          title: 'Birthday',
+          content: {},
+          client_id: session.user.id,
+          coach_id: null,
+        }))
+      )
+    }
+  }
+
   return Response.json({ ok: true })
 }
