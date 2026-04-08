@@ -117,9 +117,108 @@ function Empty({ label }: { label: string }) {
   return <p className="text-sm text-gray-400 text-center py-10">{label}</p>
 }
 
+// ── Goals section (inside Overview) ───────────────────────────────────────────
+
+function GoalsSection({ clientId }: { clientId: string }) {
+  const [mainGoal, setMainGoal] = useState('')
+  const [miniGoals, setMiniGoals] = useState<string[]>([])
+  const [newMini, setNewMini] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    fetch(`/api/coach/clients/${clientId}/goals`)
+      .then((r) => r.json())
+      .then((d) => {
+        setMainGoal(d.main_goal ?? '')
+        setMiniGoals(Array.isArray(d.mini_goals) ? d.mini_goals : [])
+      })
+      .finally(() => setLoading(false))
+  }, [clientId])
+
+  async function save() {
+    setSaving(true)
+    await fetch(`/api/coach/clients/${clientId}/goals`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ main_goal: mainGoal || null, mini_goals: miniGoals }),
+    })
+    setSaving(false)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
+
+  function addMini() {
+    const val = newMini.trim()
+    if (!val) return
+    setMiniGoals((prev) => [...prev, val])
+    setNewMini('')
+  }
+
+  function removeMini(i: number) {
+    setMiniGoals((prev) => prev.filter((_, j) => j !== i))
+  }
+
+  if (loading) return <div className="bg-white rounded-2xl border p-5"><p className="text-sm text-gray-400">Loading…</p></div>
+
+  return (
+    <div className="bg-white rounded-2xl border p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Client Goals</h3>
+        <button
+          onClick={save}
+          disabled={saving}
+          className="text-xs font-semibold text-blue-600 hover:text-blue-800 disabled:opacity-50 transition-colors"
+        >
+          {saving ? 'Saving…' : saved ? 'Saved!' : 'Save'}
+        </button>
+      </div>
+
+      {/* Main goal */}
+      <div>
+        <label className="block text-xs font-medium text-gray-500 mb-1">Main goal</label>
+        <textarea
+          value={mainGoal}
+          onChange={(e) => setMainGoal(e.target.value)}
+          placeholder="e.g. Lose 5 kg by summer, build consistent training habit…"
+          rows={2}
+          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+        />
+      </div>
+
+      {/* Mini goals */}
+      <div>
+        <label className="block text-xs font-medium text-gray-500 mb-2">Mini goals <span className="text-gray-400 font-normal">(this week / before next check-in)</span></label>
+        <div className="space-y-1.5 mb-2">
+          {miniGoals.length === 0 && <p className="text-xs text-gray-400">No mini goals yet.</p>}
+          {miniGoals.map((g, i) => (
+            <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
+              <span className="flex-1 text-sm text-gray-800">{g}</span>
+              <button onClick={() => removeMini(i)} className="text-gray-300 hover:text-red-400 flex-shrink-0">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <input
+            value={newMini}
+            onChange={(e) => setNewMini(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addMini())}
+            placeholder="Add a mini goal…"
+            className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+          />
+          <button onClick={addMini} className="text-xs font-semibold text-blue-600 hover:text-blue-800 px-2">Add</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Overview tab ──────────────────────────────────────────────────────────────
 
-function OverviewTab({ data }: { data: ClientData }) {
+function OverviewTab({ data, clientId }: { data: ClientData; clientId: string }) {
   const latest = data.checkIns[0] ?? null
   const latestWeight = data.weightLogs[0] ?? null
   const prevWeight = data.weightLogs[1] ?? null
@@ -183,20 +282,7 @@ function OverviewTab({ data }: { data: ClientData }) {
         </div>
       </div>
 
-      {/* Recent workouts */}
-      <div className="bg-white rounded-2xl border p-5">
-        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Recent Workouts</h3>
-        {data.workouts.length === 0 ? <p className="text-sm text-gray-400">No workouts recorded.</p> : (
-          <div className="space-y-2">
-            {data.workouts.slice(0, 3).map((w) => (
-              <div key={w.id} className="flex items-center justify-between text-sm">
-                <span className="font-medium text-gray-900">{w.name}</span>
-                <span className="text-xs text-gray-400">{fmt(w.started_at)} · {duration(w.started_at, w.ended_at)}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      <GoalsSection clientId={clientId} />
     </div>
   )
 }
@@ -3496,7 +3582,7 @@ export default function ClientTabs({ clientId }: { clientId: string }) {
       </div>
 
       {/* Overview */}
-      {tab === 'overview' && data && <OverviewTab data={data} />}
+      {tab === 'overview' && data && <OverviewTab data={data} clientId={clientId} />}
 
       {/* Calendar */}
       {tab === 'calendar' && <CalendarTab clientId={clientId} />}

@@ -15,6 +15,7 @@ import UpgradePrompt from '@/components/UpgradePrompt'
 import MealPlanView from './MealPlanView'
 import HabitsPanel from './HabitsPanel'
 import ScheduledCheckIns from './ScheduledCheckIns'
+import GoalsPanel from './GoalsPanel'
 import DashboardTour from './DashboardTour'
 import ProfileCompletionPrompt from './ProfileCompletionPrompt'
 
@@ -158,6 +159,9 @@ export default async function DashboardPage() {
             initialPhone={(profile as Record<string, unknown>)?.phone as string ?? ''}
           />
         )}
+
+        {/* Goals — set by coach, shown at top for coached clients */}
+        {isCoached && <GoalsPanel />}
 
         {/* Check-ins — top of page for coached clients */}
         {isCoached && <ScheduledCheckIns />}
