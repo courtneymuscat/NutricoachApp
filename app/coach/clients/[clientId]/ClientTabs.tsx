@@ -868,6 +868,14 @@ function NotesTab({ clientId }: { clientId: string }) {
       <div className="bg-white rounded-2xl border p-5 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
+            {currentNoteId && (
+              <button onClick={startNew} className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-700 transition-colors">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+                Back
+              </button>
+            )}
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide">
               {currentNoteId ? 'Editing note' : 'New note'}
             </label>
@@ -875,11 +883,6 @@ function NotesTab({ clientId }: { clientId: string }) {
             {saveStatus === 'saved' && <span className="text-[11px] text-green-500">Saved</span>}
           </div>
           <div className="flex items-center gap-3">
-            {currentNoteId && (
-              <button onClick={startNew} className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
-                + New note
-              </button>
-            )}
             {templates.length > 0 && (
               <select
                 defaultValue=""
@@ -913,7 +916,7 @@ function NotesTab({ clientId }: { clientId: string }) {
       {notes.length === 0 && <Empty label="No notes yet." />}
       {notes.map((note) => (
         <div key={note.id} className={`bg-white rounded-2xl border p-5 group relative transition-all ${currentNoteId === note.id ? 'border-blue-300 bg-blue-50' : ''}`}>
-          <p className="text-xs text-gray-800 whitespace-pre-wrap font-mono leading-relaxed line-clamp-6">{note.body}</p>
+          <p className="text-xs text-gray-800 whitespace-pre-wrap font-mono leading-relaxed">{note.body}</p>
           <div className="flex items-center justify-between mt-3">
             <p className="text-xs text-gray-400">{fmtFull(note.created_at)}</p>
             <div className="flex items-center gap-3">
