@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import { acceptInvite } from '@/lib/coach'
+import { STARTER_NOTE_TEMPLATES } from '@/lib/noteTemplates'
 
 type AuthState = { error?: string } | null
 
@@ -30,6 +31,11 @@ export async function signup(prevState: AuthState, formData: FormData): Promise<
       { id: user.id, email: user.email, role: userType === 'coach' ? 'coach' : 'client', user_type: userType },
       { onConflict: 'id' }
     )
+    if (userType === 'coach') {
+      await admin.from('note_templates').insert(
+        STARTER_NOTE_TEMPLATES.map((t) => ({ coach_id: user.id, name: t.name, body: t.body }))
+      )
+    }
     if (invite) await acceptInvite(invite, user.id)
   }
 
