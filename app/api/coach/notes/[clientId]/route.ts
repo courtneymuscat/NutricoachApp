@@ -57,6 +57,31 @@ export async function POST(
   return Response.json(data, { status: 201 })
 }
 
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ clientId: string }> }
+) {
+  const { clientId } = await params
+  const coachId = await requireCoach()
+  if (!coachId) return Response.json({ error: 'Unauthorised' }, { status: 401 })
+
+  const { noteId, body } = await req.json()
+  if (!noteId || !body?.trim()) return Response.json({ error: 'noteId and body required' }, { status: 400 })
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('coach_notes')
+    .update({ body: body.trim() })
+    .eq('id', noteId)
+    .eq('coach_id', coachId)
+    .eq('client_id', clientId)
+    .select('id, body, created_at')
+    .single()
+
+  if (error) return Response.json({ error: error.message }, { status: 500 })
+  return Response.json(data)
+}
+
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ clientId: string }> }

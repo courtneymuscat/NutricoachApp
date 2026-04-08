@@ -723,9 +723,11 @@ function OverviewTab({ data, clientId }: { data: ClientData; clientId: string })
 function NotesTab({ clientId }: { clientId: string }) {
   const [notes, setNotes] = useState<Note[]>([])
   const [body, setBody] = useState('')
-  const [saving, setSaving] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [loading, setLoading] = useState(true)
   const [templates, setTemplates] = useState<{ id: string; name: string; body: string }[]>([])
+  const [currentNoteId, setCurrentNoteId] = useState<string | null>(null)
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     Promise.all([
@@ -737,20 +739,62 @@ function NotesTab({ clientId }: { clientId: string }) {
     }).finally(() => setLoading(false))
   }, [clientId])
 
-  async function addNote() {
-    if (!body.trim()) return
-    setSaving(true)
-    const res = await fetch(`/api/coach/notes/${clientId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ body }),
-    })
-    if (res.ok) {
-      const note = await res.json()
-      setNotes((prev) => [note, ...prev])
-      setBody('')
+  async function doSave(text: string, noteId: string | null): Promise<string | null> {
+    if (!text.trim()) return noteId
+    setSaveStatus('saving')
+    if (noteId) {
+      const res = await fetch(`/api/coach/notes/${clientId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ noteId, body: text }),
+      })
+      if (res.ok) {
+        const updated = await res.json()
+        setNotes((prev) => prev.map((n) => n.id === noteId ? updated : n))
+      }
+      setSaveStatus('saved')
+      return noteId
+    } else {
+      const res = await fetch(`/api/coach/notes/${clientId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body: text }),
+      })
+      if (res.ok) {
+        const note = await res.json()
+        setNotes((prev) => [note, ...prev])
+        setSaveStatus('saved')
+        return note.id
+      }
+      setSaveStatus('idle')
+      return null
     }
-    setSaving(false)
+  }
+
+  function handleBodyChange(text: string) {
+    setBody(text)
+    setSaveStatus('idle')
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
+    if (!text.trim()) return
+    autoSaveTimer.current = setTimeout(async () => {
+      const id = await doSave(text, currentNoteId)
+      if (id && !currentNoteId) setCurrentNoteId(id)
+    }, 1500)
+  }
+
+  function startNew() {
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
+    setBody('')
+    setCurrentNoteId(null)
+    setSaveStatus('idle')
+  }
+
+  function editNote(note: Note) {
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
+    setBody(note.body)
+    setCurrentNoteId(note.id)
+    setSaveStatus('saved')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   async function deleteNote(id: string) {
@@ -760,65 +804,73 @@ function NotesTab({ clientId }: { clientId: string }) {
       body: JSON.stringify({ noteId: id }),
     })
     setNotes((prev) => prev.filter((n) => n.id !== id))
+    if (currentNoteId === id) startNew()
   }
 
   if (loading) return <p className="text-sm text-gray-400 py-10 text-center">Loading notes…</p>
 
   return (
     <div className="space-y-4">
-      {/* Add note */}
+      {/* Editor */}
       <div className="bg-white rounded-2xl border p-5 space-y-3">
         <div className="flex items-center justify-between">
-          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide">Add note</label>
-          {templates.length > 0 && (
-            <select
-              defaultValue=""
-              onChange={(e) => {
-                const t = templates.find((t) => t.id === e.target.value)
-                if (t) setBody(t.body)
-                e.target.value = ''
-              }}
-              className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-600 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
-            >
-              <option value="" disabled>Use template…</option>
-              {templates.map((t) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </select>
-          )}
-          {templates.length === 0 && (
-            <a href="/coach/note-templates" className="text-xs text-blue-500 hover:underline">+ Create templates</a>
-          )}
+          <div className="flex items-center gap-3">
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              {currentNoteId ? 'Editing note' : 'New note'}
+            </label>
+            {saveStatus === 'saving' && <span className="text-[11px] text-gray-400">Saving…</span>}
+            {saveStatus === 'saved' && <span className="text-[11px] text-green-500">Saved</span>}
+          </div>
+          <div className="flex items-center gap-3">
+            {currentNoteId && (
+              <button onClick={startNew} className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
+                + New note
+              </button>
+            )}
+            {templates.length > 0 && (
+              <select
+                defaultValue=""
+                onChange={(e) => {
+                  const t = templates.find((t) => t.id === e.target.value)
+                  if (t) { handleBodyChange(t.body); e.target.value = '' }
+                }}
+                className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-600 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+              >
+                <option value="" disabled>Use template…</option>
+                {templates.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+            )}
+            {templates.length === 0 && (
+              <a href="/coach/note-templates" className="text-xs text-blue-500 hover:underline">+ Create templates</a>
+            )}
+          </div>
         </div>
         <textarea
           value={body}
-          onChange={(e) => setBody(e.target.value)}
-          rows={body ? 10 : 3}
+          onChange={(e) => handleBodyChange(e.target.value)}
           placeholder="Write a note about this client… or pick a template above"
-          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y font-mono"
+          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y font-mono leading-relaxed"
+          style={{ minHeight: '55vh' }}
         />
-        <button
-          onClick={addNote}
-          disabled={saving || !body.trim()}
-          className="bg-blue-600 text-white px-5 py-2 rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors"
-        >
-          {saving ? 'Saving…' : 'Save note'}
-        </button>
       </div>
 
       {/* Notes history */}
       {notes.length === 0 && <Empty label="No notes yet." />}
       {notes.map((note) => (
-        <div key={note.id} className="bg-white rounded-2xl border p-5 group relative">
-          <p className="text-sm text-gray-800 whitespace-pre-wrap">{note.body}</p>
+        <div key={note.id} className={`bg-white rounded-2xl border p-5 group relative transition-all ${currentNoteId === note.id ? 'border-blue-300 bg-blue-50' : ''}`}>
+          <p className="text-xs text-gray-800 whitespace-pre-wrap font-mono leading-relaxed line-clamp-6">{note.body}</p>
           <div className="flex items-center justify-between mt-3">
             <p className="text-xs text-gray-400">{fmtFull(note.created_at)}</p>
-            <button
-              onClick={() => deleteNote(note.id)}
-              className="text-xs text-gray-300 hover:text-red-400 transition-colors"
-            >
-              Delete
-            </button>
+            <div className="flex items-center gap-3">
+              <button onClick={() => editNote(note)} className="text-xs text-blue-500 hover:text-blue-700 transition-colors">
+                Edit
+              </button>
+              <button onClick={() => deleteNote(note.id)} className="text-xs text-gray-300 hover:text-red-400 transition-colors">
+                Delete
+              </button>
+            </div>
           </div>
         </div>
       ))}
