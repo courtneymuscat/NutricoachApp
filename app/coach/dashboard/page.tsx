@@ -5,7 +5,6 @@ import InviteForm from './InviteForm'
 import CoachActivityFeed from './CoachActivityFeed'
 import ClientSummaries from './ClientSummaries'
 
-const TIER_LABEL: Record<string, string> = { tier_1: 'Free', tier_2: 'Pro', tier_3: 'Elite' }
 
 export default async function CoachDashboard() {
   const coachId = await requireCoach()
@@ -100,53 +99,15 @@ export default async function CoachDashboard() {
         ))}
       </div>
 
-      {/* Clients list */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Your clients</h2>
-          <a href="/coach/clients" className="text-sm text-blue-600 hover:underline">View all</a>
-        </div>
-
-        {clients.length === 0 ? (
-          <div className="bg-white rounded-2xl border p-8 text-center space-y-4">
-            <p className="text-gray-500 font-medium">No clients yet</p>
-            <p className="text-gray-400 text-sm">Generate an invite link below and share it with your first client.</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {clients.slice(0, 5).map((client) => (
-              <a
-                key={client.id}
-                href={`/coach/clients/${client.id}`}
-                className="flex items-center gap-3 bg-white rounded-2xl border p-4 hover:bg-gray-50 transition-colors group"
-              >
-                <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                  <span className="text-sm font-bold text-blue-600">{(client.name ?? client.email)[0].toUpperCase()}</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-900 truncate">{client.name ?? client.email}</p>
-                  {client.name && <p className="text-xs text-gray-400 truncate">{client.email}</p>}
-                  <p className="text-xs text-gray-400">
-                    {TIER_LABEL[client.tier] ?? client.tier}
-                    {client.joinedAt && ` · Joined ${new Date(client.joinedAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`}
-                  </p>
-                </div>
-                <svg className="w-4 h-4 text-gray-300 group-hover:text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </a>
-            ))}
-            {clients.length > 5 && (
-              <a href="/coach/clients" className="block text-center text-sm text-blue-600 hover:underline py-2">
-                View all {clients.length} clients →
-              </a>
-            )}
-          </div>
-        )}
-      </section>
-
       {/* Client summaries — goals, targets, upcoming events */}
-      <ClientSummaries coachId={coachId} clients={clients} />
+      {clients.length === 0 ? (
+        <div className="bg-white rounded-2xl border p-8 text-center space-y-4">
+          <p className="text-gray-500 font-medium">No clients yet</p>
+          <p className="text-gray-400 text-sm">Generate an invite link below and share it with your first client.</p>
+        </div>
+      ) : (
+        <ClientSummaries coachId={coachId} clients={clients} />
+      )}
 
       {/* Invite */}
       <InviteForm />
