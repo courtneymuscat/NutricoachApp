@@ -2327,6 +2327,7 @@ const EVENT_COLORS: Record<string, string> = {
   steps: 'bg-green-50 text-green-700 border-green-200',
   note: 'bg-yellow-50 text-yellow-700 border-yellow-200',
   habit: 'bg-purple-50 text-purple-700 border-purple-200',
+  autoflow: 'bg-orange-50 text-orange-700 border-orange-200',
   custom: 'bg-gray-50 text-gray-700 border-gray-200',
 }
 
@@ -2794,6 +2795,29 @@ function CalendarTab({ clientId }: { clientId: string }) {
   const [newEvent, setNewEvent] = useState({ type: 'note', title: '', content: '' })
   const [saving, setSaving] = useState(false)
   const [viewingWorkout, setViewingWorkout] = useState<CalWorkoutForDate | null>(null)
+  const [viewingAutoflow, setViewingAutoflow] = useState<{ title: string; flowId: string; stepNumber: number } | null>(null)
+  const [autoflowStepData, setAutoflowStepData] = useState<{ core_questions: { id: string; label: string; type: string }[]; questions: { id: string; label: string; type: string }[]; response: { answers: Record<string, string>; submitted_at: string } | null } | null>(null)
+  const [autoflowLoading, setAutoflowLoading] = useState(false)
+
+  async function openAutoflowStep(evt: CalendarEvent) {
+    const flowId = evt.content.flow_id as string
+    const stepNumber = evt.content.step_number as number
+    if (!flowId || !stepNumber) return
+    setViewingAutoflow({ title: evt.title, flowId, stepNumber })
+    setAutoflowStepData(null)
+    setAutoflowLoading(true)
+    const d = await fetch(`/api/coach/clients/${clientId}/autoflows/${flowId}`).then(r => r.json())
+    if (!d.error) {
+      const step = (d.steps ?? []).find((s: { step_number: number }) => s.step_number === stepNumber)
+      const tpl = d.autoflow_templates as { core_questions: { id: string; label: string; type: string }[] } | null
+      setAutoflowStepData({
+        core_questions: tpl?.core_questions ?? [],
+        questions: step?.questions ?? [],
+        response: step?.response ?? null,
+      })
+    }
+    setAutoflowLoading(false)
+  }
 
   const weekEnd = addDays(weekStart, 6)
   const monthGridDays = getMonthGridDays(monthStart)
@@ -2957,7 +2981,11 @@ function CalendarTab({ clientId }: { clientId: string }) {
                 )}
                 {dayEvents.map((evt) => (
                   <div key={evt.id} className={`text-[10px] rounded-md px-1.5 py-0.5 font-medium truncate border flex items-center justify-between gap-0.5 group ${EVENT_COLORS[evt.type] ?? EVENT_COLORS.custom}`}>
-                    <span className="truncate">{evt.title}</span>
+                    {evt.type === 'autoflow' ? (
+                      <button onClick={() => openAutoflowStep(evt)} className="truncate text-left hover:underline flex-1">⚡ {evt.title}</button>
+                    ) : (
+                      <span className="truncate flex-1">{evt.title}</span>
+                    )}
                     <button onClick={() => deleteEvent(evt.id)} className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                       <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
@@ -3021,9 +3049,15 @@ function CalendarTab({ clientId }: { clientId: string }) {
 
                   {/* Custom events */}
                   {dayEvents.slice(0, 2).map((evt) => (
-                    <div key={evt.id} className={`text-[9px] rounded px-1 py-0.5 font-medium truncate ${EVENT_COLORS[evt.type] ?? EVENT_COLORS.custom}`}>
-                      {evt.title}
-                    </div>
+                    evt.type === 'autoflow' ? (
+                      <button key={evt.id} onClick={() => openAutoflowStep(evt)} className={`w-full text-left text-[9px] rounded px-1 py-0.5 font-medium truncate hover:opacity-80 transition-opacity ${EVENT_COLORS[evt.type] ?? EVENT_COLORS.custom}`}>
+                        ⚡ {evt.title}
+                      </button>
+                    ) : (
+                      <div key={evt.id} className={`text-[9px] rounded px-1 py-0.5 font-medium truncate ${EVENT_COLORS[evt.type] ?? EVENT_COLORS.custom}`}>
+                        {evt.title}
+                      </div>
+                    )
                   ))}
                   {dayEvents.length > 2 && (
                     <p className="text-[9px] text-gray-400 px-1">+{dayEvents.length - 2} more</p>
@@ -3031,6 +3065,79 @@ function CalendarTab({ clientId }: { clientId: string }) {
                 </div>
               )
             })}
+          </div>
+        </div>
+      )}
+
+      {/* Autoflow step modal */}
+      {viewingAutoflow && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[80vh] flex flex-col">
+            <div className="flex items-start justify-between p-5 border-b">
+              <div>
+                <p className="text-[11px] text-orange-500 font-semibold uppercase tracking-wide mb-0.5">Autoflow step</p>
+                <h3 className="text-sm font-bold text-gray-900 leading-snug">{viewingAutoflow.title}</h3>
+              </div>
+              <button onClick={() => { setViewingAutoflow(null); setAutoflowStepData(null) }} className="text-gray-400 hover:text-gray-600 ml-3 flex-shrink-0">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="overflow-y-auto p-5 space-y-4">
+              {autoflowLoading ? (
+                <p className="text-sm text-gray-400">Loading…</p>
+              ) : autoflowStepData ? (
+                <>
+                  {/* Submission status */}
+                  {autoflowStepData.response ? (
+                    <div className="flex items-center gap-2 bg-green-50 border border-green-100 rounded-xl px-3 py-2">
+                      <svg className="w-4 h-4 text-green-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                      <p className="text-xs text-green-700 font-medium">Submitted {new Date(autoflowStepData.response.submitted_at).toLocaleDateString()}</p>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl px-3 py-2">
+                      <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01" /></svg>
+                      <p className="text-xs text-gray-500">Not yet submitted</p>
+                    </div>
+                  )}
+
+                  {/* Core questions */}
+                  {autoflowStepData.core_questions.length > 0 && (
+                    <div className="space-y-1.5">
+                      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Core questions (every step)</p>
+                      {autoflowStepData.core_questions.map((q, i) => (
+                        <div key={q.id ?? i} className="rounded-xl bg-gray-50 border border-gray-100 px-3 py-2">
+                          <p className="text-xs text-gray-700">{i + 1}. {q.label}</p>
+                          {autoflowStepData.response?.answers?.[q.id] && (
+                            <p className="text-xs font-medium text-gray-900 mt-1 pl-3 border-l-2 border-gray-300">{String(autoflowStepData.response.answers[q.id])}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Step questions */}
+                  {autoflowStepData.questions.length > 0 && (
+                    <div className="space-y-1.5">
+                      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Step questions</p>
+                      {autoflowStepData.questions.map((q, i) => (
+                        <div key={q.id ?? i} className="rounded-xl bg-gray-50 border border-gray-100 px-3 py-2">
+                          <p className="text-xs text-gray-700">{i + 1}. {q.label}</p>
+                          {autoflowStepData.response?.answers?.[q.id] && (
+                            <p className="text-xs font-medium text-gray-900 mt-1 pl-3 border-l-2 border-gray-300">{String(autoflowStepData.response.answers[q.id])}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {autoflowStepData.core_questions.length === 0 && autoflowStepData.questions.length === 0 && (
+                    <p className="text-xs text-gray-400">No questions configured for this step.</p>
+                  )}
+                </>
+              ) : (
+                <p className="text-sm text-gray-400">Could not load step data.</p>
+              )}
+            </div>
           </div>
         </div>
       )}

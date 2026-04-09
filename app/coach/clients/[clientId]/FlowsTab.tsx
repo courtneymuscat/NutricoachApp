@@ -44,6 +44,8 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
   const [assignTemplateId, setAssignTemplateId] = useState('')
   const [assignStartDate, setAssignStartDate] = useState(new Date().toISOString().split('T')[0])
   const [viewingResponse, setViewingResponse] = useState<{ step: FlowDetail['steps'][0]; answers: Record<string, string> } | null>(null)
+  const [editingStartDate, setEditingStartDate] = useState<string | null>(null)
+  const [savingStartDate, setSavingStartDate] = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -76,6 +78,20 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
       const updated = await fetch(`/api/coach/clients/${clientId}/autoflows`).then(r => r.json())
       setFlows(Array.isArray(updated) ? updated : [])
     }
+  }
+
+  async function saveStartDate(flowId: string, newDate: string) {
+    setSavingStartDate(true)
+    await fetch(`/api/coach/clients/${clientId}/autoflows/${flowId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ start_date: newDate }),
+    })
+    setSavingStartDate(false)
+    setEditingStartDate(null)
+    // Refresh flow detail
+    const d = await fetch(`/api/coach/clients/${clientId}/autoflows/${flowId}`).then(r => r.json())
+    if (!d.error) setSelectedFlow(d)
   }
 
   async function removeFlow(flowId: string) {
@@ -143,8 +159,35 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
 
         <div>
           <h3 className="text-sm font-semibold text-gray-900">{selectedFlow.name}</h3>
-          <div className="flex items-center gap-3 mt-1">
-            <p className="text-xs text-gray-500">Started {new Date(selectedFlow.start_date).toLocaleDateString()}</p>
+          <div className="flex items-center gap-3 mt-1 flex-wrap">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-500">Start date:</span>
+              {editingStartDate !== null ? (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="date"
+                    value={editingStartDate}
+                    onChange={e => setEditingStartDate(e.target.value)}
+                    className="text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none"
+                  />
+                  <button
+                    onClick={() => saveStartDate(selectedFlow.id, editingStartDate)}
+                    disabled={savingStartDate}
+                    className="text-xs font-semibold text-gray-700 hover:text-gray-900 disabled:opacity-40"
+                  >
+                    {savingStartDate ? 'Saving…' : 'Save'}
+                  </button>
+                  <button onClick={() => setEditingStartDate(null)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setEditingStartDate(selectedFlow.start_date)}
+                  className="text-xs text-gray-700 underline underline-offset-2 hover:text-gray-900 transition-colors"
+                >
+                  {new Date(selectedFlow.start_date + 'T00:00:00').toLocaleDateString()}
+                </button>
+              )}
+            </div>
             <span className="text-xs text-gray-400">{completedCount}/{total} completed</span>
           </div>
           {/* Progress bar */}
