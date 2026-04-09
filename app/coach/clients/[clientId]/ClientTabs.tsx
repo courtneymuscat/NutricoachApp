@@ -637,7 +637,7 @@ function GoalsSection({ clientId }: { clientId: string }) {
   return (
     <div className="space-y-4">
       {/* Important notes */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 space-y-3">
+      <div className="rounded-2xl border border-red-100 p-5 space-y-3" style={{ backgroundColor: 'rgba(254,226,226,0.45)' }}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <svg className="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -696,7 +696,7 @@ function GoalsSection({ clientId }: { clientId: string }) {
       </div>
 
       {/* Goals */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 space-y-4">
+      <div className="rounded-2xl border border-green-100 p-5 space-y-4" style={{ backgroundColor: 'rgba(220,252,231,0.45)' }}>
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Client Goals</h3>
           <button
