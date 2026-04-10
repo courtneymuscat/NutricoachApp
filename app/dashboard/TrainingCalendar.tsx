@@ -1091,13 +1091,10 @@ function DayCell({ date, workouts, events, isToday, isPast, compact, onWorkoutTa
         {/* Other events */}
         {events.filter((e) => e.type !== 'program_workout_result').map((ev) => {
           const isClientEvent = ['personal', 'travel', 'extra_activity', 'note'].includes(ev.type)
-          const autoflowLink = ev.type === 'autoflow'
-            ? (ev.content as Record<string, unknown>)?.link as string | undefined
-            : undefined
-
-          const inner = (
-            <>
-              <span className="truncate flex-1">{ev.type === 'birthday' ? '🎂 ' : ev.type === 'autoflow' ? '📋 ' : ''}{ev.title}</span>
+          const cls = `rounded-lg border px-2 py-1 text-[10px] font-medium flex items-center gap-1 ${eventColour(ev.type)}`
+          return (
+            <div key={ev.id} className={cls}>
+              <span className="truncate flex-1">{ev.type === 'birthday' ? '🎂 ' : ''}{ev.title}</span>
               {isClientEvent && onDeleteEvent && (
                 <button
                   type="button"
@@ -1110,18 +1107,6 @@ function DayCell({ date, workouts, events, isToday, isPast, compact, onWorkoutTa
                   </svg>
                 </button>
               )}
-            </>
-          )
-
-          const cls = `rounded-lg border px-2 py-1 text-[10px] font-medium flex items-center gap-1 ${eventColour(ev.type)}`
-
-          return autoflowLink ? (
-            <a key={ev.id} href={autoflowLink} className={`${cls} hover:opacity-80 transition-opacity`}>
-              {inner}
-            </a>
-          ) : (
-            <div key={ev.id} className={cls}>
-              {inner}
             </div>
           )
         })}
@@ -1167,6 +1152,7 @@ export default function TrainingCalendar() {
           .from('calendar_events')
           .select('*')
           .eq('client_id', user.id)
+          .neq('type', 'autoflow')
           .gte('event_date', startStr)
           .lte('event_date', endStr),
       ])
