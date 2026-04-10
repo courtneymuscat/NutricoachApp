@@ -58,7 +58,7 @@ type CoachForm = {
   type: string
 }
 
-const TYPE_LABELS: Record<Exclude<QuestionType, 'note'>, string> = {
+const TYPE_LABELS: Record<Exclude<QuestionType, 'note' | 'section'>, string> = {
   text: 'Short answer',
   textarea: 'Long answer',
   scale: 'Scale 1–10',
