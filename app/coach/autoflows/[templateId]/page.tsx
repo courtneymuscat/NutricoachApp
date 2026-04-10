@@ -91,23 +91,20 @@ function QuestionCard({
 
   if (isNote) {
     return (
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
+      <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-2">
         <div className="flex items-start gap-3">
           <DragHandle />
-          <div className="flex-1 space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-wide text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full">Note</span>
-              <span className="text-xs text-amber-600">Shown as info text — no answer required</span>
-            </div>
+          <div className="flex-1 space-y-1.5">
+            <p className="text-xs font-medium text-gray-500">Note (optional)</p>
             <textarea
               value={q.label}
               onChange={e => onChange({ ...q, label: e.target.value })}
               placeholder="Write your note here…"
               rows={3}
-              className="w-full text-sm border border-amber-200 rounded-lg px-3 py-2 focus:outline-none bg-white resize-none"
+              className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none bg-white resize-none"
             />
           </div>
-          <button onClick={onDelete} className="text-amber-300 hover:text-red-400 transition-colors flex-shrink-0 mt-0.5">
+          <button onClick={onDelete} className="text-gray-300 hover:text-red-400 transition-colors flex-shrink-0 mt-0.5">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
           </button>
         </div>
@@ -271,7 +268,7 @@ function QuestionList({
         </button>
         <button
           onClick={addNote}
-          className="flex-1 text-xs text-amber-600 border border-dashed border-amber-200 rounded-xl py-2.5 hover:border-amber-400 hover:text-amber-700 bg-amber-50/50 transition-colors"
+          className="flex-1 text-xs text-gray-500 border border-dashed border-gray-200 rounded-xl py-2.5 hover:border-gray-400 hover:text-gray-700 transition-colors"
         >
           + Add note
         </button>
