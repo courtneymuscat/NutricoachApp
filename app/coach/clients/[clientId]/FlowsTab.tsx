@@ -30,6 +30,7 @@ type FlowDetail = {
     title: string
     day_offset: number
     has_override: boolean
+    due_date_override: string | null
     response: { submitted_at: string; answers: Record<string, string> } | null
   }[]
 }
@@ -47,6 +48,8 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
   const [viewingResponse, setViewingResponse] = useState<{ step: FlowDetail['steps'][0]; answers: Record<string, string> } | null>(null)
   const [editingStartDate, setEditingStartDate] = useState<string | null>(null)
   const [savingStartDate, setSavingStartDate] = useState(false)
+  const [editingStepDate, setEditingStepDate] = useState<{ stepNumber: number; date: string } | null>(null)
+  const [savingStepDate, setSavingStepDate] = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -90,7 +93,19 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
     })
     setSavingStartDate(false)
     setEditingStartDate(null)
-    // Refresh flow detail
+    const d = await fetch(`/api/coach/clients/${clientId}/autoflows/${flowId}`).then(r => r.json())
+    if (!d.error) setSelectedFlow(d)
+  }
+
+  async function saveStepDate(flowId: string, stepNumber: number, dueDate: string) {
+    setSavingStepDate(true)
+    await fetch(`/api/coach/clients/${clientId}/autoflows/${flowId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ step_number: stepNumber, due_date: dueDate }),
+    })
+    setSavingStepDate(false)
+    setEditingStepDate(null)
     const d = await fetch(`/api/coach/clients/${clientId}/autoflows/${flowId}`).then(r => r.json())
     if (!d.error) setSelectedFlow(d)
   }
@@ -199,8 +214,12 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
 
         <div className="space-y-1.5">
           {selectedFlow.steps.map(s => {
-            const dueDate = new Date(new Date(selectedFlow.start_date).getTime() + s.day_offset * 86400000)
-            const isPast = dueDate <= new Date()
+            const effectiveDate = s.due_date_override
+              ? new Date(s.due_date_override + 'T00:00:00')
+              : new Date(new Date(selectedFlow.start_date + 'T00:00:00').getTime() + s.day_offset * 86400000)
+            const isPast = effectiveDate <= new Date()
+            const isEditingThisStep = editingStepDate?.stepNumber === s.step_number
+
             return (
               <div
                 key={s.step_number}
@@ -216,23 +235,69 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
                     <span className="text-[9px] font-bold text-gray-400">{s.step_number}</span>
                   )}
                 </div>
+
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-gray-900 truncate">{s.title || `Step ${s.step_number}`}</p>
-                  <p className="text-xs text-gray-400">
-                    {s.response
-                      ? `Submitted ${new Date(s.response.submitted_at).toLocaleDateString()}`
-                      : `Due ${dueDate.toLocaleDateString()}`}
-                    {s.has_override && <span className="ml-2 text-blue-500">custom questions</span>}
-                  </p>
+
+                  {s.response ? (
+                    <p className="text-xs text-gray-400">
+                      Submitted {new Date(s.response.submitted_at).toLocaleDateString()}
+                    </p>
+                  ) : isEditingThisStep ? (
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <input
+                        type="date"
+                        value={editingStepDate.date}
+                        onChange={e => setEditingStepDate({ stepNumber: s.step_number, date: e.target.value })}
+                        className="text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                      />
+                      <button
+                        onClick={() => saveStepDate(selectedFlow.id, s.step_number, editingStepDate.date)}
+                        disabled={savingStepDate}
+                        className="text-xs font-semibold text-gray-700 hover:text-gray-900 disabled:opacity-40"
+                      >
+                        {savingStepDate ? 'Saving…' : 'Save'}
+                      </button>
+                      <button
+                        onClick={() => setEditingStepDate(null)}
+                        className="text-xs text-gray-400 hover:text-gray-600"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-400">
+                      Due {effectiveDate.toLocaleDateString()}
+                      {s.due_date_override && <span className="ml-1 text-blue-500">· custom date</span>}
+                      {s.has_override && <span className="ml-1 text-blue-500">· custom questions</span>}
+                    </p>
+                  )}
                 </div>
-                {s.response && (
-                  <button
-                    onClick={() => setViewingResponse({ step: s, answers: s.response!.answers })}
-                    className="text-xs text-gray-500 hover:text-gray-900 transition-colors flex-shrink-0"
-                  >
-                    View
-                  </button>
-                )}
+
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {!s.response && !isEditingThisStep && (
+                    <button
+                      onClick={() => setEditingStepDate({
+                        stepNumber: s.step_number,
+                        date: s.due_date_override ?? effectiveDate.toISOString().split('T')[0],
+                      })}
+                      className="text-gray-300 hover:text-gray-600 transition-colors"
+                      title="Edit step date"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    </button>
+                  )}
+                  {s.response && (
+                    <button
+                      onClick={() => setViewingResponse({ step: s, answers: s.response!.answers })}
+                      className="text-xs text-gray-500 hover:text-gray-900 transition-colors"
+                    >
+                      View
+                    </button>
+                  )}
+                </div>
               </div>
             )
           })}
