@@ -3456,6 +3456,12 @@ function MealPlanTab({ clientId }: { clientId: string }) {
         </div>
       </div>
 
+      {/* Info note */}
+      <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-xl px-3 py-2.5">
+        <svg className="w-3.5 h-3.5 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+        <p className="text-xs text-blue-700">Clients can see <strong>all active meal plans</strong> and switch between them using tabs — useful for e.g. a training day and a rest day plan. Plans without an end date stay active indefinitely alongside any others.</p>
+      </div>
+
       {assignments.length === 0 && (
         <div className="text-center py-14 bg-white rounded-2xl border">
           <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center mx-auto mb-3">
