@@ -3,13 +3,14 @@
 import { useState, useEffect, use } from 'react'
 import { useRouter } from 'next/navigation'
 
-type QuestionType = 'text' | 'textarea' | 'scale' | 'yesno' | 'choice'
+type QuestionType = 'text' | 'textarea' | 'scale' | 'yesno' | 'choice' | 'note'
 
 type Question = {
   id: string
   type: QuestionType
   label: string
   required: boolean
+  description?: string
   options?: string[]
 }
 
@@ -159,7 +160,7 @@ export default function AutoflowStepPage({ params }: { params: Promise<{ flowId:
   async function submit() {
     if (!data) return
     const allQuestions = [...data.core_questions, ...data.questions]
-    const missing = allQuestions.filter(q => q.required && !answers[q.id]?.trim())
+    const missing = allQuestions.filter(q => q.type !== 'note' && q.required && !answers[q.id]?.trim())
     if (missing.length > 0) {
       setError(`Please answer all required questions (${missing.length} remaining).`)
       return
@@ -343,20 +344,38 @@ export default function AutoflowStepPage({ params }: { params: Promise<{ flowId:
           </div>
         )}
 
-        {/* Questions */}
-        {allQuestions.map((q, i) => (
-          <div key={q.id} className="bg-white rounded-xl border border-gray-200 p-4 space-y-2">
-            <label className="block text-sm font-medium text-gray-900">
-              {i + 1}. {q.label}
-              {q.required && <span className="text-red-400 ml-0.5">*</span>}
-            </label>
-            <QuestionInput
-              q={q}
-              value={answers[q.id] ?? ''}
-              onChange={v => setAnswers({ ...answers, [q.id]: v })}
-            />
-          </div>
-        ))}
+        {/* Questions + Notes */}
+        {(() => {
+          let questionIndex = 0
+          return allQuestions.map(q => {
+            if (q.type === 'note') {
+              return (
+                <div key={q.id} className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex gap-2.5">
+                  <span className="text-base flex-shrink-0 mt-0.5">💬</span>
+                  <p className="text-sm text-amber-900 whitespace-pre-wrap">{q.label || <em className="opacity-50">No note text.</em>}</p>
+                </div>
+              )
+            }
+            questionIndex++
+            const idx = questionIndex
+            return (
+              <div key={q.id} className="bg-white rounded-xl border border-gray-200 p-4 space-y-2">
+                <label className="block text-sm font-medium text-gray-900">
+                  {idx}. {q.label}
+                  {q.required && <span className="text-red-400 ml-0.5">*</span>}
+                </label>
+                {q.description && (
+                  <p className="text-xs text-gray-500">{q.description}</p>
+                )}
+                <QuestionInput
+                  q={q}
+                  value={answers[q.id] ?? ''}
+                  onChange={v => setAnswers({ ...answers, [q.id]: v })}
+                />
+              </div>
+            )
+          })
+        })()}
 
         {allQuestions.length === 0 && !data.tasks?.length && !data.resources?.length && !data.linked_form && (
           <div className="bg-white rounded-xl border border-gray-200 p-6 text-center">
@@ -368,7 +387,7 @@ export default function AutoflowStepPage({ params }: { params: Promise<{ flowId:
           <p className="text-xs text-red-500 px-1">{error}</p>
         )}
 
-        {(allQuestions.length > 0 || (data.tasks ?? []).length > 0) && (
+        {(allQuestions.some(q => q.type !== 'note') || (data.tasks ?? []).length > 0) && (
           <button
             onClick={submit}
             disabled={submitting}
