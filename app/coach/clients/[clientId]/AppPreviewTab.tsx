@@ -10,7 +10,6 @@ type PreviewData = {
     target_carbs: number | null
     target_fat: number | null
   } | null
-  show_daily_targets: boolean
   goals: { main_goal: string | null; mini_goals: string[]; key_notes: string[] }
   meal_plans: { id: string; name: string }[]
   habits: { id: string; name: string; icon: string; target: number; unit: string }[]
@@ -30,14 +29,14 @@ function repeatLabel(type: string): string {
 
 // ── Toggle switch ────────────────────────────────────────────────────────────
 
-function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: () => void; disabled?: boolean }) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
       disabled={disabled}
-      onClick={() => onChange(!checked)}
+      onClick={onChange}
       className={[
         'relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:opacity-50',
         checked ? 'bg-blue-600' : 'bg-gray-200',
@@ -91,40 +90,33 @@ function Section({ label, children }: { label: string; children: React.ReactNode
 
 // ── Main Component ───────────────────────────────────────────────────────────
 
-export default function AppPreviewTab({ clientId }: { clientId: string }) {
+export default function AppPreviewTab({
+  clientId,
+  showDailyTargets,
+  onToggleTargets,
+  savingTargets,
+}: {
+  clientId: string
+  showDailyTargets: boolean
+  onToggleTargets: () => void
+  savingTargets: boolean
+}) {
   const [data, setData] = useState<PreviewData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [togglingTargets, setTogglingTargets] = useState(false)
 
-  async function load() {
+  useEffect(() => {
     setLoading(true)
     setError(null)
-    try {
-      const res = await fetch(`/api/coach/clients/${clientId}/preview`)
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error ?? 'Failed to load preview')
-      setData(json)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load preview')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => { load() }, [clientId])
-
-  async function handleToggleTargets(next: boolean) {
-    if (!data) return
-    setData({ ...data, show_daily_targets: next })
-    setTogglingTargets(true)
-    await fetch(`/api/coach/clients/${clientId}/settings`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ show_daily_targets: next }),
-    })
-    setTogglingTargets(false)
-  }
+    fetch(`/api/coach/clients/${clientId}/preview`)
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.error) throw new Error(json.error)
+        setData(json)
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load preview'))
+      .finally(() => setLoading(false))
+  }, [clientId])
 
   if (loading) {
     return (
@@ -142,7 +134,7 @@ export default function AppPreviewTab({ clientId }: { clientId: string }) {
     )
   }
 
-  const { profile, show_daily_targets, goals, meal_plans, habits, checkin_schedules, due_autoflow_steps } = data
+  const { profile, goals, meal_plans, habits, checkin_schedules, due_autoflow_steps } = data
   const name = profile?.full_name
   const hasTargets = !!(profile?.target_calories)
   const hasGoals = !!(goals.main_goal || goals.mini_goals.length || goals.key_notes.length)
@@ -162,9 +154,9 @@ export default function AppPreviewTab({ clientId }: { clientId: string }) {
               <p className="text-xs text-gray-400 mt-0.5">Calorie &amp; macro targets on home screen</p>
             </div>
             <Toggle
-              checked={show_daily_targets}
-              onChange={handleToggleTargets}
-              disabled={togglingTargets}
+              checked={showDailyTargets}
+              onChange={onToggleTargets}
+              disabled={savingTargets}
             />
           </div>
           {!hasTargets && (
@@ -182,7 +174,7 @@ export default function AppPreviewTab({ clientId }: { clientId: string }) {
             { label: 'Check-ins due', on: hasCheckins },
             { label: 'Meal plan', on: meal_plans.length > 0 },
             { label: 'Daily habits', on: habits.length > 0 },
-            { label: 'Daily targets', on: show_daily_targets && hasTargets },
+            { label: 'Daily targets', on: showDailyTargets && hasTargets },
           ].map(({ label, on }) => (
             <div key={label} className="flex items-center gap-2">
               <span className={`w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 ${on ? 'bg-green-100' : 'bg-gray-100'}`}>
@@ -320,7 +312,7 @@ export default function AppPreviewTab({ clientId }: { clientId: string }) {
             )}
 
             {/* Daily targets */}
-            {show_daily_targets && hasTargets && (
+            {showDailyTargets && hasTargets && (
               <Section label="Daily targets">
                 <div className="bg-white rounded-2xl border border-gray-200 px-3 py-3">
                   <div className="grid grid-cols-4 gap-2 text-center">

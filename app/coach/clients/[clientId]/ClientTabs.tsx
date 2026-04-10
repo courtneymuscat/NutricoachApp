@@ -761,32 +761,15 @@ function GoalsSection({ clientId }: { clientId: string }) {
 
 // ── Client settings section (inside Overview) ─────────────────────────────────
 
-function ClientSettingsSection({ clientId }: { clientId: string }) {
-  const [showDailyTargets, setShowDailyTargets] = useState(true)
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
-    fetch(`/api/coach/clients/${clientId}/settings`)
-      .then((r) => r.json())
-      .then((d) => { setShowDailyTargets(d.show_daily_targets ?? true) })
-      .finally(() => setLoading(false))
-  }, [clientId])
-
-  async function handleToggle() {
-    const next = !showDailyTargets
-    setShowDailyTargets(next)
-    setSaving(true)
-    await fetch(`/api/coach/clients/${clientId}/settings`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ show_daily_targets: next }),
-    })
-    setSaving(false)
-  }
-
-  if (loading) return null
-
+function ClientSettingsSection({
+  showDailyTargets,
+  onToggle,
+  saving,
+}: {
+  showDailyTargets: boolean
+  onToggle: () => void
+  saving: boolean
+}) {
   return (
     <div className="bg-white rounded-2xl border p-5">
       <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-4">Client App Settings</h3>
@@ -796,7 +779,7 @@ function ClientSettingsSection({ clientId }: { clientId: string }) {
           <p className="text-xs text-gray-400 mt-0.5">Display calorie &amp; macro targets on the client&apos;s home page</p>
         </div>
         <button
-          onClick={handleToggle}
+          onClick={onToggle}
           disabled={saving}
           aria-checked={showDailyTargets}
           role="switch"
@@ -819,7 +802,13 @@ function ClientSettingsSection({ clientId }: { clientId: string }) {
 
 // ── Overview tab ──────────────────────────────────────────────────────────────
 
-function OverviewTab({ data, clientId }: { data: ClientData; clientId: string }) {
+function OverviewTab({ data, clientId, showDailyTargets, onToggleTargets, savingTargets }: {
+  data: ClientData
+  clientId: string
+  showDailyTargets: boolean
+  onToggleTargets: () => void
+  savingTargets: boolean
+}) {
   const latest = data.checkIns[0] ?? null
   const latestWeight = data.weightLogs[0] ?? null
   const prevWeight = data.weightLogs[1] ?? null
@@ -874,7 +863,7 @@ function OverviewTab({ data, clientId }: { data: ClientData; clientId: string })
       <TDEESection clientId={clientId} />
 
       {/* Client app settings */}
-      <ClientSettingsSection clientId={clientId} />
+      <ClientSettingsSection showDailyTargets={showDailyTargets} onToggle={onToggleTargets} saving={savingTargets} />
     </div>
   )
 }
@@ -4543,13 +4532,30 @@ export default function ClientTabs({ clientId }: { clientId: string }) {
   const [data, setData] = useState<ClientData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [showDailyTargets, setShowDailyTargets] = useState(true)
+  const [savingTargets, setSavingTargets] = useState(false)
 
   useEffect(() => {
-    fetch(`/api/coach/clients/${clientId}`)
-      .then((r) => r.json())
-      .then((d) => { if (d.error) setError(d.error); else setData(d) })
-      .finally(() => setLoading(false))
+    Promise.all([
+      fetch(`/api/coach/clients/${clientId}`).then((r) => r.json()),
+      fetch(`/api/coach/clients/${clientId}/settings`).then((r) => r.json()),
+    ]).then(([clientData, settings]) => {
+      if (clientData.error) setError(clientData.error); else setData(clientData)
+      setShowDailyTargets(settings.show_daily_targets ?? true)
+    }).finally(() => setLoading(false))
   }, [clientId])
+
+  async function handleToggleTargets() {
+    const next = !showDailyTargets
+    setShowDailyTargets(next)
+    setSavingTargets(true)
+    await fetch(`/api/coach/clients/${clientId}/settings`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ show_daily_targets: next }),
+    })
+    setSavingTargets(false)
+  }
 
   if (loading) return <p className="text-sm text-gray-400 py-10 text-center">Loading…</p>
   if (error) return <p className="text-sm text-red-500 py-10 text-center">{error}</p>
@@ -4572,12 +4578,25 @@ export default function ClientTabs({ clientId }: { clientId: string }) {
       </div>
 
       {/* Overview */}
-      {tab === 'overview' && data && <OverviewTab data={data} clientId={clientId} />}
+      {tab === 'overview' && data && (
+        <OverviewTab
+          data={data}
+          clientId={clientId}
+          showDailyTargets={showDailyTargets}
+          onToggleTargets={handleToggleTargets}
+          savingTargets={savingTargets}
+        />
+      )}
 
       {/* App Preview */}
       {tab === 'preview' && (
         <Suspense fallback={<p className="text-sm text-gray-400 py-6 text-center">Loading…</p>}>
-          <AppPreviewTab clientId={clientId} />
+          <AppPreviewTab
+            clientId={clientId}
+            showDailyTargets={showDailyTargets}
+            onToggleTargets={handleToggleTargets}
+            savingTargets={savingTargets}
+          />
         </Suspense>
       )}
 
