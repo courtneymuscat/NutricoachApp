@@ -1150,7 +1150,7 @@ export default function TrainingCalendar() {
       const startStr = toDateStr(wStart)
       const endStr = toDateStr(wEnd)
 
-      const [programsResult, eventsResult, activeFlowsResult] = await Promise.all([
+      const [programsResult, eventsResult, activeFlowsResult, responsesResult] = await Promise.all([
         supabase
           .from('client_programs')
           .select('id, name, start_date, content, status')
@@ -1167,14 +1167,27 @@ export default function TrainingCalendar() {
           .select('id')
           .eq('client_id', user.id)
           .eq('status', 'active'),
+        supabase
+          .from('autoflow_responses')
+          .select('client_autoflow_id, step_number')
+          .eq('client_id', user.id),
       ])
 
       const activeFlowIds = new Set((activeFlowsResult.data ?? []).map((f: { id: string }) => f.id))
+      const completedStepKeys = new Set(
+        (responsesResult.data ?? []).map((r: { client_autoflow_id: string; step_number: number }) =>
+          `${r.client_autoflow_id}:${r.step_number}`
+        )
+      )
       const allEvents = eventsResult.data ?? []
       const filteredEvents = allEvents.filter((e: { type: string; content: Record<string, unknown> }) => {
         if (e.type !== 'autoflow') return true
         const flowId = e.content?.flow_id as string | undefined
-        return flowId ? activeFlowIds.has(flowId) : false
+        const stepNumber = e.content?.step_number as number | undefined
+        if (!flowId || !activeFlowIds.has(flowId)) return false
+        // Hide steps that have already been responded to
+        if (stepNumber != null && completedStepKeys.has(`${flowId}:${stepNumber}`)) return false
+        return true
       })
 
       setPrograms(programsResult.data ?? [])

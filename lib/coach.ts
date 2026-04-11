@@ -78,21 +78,23 @@ export async function acceptInvite(token: string, clientId: string): Promise<voi
         if (flow) {
           const { data: steps } = await admin
             .from('autoflow_template_steps')
-            .select('step_number, title, day_offset')
+            .select('step_number, title, day_offset, trigger_type')
             .eq('template_id', autoflowId)
             .order('step_number')
 
           if (steps && steps.length > 0) {
-            const startMs = new Date(startDate).getTime()
-            const events = steps.map((s) => ({
-              coach_id: invite.coach_id,
-              client_id: clientId,
-              event_date: new Date(startMs + s.day_offset * 86400000).toISOString().split('T')[0],
-              type: 'autoflow',
-              title: `${tpl.name} — Step ${s.step_number}${s.title ? `: ${s.title}` : ''}`,
-              content: { flow_id: flow.id, step_number: s.step_number, link: `/autoflows/${flow.id}/${s.step_number}` },
-            }))
-            await admin.from('calendar_events').insert(events)
+            const [y, m, d] = startDate.split('-').map(Number)
+            const events = steps
+              .filter((s) => (s as Record<string, unknown>).trigger_type !== 'on_step_complete')
+              .map((s) => ({
+                coach_id: invite.coach_id,
+                client_id: clientId,
+                event_date: new Date(Date.UTC(y, m - 1, d + s.day_offset)).toISOString().split('T')[0],
+                type: 'autoflow',
+                title: `${tpl.name} — Step ${s.step_number}${s.title ? `: ${s.title}` : ''}`,
+                content: { flow_id: flow.id, step_number: s.step_number, link: `/autoflows/${flow.id}/${s.step_number}` },
+              }))
+            if (events.length > 0) await admin.from('calendar_events').insert(events)
           }
         }
       }

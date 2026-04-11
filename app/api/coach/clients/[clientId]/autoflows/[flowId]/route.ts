@@ -190,7 +190,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   const [{ data: steps }, { data: overrides }] = await Promise.all([
     supabase
       .from('autoflow_template_steps')
-      .select('step_number, title, day_offset')
+      .select('step_number, title, day_offset, trigger_type')
       .eq('template_id', flow.template_id)
       .order('step_number'),
     supabase
@@ -204,21 +204,23 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   )
 
   if (steps && steps.length > 0) {
-    const startMs = new Date(start_date).getTime()
-    const events = steps.map((s) => {
-      // Prefer per-step override date; fall back to start_date + day_offset
-      const eventDate = overrideDates[s.step_number]
-        ?? new Date(startMs + s.day_offset * 86400000).toISOString().split('T')[0]
-      return {
-        coach_id: coachId,
-        client_id: clientId,
-        event_date: eventDate,
-        type: 'autoflow',
-        title: `${flow.name} — Step ${s.step_number}${s.title ? `: ${s.title}` : ''}`,
-        content: { flow_id: flowId, step_number: s.step_number, link: `/autoflows/${flowId}/${s.step_number}` },
-      }
-    })
-    await supabase.from('calendar_events').insert(events)
+    const [y, m, d] = start_date.split('-').map(Number)
+    const events = steps
+      .filter((s) => (s as Record<string, unknown>).trigger_type !== 'on_step_complete')
+      .map((s) => {
+        // Prefer per-step override date; fall back to start_date + day_offset (UTC-safe)
+        const eventDate = overrideDates[s.step_number]
+          ?? new Date(Date.UTC(y, m - 1, d + s.day_offset)).toISOString().split('T')[0]
+        return {
+          coach_id: coachId,
+          client_id: clientId,
+          event_date: eventDate,
+          type: 'autoflow',
+          title: `${flow.name} — Step ${s.step_number}${s.title ? `: ${s.title}` : ''}`,
+          content: { flow_id: flowId, step_number: s.step_number, link: `/autoflows/${flowId}/${s.step_number}` },
+        }
+      })
+    if (events.length > 0) await supabase.from('calendar_events').insert(events)
   }
 
   return Response.json({ ok: true })

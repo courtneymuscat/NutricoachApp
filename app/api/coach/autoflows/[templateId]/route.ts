@@ -109,18 +109,20 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
             .eq('type', 'autoflow')
             .filter('content->>flow_id', 'eq', flow.id)
 
-          // Recreate with updated titles and offsets
-          const startMs = new Date(flow.start_date).getTime()
-          const events = steps.map((s: { step_number: number; title?: string; day_offset: number }) => ({
-            coach_id: coachId,
-            client_id: flow.client_id,
-            event_date: overrideDates[s.step_number]
-              ?? new Date(startMs + s.day_offset * 86400000).toISOString().split('T')[0],
-            type: 'autoflow',
-            title: `${name} — Step ${s.step_number}${s.title ? `: ${s.title}` : ''}`,
-            content: { flow_id: flow.id, step_number: s.step_number, link: `/autoflows/${flow.id}/${s.step_number}` },
-          }))
-          await supabase.from('calendar_events').insert(events)
+          // Recreate with updated titles and offsets (skip on_step_complete triggered steps)
+          const [y, m, d] = (flow.start_date as string).split('-').map(Number)
+          const events = (steps as Array<{ step_number: number; title?: string; day_offset: number; trigger_type?: string }>)
+            .filter((s) => s.trigger_type !== 'on_step_complete')
+            .map((s) => ({
+              coach_id: coachId,
+              client_id: flow.client_id,
+              event_date: overrideDates[s.step_number]
+                ?? new Date(Date.UTC(y, m - 1, d + s.day_offset)).toISOString().split('T')[0],
+              type: 'autoflow',
+              title: `${name} — Step ${s.step_number}${s.title ? `: ${s.title}` : ''}`,
+              content: { flow_id: flow.id, step_number: s.step_number, link: `/autoflows/${flow.id}/${s.step_number}` },
+            }))
+          if (events.length > 0) await supabase.from('calendar_events').insert(events)
         }
       }
     }
