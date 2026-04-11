@@ -30,6 +30,8 @@ type Step = {
   description: string
   questions: Question[]
   day_offset: number
+  trigger_type: 'day_offset' | 'on_step_complete'
+  trigger_step_number: number | null
   resource_ids: string[]
   form_id: string | null
   tasks: Task[]
@@ -732,7 +734,11 @@ export default function AutoflowTemplatePage({ params }: { params: Promise<{ tem
               className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${tab === 'steps' && activeStep === s.step_number ? 'bg-gray-100 text-gray-900 font-medium' : 'text-gray-500 hover:bg-gray-50'}`}
             >
               {s.title || `Step ${s.step_number}`}
-              <span className="text-[11px] text-gray-400 ml-1">· day {s.day_offset}</span>
+              <span className="text-[11px] text-gray-400 ml-1">
+                {s.trigger_type === 'on_step_complete'
+                  ? `· after step ${s.trigger_step_number ?? '?'}`
+                  : `· day ${s.day_offset}`}
+              </span>
             </button>
           ))}
         </aside>
@@ -776,17 +782,57 @@ export default function AutoflowTemplatePage({ params }: { params: Promise<{ tem
                       className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none resize-none"
                     />
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Send on day <span className="text-gray-400 font-normal">(from flow start date)</span>
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={currentStep.day_offset}
-                      onChange={e => updateStep(activeStep, { day_offset: parseInt(e.target.value) || 0 })}
-                      className="w-24 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none"
-                    />
+                  {/* Step trigger */}
+                  <div className="space-y-2.5">
+                    <label className="block text-xs font-medium text-gray-700">Step trigger</label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => updateStep(activeStep, { trigger_type: 'day_offset' })}
+                        className={`flex-1 text-xs font-medium px-3 py-2 rounded-xl border transition-colors ${(currentStep.trigger_type ?? 'day_offset') === 'day_offset' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}
+                      >
+                        On day X
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateStep(activeStep, { trigger_type: 'on_step_complete' })}
+                        className={`flex-1 text-xs font-medium px-3 py-2 rounded-xl border transition-colors ${currentStep.trigger_type === 'on_step_complete' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}
+                      >
+                        After step completes
+                      </button>
+                    </div>
+
+                    {currentStep.trigger_type === 'on_step_complete' ? (
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Unlock when this step is completed:</label>
+                        <select
+                          value={currentStep.trigger_step_number ?? ''}
+                          onChange={e => updateStep(activeStep, { trigger_step_number: e.target.value ? parseInt(e.target.value) : null })}
+                          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none bg-white"
+                        >
+                          <option value="">— Select a step —</option>
+                          {template.steps
+                            .filter(s => s.step_number !== activeStep)
+                            .map(s => (
+                              <option key={s.step_number} value={s.step_number}>
+                                Step {s.step_number}{s.title ? ` — ${s.title}` : ''}
+                              </option>
+                            ))}
+                        </select>
+                        <p className="text-[11px] text-gray-400 mt-1">This step becomes available immediately once the selected step is submitted.</p>
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Days from flow start date:</label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={currentStep.day_offset}
+                          onChange={e => updateStep(activeStep, { day_offset: parseInt(e.target.value) || 0 })}
+                          className="w-24 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none"
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

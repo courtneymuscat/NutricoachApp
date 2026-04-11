@@ -19,7 +19,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
       .single(),
     supabase
       .from('autoflow_template_steps')
-      .select('step_number, title, description, questions, day_offset, resource_ids, form_id, tasks')
+      .select('step_number, title, description, questions, day_offset, trigger_type, trigger_step_number, resource_ids, form_id, tasks')
       .eq('template_id', templateId)
       .order('step_number'),
   ])
@@ -50,13 +50,15 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
     .eq('id', templateId)
 
   if (Array.isArray(steps)) {
-    const stepRows = steps.map((s: { step_number: number; title: string; description?: string; questions: unknown[]; day_offset: number; resource_ids?: unknown[]; form_id?: string | null; tasks?: unknown[] }) => ({
+    const stepRows = steps.map((s: { step_number: number; title: string; description?: string; questions: unknown[]; day_offset: number; trigger_type?: string; trigger_step_number?: number | null; resource_ids?: unknown[]; form_id?: string | null; tasks?: unknown[] }) => ({
       template_id: templateId,
       step_number: s.step_number,
       title: s.title ?? '',
       description: s.description ?? null,
       questions: s.questions ?? [],
       day_offset: s.day_offset ?? 0,
+      trigger_type: s.trigger_type ?? 'day_offset',
+      trigger_step_number: s.trigger_step_number ?? null,
       resource_ids: s.resource_ids ?? [],
       form_id: s.form_id ?? null,
       tasks: s.tasks ?? [],

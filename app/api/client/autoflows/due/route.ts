@@ -28,7 +28,7 @@ export async function GET() {
       const [{ data: steps }, { data: responses }] = await Promise.all([
         admin
           .from('autoflow_template_steps')
-          .select('step_number, title, day_offset')
+          .select('step_number, title, day_offset, trigger_type, trigger_step_number')
           .eq('template_id', flow.template_id)
           .order('step_number'),
         admin
@@ -42,18 +42,24 @@ export async function GET() {
 
       return (steps ?? [])
         .filter((step) => {
+          if (respondedSteps.has(step.step_number)) return false
+          const triggerType = (step as Record<string, unknown>).trigger_type ?? 'day_offset'
+          if (triggerType === 'on_step_complete') {
+            const triggerStep = (step as Record<string, unknown>).trigger_step_number as number | null
+            return triggerStep != null && respondedSteps.has(triggerStep)
+          }
           const dueDate = new Date(startDate.getTime() + step.day_offset * 86400000)
           dueDate.setHours(0, 0, 0, 0)
-          return dueDate <= today && !respondedSteps.has(step.step_number)
+          return dueDate <= today
         })
         .map((step) => ({
           flow_id: flow.id,
           flow_name: flow.name,
           step_number: step.step_number,
           title: step.title,
-          due_date: new Date(startDate.getTime() + step.day_offset * 86400000)
-            .toISOString()
-            .split('T')[0],
+          due_date: (step as Record<string, unknown>).trigger_type === 'on_step_complete'
+            ? new Date().toISOString().split('T')[0]
+            : new Date(startDate.getTime() + step.day_offset * 86400000).toISOString().split('T')[0],
         }))
     })
   )

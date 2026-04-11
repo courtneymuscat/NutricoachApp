@@ -96,7 +96,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
         const [{ data: steps }, { data: responses }] = await Promise.all([
           admin
             .from('autoflow_template_steps')
-            .select('step_number, title, day_offset')
+            .select('step_number, title, day_offset, trigger_type, trigger_step_number')
             .eq('template_id', flow.template_id)
             .order('step_number'),
           admin
@@ -108,9 +108,15 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
         const responded = new Set((responses ?? []).map((r) => r.step_number))
         return (steps ?? [])
           .filter((s) => {
+            if (responded.has(s.step_number)) return false
+            const triggerType = (s as Record<string, unknown>).trigger_type ?? 'day_offset'
+            if (triggerType === 'on_step_complete') {
+              const triggerStep = (s as Record<string, unknown>).trigger_step_number as number | null
+              return triggerStep != null && responded.has(triggerStep)
+            }
             const due = new Date(startDate.getTime() + s.day_offset * 86400000)
             due.setHours(0, 0, 0, 0)
-            return due <= today && !responded.has(s.step_number)
+            return due <= today
           })
           .map((s) => ({ flow_id: flow.id, flow_name: flow.name, step_number: s.step_number, title: s.title }))
       })
