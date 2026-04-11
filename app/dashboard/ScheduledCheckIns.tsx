@@ -24,6 +24,10 @@ type DueAutoflowStep = {
   step_number: number
   title: string
   due_date: string
+  show_as_checkin_prompt: boolean
+  tasks: Array<{ id: string; label: string; completed: boolean }>
+  resources: Array<{ id: string; name: string; type: string; url: string | null }>
+  linked_form: { id: string; title: string } | null
 }
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
@@ -177,14 +181,15 @@ export default function ScheduledCheckIns() {
     load()
   }, [])
 
-  if (!ready || (schedules.length === 0 && dueFlowSteps.length === 0)) return null
+  const checkinFlowSteps = dueFlowSteps.filter(s => s.show_as_checkin_prompt)
+  if (!ready || (schedules.length === 0 && checkinFlowSteps.length === 0)) return null
 
   return (
     <section>
       <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Check-ins</p>
 
-      {/* Due autoflow steps */}
-      {dueFlowSteps.map((step) => (
+      {/* Due autoflow steps (check-in prompt only) */}
+      {dueFlowSteps.filter(s => s.show_as_checkin_prompt).map((step) => (
         <a
           key={`${step.flow_id}-${step.step_number}`}
           href={`/autoflows/${step.flow_id}/${step.step_number}`}

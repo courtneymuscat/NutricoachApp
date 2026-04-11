@@ -27,6 +27,21 @@ type Question = {
   options?: string[]
 }
 
+type StepTask = {
+  id: string
+  label: string
+  link_type?: string | null
+  link_url?: string | null
+  link_label?: string | null
+}
+
+type StepResource = {
+  id: string
+  name: string
+  type: string
+  url: string | null
+}
+
 type FlowStep = {
   step_number: number
   title: string
@@ -38,6 +53,9 @@ type FlowStep = {
   has_override: boolean
   due_date_override: string | null
   response: { submitted_at: string; answers: Record<string, string> } | null
+  tasks: StepTask[]
+  resources: StepResource[]
+  linked_form: { id: string; title: string } | null
 }
 
 type FlowDetail = {
@@ -336,6 +354,13 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
 
   // ── Response viewer ───────────────────────────────────────────────────────────
   if (viewingResponse) {
+    const { step, answers } = viewingResponse
+    const allQuestions = [...(selectedFlow?.autoflow_templates?.core_questions as Question[] ?? []), ...step.questions]
+    const questionMap: Record<string, Question> = Object.fromEntries(allQuestions.map(q => [q.id, q]))
+
+    // Separate question answers from task answers
+    const questionAnswers = Object.entries(answers).filter(([k]) => !k.startsWith('task_'))
+
     return (
       <div className="p-5 space-y-4">
         <button
@@ -346,20 +371,99 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
           Back to flow
         </button>
         <div>
-          <h3 className="text-sm font-semibold text-gray-900">{viewingResponse.step.title || `Step ${viewingResponse.step.step_number}`}</h3>
-          <p className="text-xs text-gray-400">Submitted {new Date(viewingResponse.step.response!.submitted_at).toLocaleDateString()}</p>
+          <h3 className="text-sm font-semibold text-gray-900">{step.title || `Step ${step.step_number}`}</h3>
+          {step.response
+            ? <p className="text-xs text-gray-400">Submitted {new Date(step.response.submitted_at).toLocaleDateString()}</p>
+            : <p className="text-xs text-amber-600">Not yet submitted</p>
+          }
         </div>
-        <div className="space-y-3">
-          {Object.entries(viewingResponse.answers).map(([qId, answer]) => (
-            <div key={qId} className="bg-gray-50 rounded-xl p-3">
-              <p className="text-xs text-gray-500 mb-1 font-mono">{qId}</p>
-              <p className="text-sm text-gray-900">{String(answer)}</p>
-            </div>
-          ))}
-          {Object.keys(viewingResponse.answers).length === 0 && (
-            <p className="text-xs text-gray-400">No answers recorded.</p>
-          )}
-        </div>
+
+        {/* Tasks */}
+        {step.tasks && step.tasks.length > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Tasks</p>
+            {step.tasks.map(task => {
+              const taskAnswer = answers[`task_${task.id}`]
+              const done = taskAnswer === 'done'
+              const skipped = taskAnswer === 'skipped'
+              return (
+                <div key={task.id} className="flex items-center gap-2.5 py-1">
+                  <div className={`w-4 h-4 rounded flex items-center justify-center flex-shrink-0 ${done ? 'bg-green-600' : skipped ? 'bg-gray-300' : 'border-2 border-gray-200'}`}>
+                    {done && (
+                      <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </div>
+                  <p className={`text-sm flex-1 ${done ? 'line-through text-gray-400' : skipped ? 'text-gray-400' : 'text-gray-700'}`}>
+                    {task.label}
+                  </p>
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${done ? 'bg-green-100 text-green-700' : skipped ? 'bg-gray-100 text-gray-500' : 'bg-orange-100 text-orange-600'}`}>
+                    {done ? 'Done' : skipped ? 'Skipped' : 'Pending'}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Resources */}
+        {step.resources && step.resources.length > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Resources</p>
+            {step.resources.map(r => (
+              <div key={r.id} className="flex items-center gap-2 text-sm">
+                <span>{r.type === 'video' ? '🎬' : r.type === 'pdf' ? '📄' : r.type === 'link' ? '🔗' : '📝'}</span>
+                <span className="flex-1 text-gray-700 truncate">{r.name}</span>
+                {r.url && (
+                  <a href={r.url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 underline flex-shrink-0">Open</a>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Linked form */}
+        {step.linked_form && (
+          <div className="flex items-center gap-2">
+            <span>📋</span>
+            <span className="flex-1 text-sm text-gray-700 truncate">{step.linked_form.title}</span>
+            <span className="text-xs text-gray-400">Linked form</span>
+          </div>
+        )}
+
+        {/* Question answers (if submitted) */}
+        {step.response && questionAnswers.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Answers</p>
+            {questionAnswers.map(([qId, answer]) => {
+              const q = questionMap[qId]
+              return (
+                <div key={qId} className="bg-gray-50 rounded-xl p-3">
+                  <p className="text-xs text-gray-500 mb-1">{q?.label || qId}</p>
+                  <p className="text-sm text-gray-900">{String(answer)}</p>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* If not submitted, show question list (preview) */}
+        {!step.response && allQuestions.filter(q => q.type !== 'note' && q.type !== 'section').length > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Questions</p>
+            {allQuestions.filter(q => q.type !== 'note' && q.type !== 'section').map((q, i) => (
+              <div key={q.id} className="bg-gray-50 rounded-xl px-3 py-2">
+                <p className="text-xs text-gray-600">{i + 1}. {q.label}</p>
+                {q.required && <span className="text-[10px] text-red-400">Required</span>}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!step.response && !step.tasks?.length && !step.resources?.length && !step.linked_form && allQuestions.length === 0 && (
+          <p className="text-xs text-gray-400">No content assigned to this step yet.</p>
+        )}
       </div>
     )
   }
@@ -450,6 +554,31 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
 
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-gray-900 truncate">{s.title || `Step ${s.step_number}`}</p>
+                  {/* Content summary badges */}
+                  {(s.tasks?.length > 0 || s.resources?.length > 0 || s.linked_form || s.questions?.length > 0) && (
+                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                      {s.questions?.length > 0 && (
+                        <span className="text-[10px] text-gray-400">{s.questions.length} Q</span>
+                      )}
+                      {s.tasks?.length > 0 && (
+                        <span className="text-[10px] text-blue-500">
+                          {s.response
+                            ? (() => {
+                                const done = s.tasks.filter(t => s.response!.answers[`task_${t.id}`] === 'done').length
+                                return `${done}/${s.tasks.length} tasks done`
+                              })()
+                            : `${s.tasks.length} task${s.tasks.length !== 1 ? 's' : ''}`
+                          }
+                        </span>
+                      )}
+                      {s.resources?.length > 0 && (
+                        <span className="text-[10px] text-purple-500">{s.resources.length} resource{s.resources.length !== 1 ? 's' : ''}</span>
+                      )}
+                      {s.linked_form && (
+                        <span className="text-[10px] text-amber-500">form</span>
+                      )}
+                    </div>
+                  )}
 
                   {s.response ? (
                     <p className="text-xs text-gray-400">
@@ -511,14 +640,13 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
                       </svg>
                     </button>
                   )}
-                  {s.response && (
-                    <button
-                      onClick={() => setViewingResponse({ step: s, answers: s.response!.answers })}
-                      className="text-xs text-gray-500 hover:text-gray-900 transition-colors"
-                    >
-                      View
-                    </button>
-                  )}
+                  {/* View step content — always available */}
+                  <button
+                    onClick={() => setViewingResponse({ step: s, answers: s.response?.answers ?? {} })}
+                    className="text-xs text-gray-500 hover:text-gray-900 transition-colors"
+                  >
+                    {s.response ? 'View' : 'Preview'}
+                  </button>
                 </div>
               </div>
             )

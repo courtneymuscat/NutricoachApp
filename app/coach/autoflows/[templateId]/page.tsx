@@ -769,6 +769,36 @@ export default function AutoflowTemplatePage({ params }: { params: Promise<{ tem
               </span>
             </button>
           ))}
+          <button
+            onClick={() => {
+              const nextNum = template.steps.length + 1
+              const lastStep = template.steps[template.steps.length - 1]
+              const newStep: Step = {
+                step_number: nextNum,
+                title: `Step ${nextNum}`,
+                description: '',
+                questions: [],
+                day_offset: lastStep ? lastStep.day_offset + 7 : 0,
+                trigger_type: 'day_offset',
+                trigger_step_number: null,
+                resource_ids: [],
+                form_id: null,
+                form_save_to_file: false,
+                tasks: [],
+              }
+              setTemplate({
+                ...template,
+                total_steps: nextNum,
+                steps: [...template.steps, newStep],
+              })
+              setActiveStep(nextNum)
+              setTab('steps')
+            }}
+            className="w-full text-left px-3 py-2 rounded-lg text-xs text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors flex items-center gap-1.5 mt-1"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+            Add step
+          </button>
         </aside>
 
         {/* Right: editor panel */}

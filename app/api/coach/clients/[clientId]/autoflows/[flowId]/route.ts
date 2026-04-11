@@ -22,7 +22,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
   const [{ data: steps }, { data: overrides }, { data: responses }] = await Promise.all([
     supabase
       .from('autoflow_template_steps')
-      .select('step_number, title, description, questions, day_offset, trigger_type, trigger_step_number')
+      .select('step_number, title, description, questions, day_offset, trigger_type, trigger_step_number, tasks, resource_ids, form_id')
       .eq('template_id', flow.template_id)
       .order('step_number'),
     supabase
@@ -43,8 +43,35 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     (responses ?? []).map(r => [r.step_number, { submitted_at: r.submitted_at, answers: r.answers }])
   )
 
+  // Resolve all resource IDs across all steps in one query
+  const allResourceIds = (steps ?? []).flatMap(s =>
+    Array.isArray((s as Record<string, unknown>).resource_ids) ? (s as Record<string, unknown>).resource_ids as string[] : []
+  )
+  const allFormIds = (steps ?? [])
+    .map(s => (s as Record<string, unknown>).form_id as string | null)
+    .filter(Boolean) as string[]
+
+  const [resourcesResult, formsResult] = await Promise.all([
+    allResourceIds.length > 0
+      ? supabase.from('coach_resources').select('id, name, type, url').in('id', allResourceIds)
+      : Promise.resolve({ data: [] }),
+    allFormIds.length > 0
+      ? supabase.from('forms').select('id, title').in('id', allFormIds)
+      : Promise.resolve({ data: [] }),
+  ])
+
+  const resourceMap: Record<string, { id: string; name: string; type: string; url: string | null }> = Object.fromEntries(
+    (resourcesResult.data ?? []).map((r: { id: string; name: string; type: string; url: string | null }) => [r.id, r])
+  )
+  const formMap: Record<string, { id: string; title: string }> = Object.fromEntries(
+    (formsResult.data ?? []).map((f: { id: string; title: string }) => [f.id, f])
+  )
+
   const enrichedSteps = (steps ?? []).map(s => {
     const ov = overrideMap[s.step_number]
+    const stepRecord = s as Record<string, unknown>
+    const resourceIds = Array.isArray(stepRecord.resource_ids) ? stepRecord.resource_ids as string[] : []
+    const formId = stepRecord.form_id as string | null
     return {
       ...s,
       title: ov?.title ?? s.title,
@@ -53,6 +80,9 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
       has_override: !!(ov?.questions || ov?.title || ov?.description),
       due_date_override: ov?.due_date ?? null,
       response: responseMap[s.step_number] ?? null,
+      tasks: (stepRecord.tasks as unknown[]) ?? [],
+      resources: resourceIds.map(id => resourceMap[id]).filter(Boolean),
+      linked_form: formId ? (formMap[formId] ?? null) : null,
     }
   })
 

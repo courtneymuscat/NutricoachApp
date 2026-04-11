@@ -1092,6 +1092,14 @@ function DayCell({ date, workouts, events, isToday, isPast, compact, onWorkoutTa
         {events.filter((e) => e.type !== 'program_workout_result').map((ev) => {
           const isClientEvent = ['personal', 'travel', 'extra_activity', 'note'].includes(ev.type)
           const cls = `rounded-lg border px-2 py-1 text-[10px] font-medium flex items-center gap-1 ${eventColour(ev.type)}`
+          const autoflowLink = ev.type === 'autoflow' ? (ev.content as Record<string, unknown>)?.link as string | undefined : undefined
+          if (autoflowLink) {
+            return (
+              <a key={ev.id} href={autoflowLink} className={cls} onClick={(e) => e.stopPropagation()}>
+                <span className="truncate flex-1">{ev.title}</span>
+              </a>
+            )
+          }
           return (
             <div key={ev.id} className={cls}>
               <span className="truncate flex-1">{ev.type === 'birthday' ? '🎂 ' : ''}{ev.title}</span>
@@ -1142,7 +1150,7 @@ export default function TrainingCalendar() {
       const startStr = toDateStr(wStart)
       const endStr = toDateStr(wEnd)
 
-      const [programsResult, eventsResult] = await Promise.all([
+      const [programsResult, eventsResult, activeFlowsResult] = await Promise.all([
         supabase
           .from('client_programs')
           .select('id, name, start_date, content, status')
@@ -1152,13 +1160,25 @@ export default function TrainingCalendar() {
           .from('calendar_events')
           .select('*')
           .eq('client_id', user.id)
-          .neq('type', 'autoflow')
           .gte('event_date', startStr)
           .lte('event_date', endStr),
+        supabase
+          .from('client_autoflows')
+          .select('id')
+          .eq('client_id', user.id)
+          .eq('status', 'active'),
       ])
 
+      const activeFlowIds = new Set((activeFlowsResult.data ?? []).map((f: { id: string }) => f.id))
+      const allEvents = eventsResult.data ?? []
+      const filteredEvents = allEvents.filter((e: { type: string; content: Record<string, unknown> }) => {
+        if (e.type !== 'autoflow') return true
+        const flowId = e.content?.flow_id as string | undefined
+        return flowId ? activeFlowIds.has(flowId) : false
+      })
+
       setPrograms(programsResult.data ?? [])
-      setEvents(eventsResult.data ?? [])
+      setEvents(filteredEvents)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load calendar')
     } finally {

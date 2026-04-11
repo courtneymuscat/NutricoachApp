@@ -17,6 +17,7 @@ import HabitsPanel from './HabitsPanel'
 import ScheduledCheckIns from './ScheduledCheckIns'
 import GoalsPanel from './GoalsPanel'
 import ResourcesPanel from './ResourcesPanel'
+import AutoflowTasksPanel from './AutoflowTasksPanel'
 import DashboardTour from './DashboardTour'
 import ProfileCompletionPrompt from './ProfileCompletionPrompt'
 
@@ -211,6 +212,9 @@ export default async function DashboardPage() {
 
         {/* Resources — shown when coach has assigned any */}
         {isCoached && <ResourcesPanel />}
+
+        {/* Autoflow tasks, resources & forms — shown when there are due steps with content */}
+        {isCoached && <AutoflowTasksPanel />}
 
         {/* Daily targets card */}
         {(!isCoached || showDailyTargets) && profile?.target_calories ? (
