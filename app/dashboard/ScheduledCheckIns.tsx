@@ -104,7 +104,9 @@ function formatDate(d: Date): string {
   return d.toLocaleDateString('en-AU', { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
-export default function ScheduledCheckIns() {
+type Props = { onEmpty?: (empty: boolean) => void }
+
+export default function ScheduledCheckIns({ onEmpty }: Props) {
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [due, setDue] = useState<Set<string>>(new Set())
   const [completed, setCompleted] = useState<Record<string, Submission>>({}) // scheduleId → recent submission
@@ -182,7 +184,13 @@ export default function ScheduledCheckIns() {
   }, [])
 
   const checkinFlowSteps = dueFlowSteps.filter(s => s.show_as_checkin_prompt)
-  if (!ready || (schedules.length === 0 && checkinFlowSteps.length === 0)) return null
+  const isEmpty = schedules.length === 0 && checkinFlowSteps.length === 0
+
+  useEffect(() => {
+    if (ready) onEmpty?.(isEmpty)
+  }, [ready, isEmpty]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!ready || isEmpty) return null
 
   return (
     <section>

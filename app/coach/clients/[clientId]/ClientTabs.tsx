@@ -1183,13 +1183,18 @@ function FilesTab({ clientId }: { clientId: string }) {
 
       {files.length === 0 && <Empty label="No files uploaded yet." />}
       {files.map((f, i) => {
-        const filename = decodeURIComponent(f.url.split('/').pop()?.split('?')[0] ?? 'file')
+        const isFormResponse = f.source === 'form'
+        const filename = isFormResponse ? '' : decodeURIComponent(f.url.split('/').pop()?.split('?')[0] ?? 'file')
         const ext = filename.split('.').pop()?.toLowerCase() ?? ''
         const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic'].includes(ext)
         return (
-          <div key={i} className="bg-white rounded-2xl border p-4 flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
-              {isImage ? (
+          <div key={i} className={`bg-white rounded-2xl border p-4 flex items-center gap-4 ${isFormResponse ? 'border-indigo-100' : ''}`}>
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${isFormResponse ? 'bg-indigo-50' : 'bg-blue-50'}`}>
+              {isFormResponse ? (
+                <svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                </svg>
+              ) : isImage ? (
                 <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
@@ -1213,8 +1218,11 @@ function FilesTab({ clientId }: { clientId: string }) {
                   <button onClick={() => setRenamingId(null)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
                 </div>
               ) : (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <p className="text-sm font-medium text-gray-900 truncate">{f.label}</p>
+                  {isFormResponse && (
+                    <span className="text-[10px] bg-indigo-50 text-indigo-500 font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0">Form</span>
+                  )}
                   {f.source === 'coach' && (
                     <span className="text-[10px] bg-purple-50 text-purple-500 font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0">Coach</span>
                   )}
@@ -1225,11 +1233,11 @@ function FilesTab({ clientId }: { clientId: string }) {
             <div className="flex items-center gap-2 flex-shrink-0">
               <a
                 href={f.url}
-                target="_blank"
+                target={isFormResponse ? '_self' : '_blank'}
                 rel="noopener noreferrer"
                 className="text-xs font-semibold text-blue-600 hover:text-blue-800"
               >
-                View
+                {isFormResponse ? 'View response' : 'View'}
               </a>
               {f.source === 'coach' && f.id && renamingId !== f.id && (
                 <>

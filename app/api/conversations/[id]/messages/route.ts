@@ -27,7 +27,7 @@ export async function GET(
 
   const { data: messages } = await supabase
     .from('messages')
-    .select('id, sender_id, body, created_at, read_at')
+    .select('id, sender_id, body, created_at, read_at, attachment_url, attachment_type')
     .eq('conversation_id', id)
     .order('created_at', { ascending: true })
     .limit(100)
@@ -48,13 +48,18 @@ export async function POST(
   const convo = await verifyAccess(supabase, id, session.user.id)
   if (!convo) return Response.json({ error: 'Forbidden' }, { status: 403 })
 
-  const { body } = await req.json()
-  if (!body?.trim()) return Response.json({ error: 'Message body required' }, { status: 400 })
+  const { body, attachment_url, attachment_type } = await req.json()
+  if (!body?.trim() && !attachment_url) return Response.json({ error: 'Message body or attachment required' }, { status: 400 })
 
   const { data: message, error } = await supabase
     .from('messages')
-    .insert({ conversation_id: id, sender_id: session.user.id, body: body.trim() })
-    .select('id, sender_id, body, created_at, read_at')
+    .insert({
+      conversation_id: id,
+      sender_id: session.user.id,
+      body: body?.trim() ?? '',
+      ...(attachment_url ? { attachment_url, attachment_type } : {}),
+    })
+    .select('id, sender_id, body, created_at, read_at, attachment_url, attachment_type')
     .single()
 
   if (error) return Response.json({ error: error.message }, { status: 500 })

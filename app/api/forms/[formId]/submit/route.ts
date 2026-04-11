@@ -19,16 +19,17 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     .eq('id', formId)
     .single()
 
-  if (!form || !form.is_active) return Response.json({ error: 'Form not found' }, { status: 404 })
+  if (!form) return Response.json({ error: 'Form not found' }, { status: 404 })
 
   // Verify client belongs to this coach (admin client — RLS may block client reading coach_clients)
+  // Accept any non-removed status so onboarding forms work before the client is fully 'active'
   const { data: rel } = await admin
     .from('coach_clients')
     .select('id')
     .eq('coach_id', form.coach_id)
     .eq('client_id', session.user.id)
-    .eq('status', 'active')
-    .single()
+    .in('status', ['active', 'pending', 'archived'])
+    .maybeSingle()
 
   if (!rel) return Response.json({ error: 'Not authorised to submit this form' }, { status: 403 })
 

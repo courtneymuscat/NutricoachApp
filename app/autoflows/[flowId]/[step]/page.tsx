@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, use } from 'react'
-import { useRouter } from 'next/navigation'
 
 type QuestionType = 'text' | 'textarea' | 'scale' | 'yesno' | 'choice' | 'note' | 'section'
 
@@ -44,6 +43,14 @@ type StepData = {
   tasks: Task[]
   linked_form: { id: string; title: string } | null
   existing_submission: { id: string; answers: Record<string, string>; submitted_at: string } | null
+  next_step_available: boolean
+}
+
+type LockedData = {
+  locked: true
+  reason: 'not_yet' | 'complete_previous_step'
+  available_from?: string
+  required_step?: number
 }
 
 const RESOURCE_TYPE_META: Record<string, { icon: string; label: string; color: string }> = {
@@ -133,9 +140,9 @@ function QuestionInput({
 
 export default function AutoflowStepPage({ params }: { params: Promise<{ flowId: string; step: string }> }) {
   const { flowId, step } = use(params)
-  const router = useRouter()
 
   const [data, setData] = useState<StepData | null>(null)
+  const [locked, setLocked] = useState<LockedData | null>(null)
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [checkedTasks, setCheckedTasks] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
@@ -157,8 +164,9 @@ export default function AutoflowStepPage({ params }: { params: Promise<{ flowId:
 
   useEffect(() => {
     fetch(`/api/client/autoflows/${flowId}/${step}`)
-      .then(r => r.json())
-      .then(d => {
+      .then(async r => {
+        const d = await r.json()
+        if (r.status === 403 && d.locked) { setLocked(d); return }
         if (d.error) { setError(d.error); return }
         setData(d)
         if (d.existing_submission) {
@@ -235,6 +243,41 @@ export default function AutoflowStepPage({ params }: { params: Promise<{ flowId:
     )
   }
 
+  if (locked) {
+    const isDateLock = locked.reason === 'not_yet' && locked.available_from
+    const availableDate = isDateLock
+      ? new Date(locked.available_from! + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+      : null
+
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="bg-white border-b px-4 py-4">
+          <a href="/dashboard" className="text-xs text-gray-400 hover:text-gray-700 transition-colors">← Dashboard</a>
+        </div>
+        <div className="max-w-lg mx-auto p-6 pt-12 text-center">
+          <div className="w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
+            <svg className="w-7 h-7 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m0 0v2m0-2h2m-2 0H10m2-6V7a4 4 0 00-8 0v4H3a1 1 0 00-1 1v7a1 1 0 001 1h14a1 1 0 001-1v-7a1 1 0 00-1-1h-1V7a4 4 0 00-4-4z" />
+            </svg>
+          </div>
+          <h1 className="text-xl font-bold text-gray-900">Not available yet</h1>
+          {isDateLock ? (
+            <p className="text-sm text-gray-500 mt-2">
+              This step unlocks on <span className="font-semibold text-gray-700">{availableDate}</span>.
+            </p>
+          ) : (
+            <p className="text-sm text-gray-500 mt-2">
+              Complete step {locked.required_step} first to unlock this step.
+            </p>
+          )}
+          <a href="/dashboard" className="inline-block mt-6 px-5 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-medium hover:bg-gray-700 transition-colors">
+            Back to dashboard
+          </a>
+        </div>
+      </div>
+    )
+  }
+
   if (error && !data) {
     return (
       <div className="min-h-screen flex items-center justify-center p-6">
@@ -245,7 +288,7 @@ export default function AutoflowStepPage({ params }: { params: Promise<{ flowId:
 
   if (submitted) {
     const nextStep = stepNum + 1
-    const hasNext = data && nextStep <= data.total_steps
+    const hasNext = data && nextStep <= data.total_steps && data.next_step_available
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
         <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-4">
@@ -358,8 +401,8 @@ export default function AutoflowStepPage({ params }: { params: Promise<{ flowId:
 
         {/* Tasks */}
         {data.tasks && data.tasks.length > 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Tasks</p>
+          <div className="rounded-xl border border-yellow-300 p-4 space-y-3" style={{ backgroundColor: '#fefce8' }}>
+            <p className="text-xs font-semibold text-yellow-700 uppercase tracking-wide">To-do list</p>
             <div className="space-y-2">
               {data.tasks.map(task => (
                 <div key={task.id} className="space-y-1">
@@ -448,15 +491,13 @@ export default function AutoflowStepPage({ params }: { params: Promise<{ flowId:
           <p className="text-xs text-red-500 px-1">{error}</p>
         )}
 
-        {(allQuestions.some(q => q.type !== 'note' && q.type !== 'section') || (data.tasks ?? []).length > 0) && (
-          <button
-            onClick={submit}
-            disabled={submitting}
-            className="w-full bg-gray-900 text-white py-3 rounded-xl text-sm font-semibold hover:bg-gray-700 disabled:opacity-50 transition-colors"
-          >
-            {submitting ? 'Submitting…' : isResubmit ? 'Update response' : 'Submit'}
-          </button>
-        )}
+        <button
+          onClick={submit}
+          disabled={submitting}
+          className="w-full bg-gray-900 text-white py-3 rounded-xl text-sm font-semibold hover:bg-gray-700 disabled:opacity-50 transition-colors"
+        >
+          {submitting ? 'Submitting…' : isResubmit ? 'Update response' : allQuestions.some(q => q.type !== 'note' && q.type !== 'section') || (data.tasks ?? []).length > 0 ? 'Submit' : 'Mark as done'}
+        </button>
       </main>
     </div>
   )

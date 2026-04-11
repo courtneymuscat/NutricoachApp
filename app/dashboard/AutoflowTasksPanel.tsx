@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react'
 
+type Props = { onEmpty?: (empty: boolean) => void }
+
 type Task = {
   id: string
   label: string
@@ -30,14 +32,8 @@ type DueStep = {
   linked_form: { id: string; title: string } | null
 }
 
-const RESOURCE_ICONS: Record<string, string> = {
-  link: '🔗',
-  video: '🎬',
-  pdf: '📄',
-  document: '📝',
-}
 
-export default function AutoflowTasksPanel() {
+export default function AutoflowTasksPanel({ onEmpty }: Props) {
   const [steps, setSteps] = useState<DueStep[]>([])
   const [ready, setReady] = useState(false)
 
@@ -54,6 +50,10 @@ export default function AutoflowTasksPanel() {
   const stepsWithContent = steps.filter(
     s => s.tasks.length > 0 || s.resources.length > 0 || s.linked_form
   )
+
+  useEffect(() => {
+    if (ready) onEmpty?.(stepsWithContent.length === 0)
+  }, [ready, stepsWithContent.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!ready || stepsWithContent.length === 0) return null
 

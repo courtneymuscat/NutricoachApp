@@ -27,7 +27,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
   const [submissionsRes, coachFilesRes] = await Promise.all([
     admin
       .from('form_submissions')
-      .select('id, submitted_at, forms ( title ), form_answers ( value, form_questions ( label, type ) )')
+      .select('id, form_id, submitted_at, forms ( title ), form_answers ( value, form_questions ( label, type ) )')
       .eq('client_id', clientId)
       .eq('coach_id', coachId)
       .order('submitted_at', { ascending: false }),
@@ -41,13 +41,25 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
 
   const files: { id?: string; url: string; label: string; formTitle: string; submittedAt: string; source: string }[] = []
 
-  // Files from form submissions (client-uploaded via file_upload questions)
+  // Form submissions: one entry per submission (links to response viewer) + any uploaded files
   for (const submission of submissionsRes.data ?? []) {
-    const formsField = submission.forms as unknown as { title: string } | { title: string }[] | null
+    const formsField = submission.forms as unknown as { title: string } | null
     const formTitle = (Array.isArray(formsField) ? formsField[0] : formsField)?.title ?? 'Form'
+    const formId = (submission as unknown as Record<string, unknown>).form_id as string
+
+    // Add the form submission itself as a viewable entry
+    files.push({
+      url: `/coach/forms/${formId}/responses/${submission.id}`,
+      label: formTitle,
+      formTitle: 'Form response',
+      submittedAt: submission.submitted_at ?? '',
+      source: 'form',
+    })
+
+    // Also surface any file uploads from answers as separate entries
     const answers = submission.form_answers as unknown as { value: string; form_questions: { label: string; type: string } | null }[]
     for (const answer of answers ?? []) {
-      const q = answer.form_questions
+      const q = Array.isArray(answer.form_questions) ? answer.form_questions[0] : answer.form_questions
       if (q?.type === 'file_upload' && answer.value?.startsWith('http')) {
         files.push({ url: answer.value, label: q.label, formTitle, submittedAt: submission.submitted_at ?? '', source: 'client' })
       }

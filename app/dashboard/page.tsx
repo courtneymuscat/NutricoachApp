@@ -14,9 +14,8 @@ import CoachBanner from './CoachBanner'
 import UpgradePrompt from '@/components/UpgradePrompt'
 import MealPlanView from './MealPlanView'
 import HabitsPanel from './HabitsPanel'
-import ScheduledCheckIns from './ScheduledCheckIns'
 import GoalsPanel from './GoalsPanel'
-import AutoflowTasksPanel from './AutoflowTasksPanel'
+import CoachingSection from './CoachingSection'
 import DashboardTour from './DashboardTour'
 import ProfileCompletionPrompt from './ProfileCompletionPrompt'
 
@@ -188,11 +187,8 @@ export default async function DashboardPage() {
           />
         )}
 
-        {/* Autoflow tasks, resources & forms — shown when there are due steps with content */}
-        {isCoached && <AutoflowTasksPanel />}
-
-        {/* Check-ins — top of page for coached clients */}
-        {isCoached && <ScheduledCheckIns />}
+        {/* Tasks, check-ins — coached clients only; shows "all caught up" when nothing is due */}
+        {isCoached && <CoachingSection />}
 
         {/* Goals — set by coach */}
         {isCoached && <GoalsPanel />}

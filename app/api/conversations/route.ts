@@ -81,10 +81,10 @@ export async function POST(req: NextRequest) {
     .select('id')
     .eq('coach_id', coachId)
     .eq('client_id', clientId)
-    .eq('status', 'active')
-    .single()
+    .in('status', ['active', 'pending'])
+    .maybeSingle()
 
-  if (!rel) return Response.json({ error: 'No active coach-client relationship' }, { status: 403 })
+  if (!rel) return Response.json({ error: 'No coach-client relationship' }, { status: 403 })
 
   // Upsert conversation
   const { data, error } = await supabase

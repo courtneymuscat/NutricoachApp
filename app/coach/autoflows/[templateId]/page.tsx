@@ -37,6 +37,7 @@ type Step = {
   form_id: string | null
   form_save_to_file: boolean
   tasks: Task[]
+  automated_message: string
 }
 
 type Template = {
@@ -524,6 +525,7 @@ export default function AutoflowTemplatePage({ params }: { params: Promise<{ tem
             form_id: s.form_id ?? null,
             form_save_to_file: s.form_save_to_file ?? false,
             tasks: s.tasks ?? [],
+            automated_message: s.automated_message ?? '',
           })),
         })
       })
@@ -785,6 +787,7 @@ export default function AutoflowTemplatePage({ params }: { params: Promise<{ tem
                 form_id: null,
                 form_save_to_file: false,
                 tasks: [],
+                automated_message: '',
               }
               setTemplate({
                 ...template,
@@ -998,6 +1001,24 @@ export default function AutoflowTemplatePage({ params }: { params: Promise<{ tem
                     )}
                   </>
                 )}
+              </div>
+
+              {/* Automated message */}
+              <div className="border border-gray-200 rounded-2xl p-4 space-y-3 bg-white">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900">Automated message</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    A message automatically sent to the client in chat when this step becomes available.
+                    Leave blank to send nothing.
+                  </p>
+                </div>
+                <textarea
+                  value={currentStep.automated_message ?? ''}
+                  onChange={e => updateStep(activeStep, { automated_message: e.target.value })}
+                  placeholder="e.g. Hi! Your Week 1 check-in is now ready. Tap the link in your dashboard to get started 💪"
+                  rows={3}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
               </div>
             </div>
           )}

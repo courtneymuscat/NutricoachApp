@@ -1,14 +1,16 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { requireCoach } from '@/lib/coach'
 
 export async function GET() {
   const coachId = await requireCoach()
   if (!coachId) return Response.json({ error: 'Unauthorised' }, { status: 401 })
 
-  const supabase = await createClient()
+  // Use admin client — coaches can't read client tables (check_ins, workouts, autoflow_responses) via RLS
+  const admin = createAdminClient()
 
   // Get all active client IDs
-  const { data: clientRows } = await supabase
+  const { data: clientRows } = await admin
     .from('coach_clients')
     .select('client_id')
     .eq('coach_id', coachId)
@@ -18,7 +20,7 @@ export async function GET() {
   if (!clientIds.length) return Response.json({ activity: [], lapsed: [] })
 
   // Get client profiles for display
-  const { data: profiles } = await supabase
+  const { data: profiles } = await admin
     .from('profiles')
     .select('id, email')
     .in('id', clientIds)
@@ -28,7 +30,7 @@ export async function GET() {
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
 
   // Get all client_autoflow IDs for this coach so we can match autoflow responses
-  const { data: clientFlows } = await supabase
+  const { data: clientFlows } = await admin
     .from('client_autoflows')
     .select('id, client_id, name')
     .eq('coach_id', coachId)
@@ -37,7 +39,7 @@ export async function GET() {
   const flowIds = Object.keys(flowMap)
 
   const [{ data: checkIns }, { data: formSubs }, { data: workouts }, { data: autoflowResps }] = await Promise.all([
-    supabase
+    admin
       .from('check_ins')
       .select('id, user_id, created_at')
       .in('user_id', clientIds)
@@ -45,7 +47,7 @@ export async function GET() {
       .order('created_at', { ascending: false })
       .limit(30),
 
-    supabase
+    admin
       .from('form_submissions')
       .select('id, client_id, submitted_at, viewed_by_coach')
       .eq('coach_id', coachId)
@@ -53,7 +55,7 @@ export async function GET() {
       .order('submitted_at', { ascending: false })
       .limit(30),
 
-    supabase
+    admin
       .from('workouts')
       .select('id, user_id, name, started_at')
       .in('user_id', clientIds)
@@ -63,7 +65,7 @@ export async function GET() {
       .limit(30),
 
     flowIds.length
-      ? supabase
+      ? admin
           .from('autoflow_responses')
           .select('id, client_autoflow_id, step_number, submitted_at')
           .in('client_autoflow_id', flowIds)

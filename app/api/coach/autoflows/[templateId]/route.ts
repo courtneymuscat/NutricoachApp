@@ -19,7 +19,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
       .single(),
     supabase
       .from('autoflow_template_steps')
-      .select('step_number, title, description, questions, day_offset, trigger_type, trigger_step_number, resource_ids, form_id, form_save_to_file, tasks')
+      .select('step_number, title, description, questions, day_offset, trigger_type, trigger_step_number, resource_ids, form_id, form_save_to_file, tasks, automated_message')
       .eq('template_id', templateId)
       .order('step_number'),
   ])
@@ -50,7 +50,7 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
     .eq('id', templateId)
 
   if (Array.isArray(steps)) {
-    const stepRows = steps.map((s: { step_number: number; title: string; description?: string; questions: unknown[]; day_offset: number; trigger_type?: string; trigger_step_number?: number | null; resource_ids?: unknown[]; form_id?: string | null; form_save_to_file?: boolean; tasks?: unknown[] }) => ({
+    const stepRows = steps.map((s: { step_number: number; title: string; description?: string; questions: unknown[]; day_offset: number; trigger_type?: string; trigger_step_number?: number | null; resource_ids?: unknown[]; form_id?: string | null; form_save_to_file?: boolean; tasks?: unknown[]; automated_message?: string }) => ({
       template_id: templateId,
       step_number: s.step_number,
       title: s.title ?? '',
@@ -63,6 +63,7 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
       form_id: s.form_id ?? null,
       form_save_to_file: s.form_save_to_file ?? false,
       tasks: s.tasks ?? [],
+      automated_message: s.automated_message ?? null,
     }))
     await supabase
       .from('autoflow_template_steps')
