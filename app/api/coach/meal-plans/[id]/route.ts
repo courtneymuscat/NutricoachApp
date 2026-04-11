@@ -34,6 +34,8 @@ export async function PATCH(
   const body = await req.json()
   const { name, goal, total_calories, content } = body
 
+  const { push_to_clients } = body
+
   const { data, error } = await supabase
     .from('meal_plans')
     .update({ name, goal, total_calories, content, updated_at: new Date().toISOString() })
@@ -43,6 +45,20 @@ export async function PATCH(
     .single()
 
   if (error || !data) return Response.json({ error: error?.message ?? 'Not found' }, { status: 400 })
+
+  // Propagate to existing client assignments if requested
+  if (push_to_clients) {
+    const clientUpdates: Record<string, unknown> = { updated_at: new Date().toISOString() }
+    if (name !== undefined) clientUpdates.name = name
+    if (content !== undefined) clientUpdates.content = content
+    if (total_calories !== undefined) clientUpdates.total_calories = total_calories
+    await supabase
+      .from('client_meal_plans')
+      .update(clientUpdates)
+      .eq('meal_plan_id', id)
+      .eq('coach_id', coachId)
+  }
+
   return Response.json(data)
 }
 

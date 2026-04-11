@@ -500,6 +500,7 @@ export default function AutoflowTemplatePage({ params }: { params: Promise<{ tem
   const [tab, setTab] = useState<'core' | 'steps'>('core')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [pushToClients, setPushToClients] = useState(true)
   const [loading, setLoading] = useState(!isNew)
   const [resources, setResources] = useState<CoachResource[]>([])
   const [forms, setForms] = useState<CoachForm[]>([])
@@ -562,6 +563,7 @@ export default function AutoflowTemplatePage({ params }: { params: Promise<{ tem
         description: template.description,
         core_questions: template.core_questions,
         steps: template.steps,
+        push_to_clients: pushToClients,
       }),
     })
     setSaving(false)
@@ -720,6 +722,16 @@ export default function AutoflowTemplatePage({ params }: { params: Promise<{ tem
           >
             Delete
           </button>
+          <label className="flex items-center gap-1.5 cursor-pointer select-none" title="When on, saving will update active client flows using this template">
+            <button
+              type="button"
+              onClick={() => setPushToClients(v => !v)}
+              className={`relative w-8 h-4 rounded-full transition-colors flex-shrink-0 ${pushToClients ? 'bg-blue-600' : 'bg-gray-200'}`}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${pushToClients ? 'translate-x-4' : ''}`} />
+            </button>
+            <span className="text-xs text-gray-500 hidden sm:block">Push to clients</span>
+          </label>
           <button
             onClick={save}
             disabled={saving}

@@ -655,6 +655,7 @@ export default function ProgramBuilderPage({ params }: { params: Promise<{ id: s
   const [dirty, setDirty] = useState(false)
   const [editingName, setEditingName] = useState(false)
   const [editingDesc, setEditingDesc] = useState(false)
+  const [pushToClients, setPushToClients] = useState(true)
   // selectedDay: [weekIndex, dayIndex] | null — drives the inline day editor
   const [selectedDay, setSelectedDay] = useState<[number, number] | null>(null)
   // drag-and-drop day reordering within a week
@@ -703,7 +704,7 @@ export default function ProgramBuilderPage({ params }: { params: Promise<{ id: s
     setSaving(true); setSaveStatus('saving')
     const res = await fetch(`/api/coach/programs/${program.id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: program.name, description: program.description, content: program.content }),
+      body: JSON.stringify({ name: program.name, description: program.description, content: program.content, push_to_clients: pushToClients }),
     })
     setSaving(false)
     if (res.ok) { setDirty(false); setSaveStatus('saved'); setTimeout(() => setSaveStatus('idle'), 2000) }
@@ -798,6 +799,16 @@ export default function ProgramBuilderPage({ params }: { params: Promise<{ id: s
           {saveStatus === 'saved' && <span className="text-xs text-green-500">Saved</span>}
           {saveStatus === 'error' && <span className="text-xs text-red-500">Save failed</span>}
           {dirty && saveStatus === 'idle' && <span className="text-xs text-amber-500">Unsaved changes</span>}
+          <label className="flex items-center gap-1.5 cursor-pointer select-none" title="When on, saving will also update all clients who have this program assigned">
+            <button
+              type="button"
+              onClick={() => setPushToClients(v => !v)}
+              className={`relative w-8 h-4 rounded-full transition-colors flex-shrink-0 ${pushToClients ? 'bg-blue-600' : 'bg-gray-200'}`}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${pushToClients ? 'translate-x-4' : ''}`} />
+            </button>
+            <span className="text-xs text-gray-500 hidden sm:block">Push to clients</span>
+          </label>
           <button onClick={saveNow} disabled={saving}
             className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 ${dirty ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
             {saving ? 'Saving…' : 'Save'}

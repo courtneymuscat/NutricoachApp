@@ -46,6 +46,19 @@ export async function PATCH(
     .single()
 
   if (error || !data) return Response.json({ error: error?.message ?? 'Not found' }, { status: 500 })
+
+  // Propagate to existing client assignments if requested
+  if (body.push_to_clients) {
+    const clientUpdates: Record<string, unknown> = { updated_at: new Date().toISOString() }
+    if (updates.name !== undefined) clientUpdates.name = updates.name
+    if (updates.content !== undefined) clientUpdates.content = updates.content
+    await supabase
+      .from('client_programs')
+      .update(clientUpdates)
+      .eq('program_id', id)
+      .eq('coach_id', coachId)
+  }
+
   return Response.json(data)
 }
 

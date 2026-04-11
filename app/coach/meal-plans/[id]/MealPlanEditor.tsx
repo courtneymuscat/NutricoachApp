@@ -282,7 +282,9 @@ export default function MealPlanEditor({ plan: initialPlan }: { plan: MealPlan }
   })
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [editingName, setEditingName] = useState(false)
+  const [pushToClients, setPushToClients] = useState(true)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pushToClientsRef = useRef(true)
 
   const totals = computeMacros(plan.content)
 
@@ -297,6 +299,7 @@ export default function MealPlanEditor({ plan: initialPlan }: { plan: MealPlan }
           name: updated.name,
           total_calories: Math.round(totals.calories),
           content: updated.content,
+          push_to_clients: pushToClientsRef.current,
         }),
       })
       setSaveStatus(res.ok ? 'saved' : 'error')
@@ -350,10 +353,17 @@ export default function MealPlanEditor({ plan: initialPlan }: { plan: MealPlan }
         name: plan.name,
         total_calories: Math.round(totals.calories),
         content: plan.content,
+        push_to_clients: pushToClients,
       }),
     })
     setSaveStatus(res.ok ? 'saved' : 'error')
     if (res.ok) setTimeout(() => setSaveStatus('idle'), 2500)
+  }
+
+  function togglePushToClients() {
+    const next = !pushToClients
+    setPushToClients(next)
+    pushToClientsRef.current = next
   }
 
   return (
@@ -413,6 +423,16 @@ export default function MealPlanEditor({ plan: initialPlan }: { plan: MealPlan }
           {saveStatus === 'idle' && (
             <span className="text-xs text-gray-300">Unsaved changes</span>
           )}
+          <label className="flex items-center gap-1.5 cursor-pointer select-none" title="When on, saving will also update all clients who have this meal plan assigned">
+            <button
+              type="button"
+              onClick={togglePushToClients}
+              className={`relative w-8 h-4 rounded-full transition-colors flex-shrink-0 ${pushToClients ? 'bg-blue-600' : 'bg-gray-200'}`}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${pushToClients ? 'translate-x-4' : ''}`} />
+            </button>
+            <span className="text-xs text-gray-500 hidden sm:block">Push to clients</span>
+          </label>
           <button
             onClick={saveNow}
             className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors"

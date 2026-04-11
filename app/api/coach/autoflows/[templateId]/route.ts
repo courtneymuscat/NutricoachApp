@@ -33,7 +33,7 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
   const coachId = await requireCoach()
   if (!coachId) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { name, description, core_questions, steps } = await req.json()
+  const { name, description, core_questions, steps, push_to_clients } = await req.json()
   const supabase = await createClient()
 
   const { data: tpl } = await supabase
@@ -67,6 +67,63 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
     await supabase
       .from('autoflow_template_steps')
       .upsert(stepRows, { onConflict: 'template_id,step_number' })
+  }
+
+  // Push name + regenerate calendar events for active client flows
+  if (push_to_clients) {
+    // Update flow names
+    await supabase
+      .from('client_autoflows')
+      .update({ name })
+      .eq('template_id', templateId)
+      .eq('coach_id', coachId)
+      .eq('status', 'active')
+
+    // Regenerate calendar events for each active flow based on updated step titles/offsets
+    if (Array.isArray(steps)) {
+      const { data: activeFlows } = await supabase
+        .from('client_autoflows')
+        .select('id, client_id, start_date')
+        .eq('template_id', templateId)
+        .eq('coach_id', coachId)
+        .eq('status', 'active')
+
+      if (activeFlows && activeFlows.length > 0) {
+        for (const flow of activeFlows) {
+          // Fetch per-step due_date overrides for this client flow
+          const { data: overrides } = await supabase
+            .from('client_autoflow_step_overrides')
+            .select('step_number, due_date')
+            .eq('client_autoflow_id', flow.id)
+
+          const overrideDates: Record<number, string> = Object.fromEntries(
+            (overrides ?? []).filter(o => o.due_date).map(o => [o.step_number, o.due_date])
+          )
+
+          // Delete old autoflow calendar events for this flow
+          await supabase
+            .from('calendar_events')
+            .delete()
+            .eq('coach_id', coachId)
+            .eq('client_id', flow.client_id)
+            .eq('type', 'autoflow')
+            .filter('content->>flow_id', 'eq', flow.id)
+
+          // Recreate with updated titles and offsets
+          const startMs = new Date(flow.start_date).getTime()
+          const events = steps.map((s: { step_number: number; title?: string; day_offset: number }) => ({
+            coach_id: coachId,
+            client_id: flow.client_id,
+            event_date: overrideDates[s.step_number]
+              ?? new Date(startMs + s.day_offset * 86400000).toISOString().split('T')[0],
+            type: 'autoflow',
+            title: `${name} — Step ${s.step_number}${s.title ? `: ${s.title}` : ''}`,
+            content: { flow_id: flow.id, step_number: s.step_number, link: `/autoflows/${flow.id}/${s.step_number}` },
+          }))
+          await supabase.from('calendar_events').insert(events)
+        }
+      }
+    }
   }
 
   return Response.json({ ok: true })
