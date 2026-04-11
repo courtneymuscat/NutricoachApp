@@ -11,7 +11,10 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data: flow } = await supabase
+  // Use admin client for coach-managed tables (RLS may block client reads)
+  const admin = createAdminClient()
+
+  const { data: flow } = await admin
     .from('client_autoflows')
     .select('id, name, template_id, start_date, autoflow_templates(core_questions, total_steps, type)')
     .eq('id', flowId)
@@ -20,15 +23,15 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
   if (!flow) return Response.json({ error: 'Not found' }, { status: 404 })
 
   const [{ data: templateStep }, { data: override }, { data: existing }] = await Promise.all([
-    supabase
+    admin
       .from('autoflow_template_steps')
       .select('title, description, questions, day_offset, resource_ids, form_id, tasks')
       .eq('template_id', flow.template_id)
       .eq('step_number', stepNum)
       .single(),
-    supabase
+    admin
       .from('client_autoflow_step_overrides')
-      .select('questions')
+      .select('title, description, questions')
       .eq('client_autoflow_id', flowId)
       .eq('step_number', stepNum)
       .maybeSingle(),
@@ -42,11 +45,10 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
 
   const tpl = flow.autoflow_templates as unknown as { core_questions: unknown[]; total_steps: number; type: string } | null
 
-  // Resolve resource details (admin client — resources are coach-owned)
+  // Resolve resource details (reuse admin client)
   const resourceIds: string[] = Array.isArray(templateStep?.resource_ids) ? templateStep.resource_ids as string[] : []
   let resources: unknown[] = []
   if (resourceIds.length > 0) {
-    const admin = createAdminClient()
     const { data: res } = await admin
       .from('coach_resources')
       .select('id, name, description, type, url')
@@ -57,7 +59,6 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
   // Resolve linked form title
   let linkedForm: { id: string; title: string } | null = null
   if (templateStep?.form_id) {
-    const admin = createAdminClient()
     const { data: form } = await admin
       .from('forms')
       .select('id, title')
@@ -72,8 +73,8 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     step_number: stepNum,
     total_steps: tpl?.total_steps ?? 1,
     type: tpl?.type ?? 'weekly_checkin',
-    title: templateStep?.title ?? `Step ${stepNum}`,
-    description: templateStep?.description ?? null,
+    title: override?.title ?? templateStep?.title ?? `Step ${stepNum}`,
+    description: override?.description ?? templateStep?.description ?? null,
     core_questions: tpl?.core_questions ?? [],
     questions: override?.questions ?? templateStep?.questions ?? [],
     resources,

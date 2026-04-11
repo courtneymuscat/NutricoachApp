@@ -36,7 +36,7 @@ export async function GET(
   if (start_date) foodQuery = foodQuery.gte('log_date', start_date)
   if (end_date) foodQuery = foodQuery.lte('log_date', end_date)
 
-  const [eventsResult, programsResult, foodResult, habitsResult] = await Promise.all([
+  const [eventsResult, programsResult, foodResult, habitsResult, activeFlowsResult] = await Promise.all([
     eventsQuery,
     supabase
       .from('client_programs')
@@ -51,7 +51,21 @@ export async function GET(
       .eq('client_id', clientId)
       .eq('coach_id', coachId)
       .order('created_at', { ascending: true }),
+    supabase
+      .from('client_autoflows')
+      .select('id')
+      .eq('client_id', clientId)
+      .eq('coach_id', coachId)
+      .eq('status', 'active'),
   ])
+
+  // Filter out autoflow calendar events for flows that are no longer active
+  const activeFlowIds = new Set((activeFlowsResult.data ?? []).map((f: { id: string }) => f.id))
+  const events = (eventsResult.data ?? []).filter((e: { type: string; content: Record<string, unknown> }) => {
+    if (e.type !== 'autoflow') return true
+    const flowId = e.content?.flow_id as string | undefined
+    return flowId ? activeFlowIds.has(flowId) : false
+  })
 
   // Aggregate food logs by date
   const foodByDate: Record<string, { cal: number; protein: number; carbs: number; fat: number }> = {}
@@ -65,7 +79,7 @@ export async function GET(
   }
 
   return Response.json({
-    events: eventsResult.data ?? [],
+    events,
     programs: programsResult.data ?? [],
     foodByDate,
     habits: habitsResult.data ?? [],

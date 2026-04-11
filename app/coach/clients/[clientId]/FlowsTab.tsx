@@ -18,6 +18,28 @@ type ClientFlow = {
   autoflow_responses: { step_number: number }[]
 }
 
+type Question = {
+  id: string
+  type: 'text' | 'textarea' | 'scale' | 'yesno' | 'choice' | 'note' | 'section'
+  label: string
+  required: boolean
+  description?: string
+  options?: string[]
+}
+
+type FlowStep = {
+  step_number: number
+  title: string
+  description: string | null
+  questions: Question[]
+  day_offset: number
+  trigger_type?: string
+  trigger_step_number?: number | null
+  has_override: boolean
+  due_date_override: string | null
+  response: { submitted_at: string; answers: Record<string, string> } | null
+}
+
 type FlowDetail = {
   id: string
   name: string
@@ -25,15 +47,25 @@ type FlowDetail = {
   status: string
   template_id: string
   autoflow_templates: { type: string; total_steps: number; core_questions: unknown[] } | null
-  steps: {
-    step_number: number
-    title: string
-    day_offset: number
-    has_override: boolean
-    due_date_override: string | null
-    response: { submitted_at: string; answers: Record<string, string> } | null
-  }[]
+  steps: FlowStep[]
 }
+
+type StepEditor = {
+  stepNumber: number
+  title: string
+  description: string
+  questions: Question[]
+}
+
+const Q_TYPES: { value: Question['type']; label: string }[] = [
+  { value: 'text', label: 'Short answer' },
+  { value: 'textarea', label: 'Long answer' },
+  { value: 'scale', label: 'Scale 1–10' },
+  { value: 'yesno', label: 'Yes / No' },
+  { value: 'choice', label: 'Multiple choice' },
+  { value: 'note', label: 'Note (no response)' },
+  { value: 'section', label: 'Section heading' },
+]
 
 export default function FlowsTab({ clientId }: { clientId: string }) {
   const [flows, setFlows] = useState<ClientFlow[]>([])
@@ -45,11 +77,17 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
   const [assignTemplateId, setAssignTemplateId] = useState('')
   const [assignStartDate, setAssignStartDate] = useState(new Date().toISOString().split('T')[0])
   const [assignCheckinPrompt, setAssignCheckinPrompt] = useState(false)
-  const [viewingResponse, setViewingResponse] = useState<{ step: FlowDetail['steps'][0]; answers: Record<string, string> } | null>(null)
+  const [viewingResponse, setViewingResponse] = useState<{ step: FlowStep; answers: Record<string, string> } | null>(null)
   const [editingStartDate, setEditingStartDate] = useState<string | null>(null)
   const [savingStartDate, setSavingStartDate] = useState(false)
   const [editingStepDate, setEditingStepDate] = useState<{ stepNumber: number; date: string } | null>(null)
   const [savingStepDate, setSavingStepDate] = useState(false)
+
+  // Step content editor
+  const [editingStep, setEditingStep] = useState<StepEditor | null>(null)
+  const [stepIsDirty, setStepIsDirty] = useState(false)
+  const [savingStep, setSavingStep] = useState(false)
+  const [stepSaveError, setStepSaveError] = useState<string | null>(null)
 
   useEffect(() => {
     Promise.all([
@@ -78,7 +116,6 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
     setAssigning(false)
     if (d.id) {
       setShowAssign(false)
-      // Refresh list
       const updated = await fetch(`/api/coach/clients/${clientId}/autoflows`).then(r => r.json())
       setFlows(Array.isArray(updated) ? updated : [])
     }
@@ -110,6 +147,71 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
     if (!d.error) setSelectedFlow(d)
   }
 
+  async function saveStepContent() {
+    if (!editingStep || !selectedFlow) return
+    setSavingStep(true)
+    setStepSaveError(null)
+    const res = await fetch(`/api/coach/clients/${clientId}/autoflows/${selectedFlow.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        step_number: editingStep.stepNumber,
+        title: editingStep.title,
+        description: editingStep.description,
+        questions: editingStep.questions,
+      }),
+    })
+    const d = await res.json()
+    setSavingStep(false)
+    if (!res.ok) { setStepSaveError(d.error ?? 'Save failed'); return }
+    setStepIsDirty(false)
+    // Refresh flow detail
+    const updated = await fetch(`/api/coach/clients/${clientId}/autoflows/${selectedFlow.id}`).then(r => r.json())
+    if (!updated.error) setSelectedFlow(updated)
+  }
+
+  function openStepEditor(step: FlowStep) {
+    setEditingStep({
+      stepNumber: step.step_number,
+      title: step.title,
+      description: step.description ?? '',
+      questions: JSON.parse(JSON.stringify(step.questions ?? [])),
+    })
+    setStepIsDirty(false)
+    setStepSaveError(null)
+  }
+
+  function tryExitStepEditor() {
+    if (stepIsDirty) {
+      if (!confirm('You have unsaved changes. Discard and go back?')) return
+    }
+    setEditingStep(null)
+    setStepIsDirty(false)
+  }
+
+  function updateStepEditor(patch: Partial<StepEditor>) {
+    setEditingStep(prev => prev ? { ...prev, ...patch } : null)
+    setStepIsDirty(true)
+  }
+
+  function updateQuestion(idx: number, patch: Partial<Question>) {
+    if (!editingStep) return
+    const qs = [...editingStep.questions]
+    qs[idx] = { ...qs[idx], ...patch }
+    updateStepEditor({ questions: qs })
+  }
+
+  function addQuestion() {
+    if (!editingStep) return
+    const q: Question = { id: crypto.randomUUID(), type: 'text', label: '', required: false }
+    updateStepEditor({ questions: [...editingStep.questions, q] })
+  }
+
+  function removeQuestion(idx: number) {
+    if (!editingStep) return
+    updateStepEditor({ questions: editingStep.questions.filter((_, i) => i !== idx) })
+  }
+
   async function removeFlow(flowId: string) {
     if (!confirm('Remove this autoflow from the client? Their responses will be deleted.')) return
     await fetch(`/api/coach/clients/${clientId}/autoflows/${flowId}`, { method: 'DELETE' })
@@ -121,7 +223,118 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
     return <div className="p-6 text-sm text-gray-400">Loading…</div>
   }
 
-  // Response viewer
+  // ── Step content editor ───────────────────────────────────────────────────────
+  if (editingStep && selectedFlow) {
+    return (
+      <div className="p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <button
+            onClick={tryExitStepEditor}
+            className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-800 transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+            Back to flow
+          </button>
+          <button
+            onClick={saveStepContent}
+            disabled={savingStep || !stepIsDirty}
+            className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-gray-900 text-white hover:bg-gray-700 disabled:opacity-40 transition-colors"
+          >
+            {savingStep ? 'Saving…' : 'Save changes'}
+          </button>
+        </div>
+
+        {/* Client-specific note */}
+        <div className="flex items-start gap-2.5 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
+          <svg className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <p className="text-xs text-blue-700">
+            <span className="font-semibold">Client-specific edits.</span> Changes here apply only to this client and will not affect the main autoflow template.
+          </p>
+        </div>
+
+        {stepSaveError && (
+          <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-2">{stepSaveError}</p>
+        )}
+
+        <div>
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">
+            Step {editingStep.stepNumber}
+            {stepIsDirty && <span className="ml-2 text-amber-500 normal-case font-normal">· Unsaved changes</span>}
+          </p>
+        </div>
+
+        {/* Title */}
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-1">Step title</label>
+          <input
+            value={editingStep.title}
+            onChange={e => updateStepEditor({ title: e.target.value })}
+            placeholder={`Step ${editingStep.stepNumber}`}
+            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+          />
+        </div>
+
+        {/* Description */}
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-1">Description (optional)</label>
+          <textarea
+            value={editingStep.description}
+            onChange={e => updateStepEditor({ description: e.target.value })}
+            placeholder="Intro text shown to the client…"
+            rows={2}
+            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+          />
+        </div>
+
+        {/* Questions */}
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-2">Questions</label>
+          <div className="space-y-2">
+            {editingStep.questions.map((q, i) => (
+              <div key={q.id} className="border border-gray-200 rounded-xl p-3 space-y-2 bg-white">
+                <div className="flex items-start gap-2">
+                  <div className="flex-1 space-y-1.5">
+                    <input
+                      value={q.label}
+                      onChange={e => updateQuestion(i, { label: e.target.value })}
+                      placeholder={q.type === 'note' ? 'Note text…' : q.type === 'section' ? 'Section heading…' : 'Question…'}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    />
+                    <select
+                      value={q.type}
+                      onChange={e => updateQuestion(i, { type: e.target.value as Question['type'] })}
+                      className="text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none bg-white"
+                    >
+                      {Q_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                  </div>
+                  <button
+                    onClick={() => removeQuestion(i)}
+                    className="text-gray-300 hover:text-red-500 transition-colors flex-shrink-0 mt-1"
+                    title="Remove question"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            ))}
+            <button
+              onClick={addQuestion}
+              className="w-full text-xs text-gray-500 hover:text-gray-800 border border-dashed border-gray-200 rounded-xl py-2 px-3 transition-colors"
+            >
+              + Add question
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Response viewer ───────────────────────────────────────────────────────────
   if (viewingResponse) {
     return (
       <div className="p-5 space-y-4">
@@ -151,7 +364,7 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
     )
   }
 
-  // Flow detail view
+  // ── Flow detail view ──────────────────────────────────────────────────────────
   if (selectedFlow) {
     const completedCount = selectedFlow.steps.filter(s => s.response).length
     const total = selectedFlow.steps.length
@@ -206,7 +419,6 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
             </div>
             <span className="text-xs text-gray-400">{completedCount}/{total} completed</span>
           </div>
-          {/* Progress bar */}
           <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
             <div className="h-full bg-gray-900 rounded-full transition-all" style={{ width: `${total > 0 ? (completedCount / total) * 100 : 0}%` }} />
           </div>
@@ -258,24 +470,34 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
                       >
                         {savingStepDate ? 'Saving…' : 'Save'}
                       </button>
-                      <button
-                        onClick={() => setEditingStepDate(null)}
-                        className="text-xs text-gray-400 hover:text-gray-600"
-                      >
-                        Cancel
-                      </button>
+                      <button onClick={() => setEditingStepDate(null)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
                     </div>
                   ) : (
                     <p className="text-xs text-gray-400">
-                      Due {effectiveDate.toLocaleDateString()}
+                      {s.trigger_type === 'on_step_complete'
+                        ? `Unlocks after step ${s.trigger_step_number ?? '?'} completed`
+                        : `Due ${effectiveDate.toLocaleDateString()}`}
                       {s.due_date_override && <span className="ml-1 text-blue-500">· custom date</span>}
-                      {s.has_override && <span className="ml-1 text-blue-500">· custom questions</span>}
+                      {s.has_override && <span className="ml-1 text-blue-500">· customised</span>}
                     </p>
                   )}
                 </div>
 
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  {!s.response && !isEditingThisStep && (
+                  {/* Edit step content */}
+                  {!s.response && (
+                    <button
+                      onClick={() => openStepEditor(s)}
+                      className="text-gray-300 hover:text-blue-500 transition-colors"
+                      title="Edit step content for this client"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 11l6.536-6.536a2 2 0 012.828 2.828L11.828 13.828A2 2 0 0110 14H8v-2a2 2 0 01.586-1.414z" />
+                      </svg>
+                    </button>
+                  )}
+                  {/* Edit step date */}
+                  {!s.response && !isEditingThisStep && s.trigger_type !== 'on_step_complete' && (
                     <button
                       onClick={() => setEditingStepDate({
                         stepNumber: s.step_number,
@@ -306,7 +528,7 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
     )
   }
 
-  // Assign flow modal
+  // ── Assign flow modal ─────────────────────────────────────────────────────────
   if (showAssign) {
     return (
       <div className="p-5 space-y-4">
@@ -370,12 +592,7 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
                   assignCheckinPrompt ? 'bg-blue-600' : 'bg-gray-200',
                 ].join(' ')}
               >
-                <span
-                  className={[
-                    'inline-block h-5 w-5 rounded-full bg-white shadow ring-0 transition-transform duration-200',
-                    assignCheckinPrompt ? 'translate-x-5' : 'translate-x-0',
-                  ].join(' ')}
-                />
+                <span className={['inline-block h-5 w-5 rounded-full bg-white shadow ring-0 transition-transform duration-200', assignCheckinPrompt ? 'translate-x-5' : 'translate-x-0'].join(' ')} />
               </button>
             </div>
 
@@ -392,7 +609,7 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
     )
   }
 
-  // Flow list
+  // ── Flow list ─────────────────────────────────────────────────────────────────
   return (
     <div className="p-5 space-y-4">
       <div className="flex items-center justify-between">
@@ -409,10 +626,7 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
         <div className="bg-gray-50 rounded-xl p-5 text-center space-y-2">
           <p className="text-sm text-gray-500">No autoflows assigned yet.</p>
           <p className="text-xs text-gray-400">Assign a check-in or onboarding sequence to automate this client&apos;s journey.</p>
-          <button
-            onClick={() => setShowAssign(true)}
-            className="mt-1 text-sm font-semibold text-gray-700 underline underline-offset-2"
-          >
+          <button onClick={() => setShowAssign(true)} className="mt-1 text-sm font-semibold text-gray-700 underline underline-offset-2">
             Assign one →
           </button>
         </div>
@@ -438,7 +652,6 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </div>
-                {/* Progress bar */}
                 <div className="mt-2.5 h-1 bg-gray-100 rounded-full overflow-hidden">
                   <div className="h-full bg-gray-900 rounded-full" style={{ width: `${total > 0 ? (completed / total) * 100 : 0}%` }} />
                 </div>

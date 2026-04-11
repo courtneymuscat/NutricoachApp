@@ -22,12 +22,12 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
   const [{ data: steps }, { data: overrides }, { data: responses }] = await Promise.all([
     supabase
       .from('autoflow_template_steps')
-      .select('step_number, title, description, questions, day_offset')
+      .select('step_number, title, description, questions, day_offset, trigger_type, trigger_step_number')
       .eq('template_id', flow.template_id)
       .order('step_number'),
     supabase
       .from('client_autoflow_step_overrides')
-      .select('step_number, questions, due_date')
+      .select('step_number, title, description, questions, due_date')
       .eq('client_autoflow_id', flowId),
     supabase
       .from('autoflow_responses')
@@ -36,20 +36,25 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
       .order('step_number'),
   ])
 
-  const overrideMap: Record<number, { questions?: unknown[]; due_date?: string | null }> = Object.fromEntries(
-    (overrides ?? []).map(o => [o.step_number, { questions: o.questions, due_date: o.due_date ?? null }])
+  const overrideMap: Record<number, { title?: string | null; description?: string | null; questions?: unknown[]; due_date?: string | null }> = Object.fromEntries(
+    (overrides ?? []).map(o => [o.step_number, { title: o.title ?? null, description: o.description ?? null, questions: o.questions, due_date: o.due_date ?? null }])
   )
   const responseMap: Record<number, { submitted_at: string; answers: unknown }> = Object.fromEntries(
     (responses ?? []).map(r => [r.step_number, { submitted_at: r.submitted_at, answers: r.answers }])
   )
 
-  const enrichedSteps = (steps ?? []).map(s => ({
-    ...s,
-    questions: overrideMap[s.step_number]?.questions ?? s.questions,
-    has_override: !!overrideMap[s.step_number]?.questions,
-    due_date_override: overrideMap[s.step_number]?.due_date ?? null,
-    response: responseMap[s.step_number] ?? null,
-  }))
+  const enrichedSteps = (steps ?? []).map(s => {
+    const ov = overrideMap[s.step_number]
+    return {
+      ...s,
+      title: ov?.title ?? s.title,
+      description: ov?.description ?? s.description,
+      questions: ov?.questions ?? s.questions,
+      has_override: !!(ov?.questions || ov?.title || ov?.description),
+      due_date_override: ov?.due_date ?? null,
+      response: responseMap[s.step_number] ?? null,
+    }
+  })
 
   return Response.json({ ...flow, steps: enrichedSteps })
 }
@@ -60,7 +65,7 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
   const coachId = await requireCoach()
   if (!coachId) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { step_number, questions, due_date } = await req.json()
+  const { step_number, questions, due_date, title, description } = await req.json()
   if (!step_number) return Response.json({ error: 'step_number required' }, { status: 400 })
 
   const supabase = await createClient()
@@ -73,13 +78,12 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
     .single()
   if (!flow) return Response.json({ error: 'Not found' }, { status: 404 })
 
-  // Build the upsert payload — only include due_date if explicitly passed
-  const upsertPayload: Record<string, unknown> = {
-    client_autoflow_id: flowId,
-    step_number,
-    questions: questions ?? [],
-  }
+  // Build the upsert payload — only include fields that were explicitly passed
+  const upsertPayload: Record<string, unknown> = { client_autoflow_id: flowId, step_number }
+  if (questions !== undefined) upsertPayload.questions = questions ?? []
   if (due_date !== undefined) upsertPayload.due_date = due_date ?? null
+  if (title !== undefined) upsertPayload.title = title ?? null
+  if (description !== undefined) upsertPayload.description = description ?? null
 
   await supabase
     .from('client_autoflow_step_overrides')
@@ -196,6 +200,16 @@ export async function DELETE(_req: NextRequest, { params }: Ctx) {
   if (!coachId) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
   const supabase = await createClient()
+
+  // Remove autoflow calendar events for this flow before deleting the flow
+  await supabase
+    .from('calendar_events')
+    .delete()
+    .eq('coach_id', coachId)
+    .eq('client_id', clientId)
+    .eq('type', 'autoflow')
+    .filter('content->>flow_id', 'eq', flowId)
+
   await supabase
     .from('client_autoflows')
     .delete()
