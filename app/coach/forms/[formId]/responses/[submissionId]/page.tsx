@@ -22,29 +22,61 @@ const BUBBLE_COLORS = [
   'bg-green-100 text-green-700',
   'bg-amber-100 text-amber-700',
   'bg-rose-100 text-rose-700',
+  'bg-cyan-100 text-cyan-700',
+  'bg-fuchsia-100 text-fuchsia-700',
 ]
+
+function bubbleColor(text: string) {
+  const idx = Math.abs(text.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)) % BUBBLE_COLORS.length
+  return BUBBLE_COLORS[idx]
+}
+
+function Bubble({ text }: { text: string }) {
+  return (
+    <span className={`inline-block px-4 py-1.5 rounded-xl text-sm font-medium ${bubbleColor(text)}`}>
+      {text}
+    </span>
+  )
+}
 
 function AnswerDisplay({ value, type }: { value: string; type: string }) {
   if (!value) {
     return <span className="text-gray-400 italic text-sm">No answer</span>
   }
 
-  // Choice / yes-no: render as colored bubble
-  if (type === 'choice' || type === 'yesno') {
-    const colorIdx = Math.abs(value.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)) % BUBBLE_COLORS.length
-    const color = type === 'yesno'
-      ? (value === 'Yes' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700')
-      : BUBBLE_COLORS[colorIdx]
+  // Try parsing JSON arrays (checkbox / multi-select answers stored as ["a","b"])
+  let parsed: string[] | null = null
+  if (value.startsWith('[')) {
+    try {
+      const arr = JSON.parse(value)
+      if (Array.isArray(arr)) parsed = arr.map(String)
+    } catch { /* not valid JSON, treat as plain string */ }
+  }
+
+  // Checkbox (multi-select) — multiple bubbles
+  if (type === 'checkbox' || parsed) {
+    const items = parsed ?? [value]
+    if (items.length === 0) return <span className="text-gray-400 italic text-sm">No answer</span>
     return (
-      <div>
-        <span className={`inline-block px-4 py-1.5 rounded-xl text-sm font-medium ${color}`}>
-          {value}
-        </span>
+      <div className="flex flex-wrap gap-2">
+        {items.map((item, i) => <Bubble key={i} text={item} />)}
       </div>
     )
   }
 
-  // Scale: render as a numbered circle
+  // Radio / dropdown — single bubble
+  if (type === 'radio' || type === 'dropdown' || type === 'choice' || type === 'yesno') {
+    const color = type === 'yesno'
+      ? (value === 'Yes' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700')
+      : bubbleColor(value)
+    return (
+      <span className={`inline-block px-4 py-1.5 rounded-xl text-sm font-medium ${color}`}>
+        {value}
+      </span>
+    )
+  }
+
+  // Scale — numbered circle
   if (type === 'scale') {
     return (
       <div className="flex items-center gap-2">
@@ -56,7 +88,7 @@ function AnswerDisplay({ value, type }: { value: string; type: string }) {
     )
   }
 
-  // Text / textarea: plain
+  // Text / textarea / number / default — plain
   return <p className="text-gray-900 text-sm whitespace-pre-wrap leading-relaxed">{value}</p>
 }
 
