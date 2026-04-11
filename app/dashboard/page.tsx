@@ -189,11 +189,17 @@ export default async function DashboardPage() {
           />
         )}
 
-        {/* Goals — set by coach, shown at top for coached clients */}
-        {isCoached && <GoalsPanel />}
+        {/* Autoflow tasks, resources & forms — shown when there are due steps with content */}
+        {isCoached && <AutoflowTasksPanel />}
 
         {/* Check-ins — top of page for coached clients */}
         {isCoached && <ScheduledCheckIns />}
+
+        {/* Goals — set by coach */}
+        {isCoached && <GoalsPanel />}
+
+        {/* Resources — shown when coach has assigned any */}
+        {isCoached && <ResourcesPanel />}
 
         {/* Coached-only sections: Meal Plan, Habits */}
         {isCoached && hasMealPlan && (
@@ -209,12 +215,6 @@ export default async function DashboardPage() {
             <HabitsPanel />
           </section>
         )}
-
-        {/* Resources — shown when coach has assigned any */}
-        {isCoached && <ResourcesPanel />}
-
-        {/* Autoflow tasks, resources & forms — shown when there are due steps with content */}
-        {isCoached && <AutoflowTasksPanel />}
 
         {/* Daily targets card */}
         {(!isCoached || showDailyTargets) && profile?.target_calories ? (
