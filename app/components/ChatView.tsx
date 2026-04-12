@@ -214,7 +214,7 @@ export default function ChatView({
         const blob = new Blob(chunksRef.current, { type: mimeType })
         await uploadAndSendAudio(blob, mimeType, recordingSecondsRef.current)
       }
-      mr.start()
+      mr.start(200)
       mediaRecorderRef.current = mr
       setRecording(true)
       setRecordingSeconds(0)
@@ -247,6 +247,10 @@ export default function ChatView({
   }
 
   async function uploadAndSendAudio(blob: Blob, mimeType: string, durationSecs: number) {
+    if (blob.size === 0) {
+      alert('Recording was empty. Please try again.')
+      return
+    }
     setSending(true)
     try {
       const ext = mimeType.includes('mp4') ? 'm4a' : 'webm'
@@ -258,8 +262,7 @@ export default function ChatView({
 
       if (error) {
         console.error('Upload error:', error)
-        alert('Failed to upload voice note. Please try again.')
-        setSending(false)
+        alert(`Failed to upload voice note: ${error.message}`)
         return
       }
 
@@ -268,7 +271,20 @@ export default function ChatView({
         .getPublicUrl(data.path)
 
       // Store recording duration in body so the player can display it immediately
-      await sendMessage(String(durationSecs), urlData.publicUrl, 'audio')
+      const res = await fetch(`/api/conversations/${conversationId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body: String(durationSecs), attachment_url: urlData.publicUrl, attachment_type: 'audio' }),
+      })
+      if (res.ok) {
+        const msg = await res.json()
+        setMessages((prev) => prev.find((m) => m.id === msg.id) ? prev : [...prev, msg])
+        setTimeout(() => scrollToBottom(true), 50)
+      } else {
+        const err = await res.json().catch(() => ({}))
+        console.error('Send message error:', err)
+        alert(`Failed to send voice note: ${err.error ?? res.statusText}`)
+      }
     } finally {
       setSending(false)
     }
