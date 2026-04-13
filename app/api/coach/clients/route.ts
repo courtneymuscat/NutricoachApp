@@ -29,7 +29,7 @@ export async function GET() {
     id: r.client_id,
     email: profileMap[r.client_id]?.email ?? 'Unknown',
     full_name: profileMap[r.client_id]?.full_name ?? null,
-    subscription_tier: profileMap[r.client_id]?.subscription_tier ?? 'tier_1',
+    subscription_tier: profileMap[r.client_id]?.subscription_tier ?? 'individual_free',
     joined_at: r.accepted_at,
   }))
 

@@ -27,7 +27,7 @@ export async function POST() {
   // Revert to free tier
   await supabase
     .from('profiles')
-    .update({ subscription_tier: 'tier_1' })
+    .update({ subscription_tier: 'individual_free' })
     .eq('id', clientId)
 
   return Response.json({ ok: true })

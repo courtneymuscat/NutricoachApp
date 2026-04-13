@@ -1,14 +1,14 @@
 // ─── Feature keys ────────────────────────────────────────────────────────────
 
 export const FEATURES = {
-  // ── Tier 1 — Tracker (Free) ───────────────────────────────────────────────
+  // ── Tier: individual_free (Free) ──────────────────────────────────────────
   FOOD_LOG:           'food_log',       // manual food entry + macros
   WORKOUT_BASIC:      'workout_basic',  // basic exercise logging
   WEIGHT_BASIC:       'weight_basic',   // weight entry, no chart
   CHECKIN_BASIC:      'checkin_basic',  // sleep + energy only
   CYCLE_BASIC:        'cycle_basic',    // period dates + phase bar only
 
-  // ── Tier 2 — Optimiser ($19.99 AUD/mo) ───────────────────────────────────
+  // ── Tier: individual_optimiser ($19.99 AUD/mo) ────────────────────────────
   MEAL_BUILDER:        'meal_builder',
   SAVED_MEALS:         'saved_meals',
   WORKOUT_SECTIONS:    'workout_sections',
@@ -19,7 +19,7 @@ export const FEATURES = {
   PROGRESS_PHOTOS:     'progress_photos',    // upload & view progress photos
   PROGRESS_COMPARE:    'progress_compare',   // before/after photo comparison
 
-  // ── Tier 3 — Elite ($34.99 AUD/mo) ───────────────────────────────────────
+  // ── Tier: individual_elite ($34.99 AUD/mo) ────────────────────────────────
   MEAL_SCANNER:         'meal_scanner',         // AI photo → detect + log foods
   ADVANCED_ANALYTICS:   'advanced_analytics',   // trends: nutrition/training/recovery
   CYCLE_INTELLIGENCE:   'cycle_intelligence',   // predictions + personalised insights
@@ -36,15 +36,29 @@ export const FEATURES = {
   EXERCISE_LIBRARY_EDIT:  'exercise_library_edit',
   CUSTOM_PROGRAMS:        'custom_programs',
   TEAM_MANAGEMENT:        'team_management',
+
+  // ── Coach Business features ───────────────────────────────────────────────
+  MULTI_COACH:        'multi_coach',
+  ORG_DASHBOARD:      'org_dashboard',
+  ORG_TEMPLATES:      'org_templates',
+  ORG_PERMISSIONS:    'org_permissions',
+  CUSTOM_BRANDING:    'custom_branding',
 } as const
 
 export type Feature = typeof FEATURES[keyof typeof FEATURES]
-export type SubscriptionTier = 'tier_1' | 'tier_2' | 'tier_3' | 'coached'
+export type SubscriptionTier =
+  | 'individual_free'
+  | 'individual_optimiser'
+  | 'individual_elite'
+  | 'coached'
+  | 'coach_solo'
+  | 'coach_pro'
+  | 'coach_business'
 export type UserType = 'individual' | 'coach' | 'business'
 
 // ─── Individual tier → feature mapping ───────────────────────────────────────
 
-const TIER_1_FEATURES: Feature[] = [
+const INDIVIDUAL_FREE_FEATURES: Feature[] = [
   FEATURES.FOOD_LOG,
   FEATURES.WORKOUT_BASIC,
   FEATURES.WEIGHT_BASIC,
@@ -52,8 +66,8 @@ const TIER_1_FEATURES: Feature[] = [
   FEATURES.CYCLE_BASIC,
 ]
 
-const TIER_2_FEATURES: Feature[] = [
-  ...TIER_1_FEATURES,
+const INDIVIDUAL_OPTIMISER_FEATURES: Feature[] = [
+  ...INDIVIDUAL_FREE_FEATURES,
   FEATURES.MEAL_BUILDER,
   FEATURES.SAVED_MEALS,
   FEATURES.WORKOUT_SECTIONS,
@@ -65,8 +79,8 @@ const TIER_2_FEATURES: Feature[] = [
   FEATURES.PROGRESS_COMPARE,
 ]
 
-const TIER_3_FEATURES: Feature[] = [
-  ...TIER_2_FEATURES,
+const INDIVIDUAL_ELITE_FEATURES: Feature[] = [
+  ...INDIVIDUAL_OPTIMISER_FEATURES,
   FEATURES.MEAL_SCANNER,
   FEATURES.ADVANCED_ANALYTICS,
   FEATURES.CYCLE_INTELLIGENCE,
@@ -75,14 +89,14 @@ const TIER_3_FEATURES: Feature[] = [
 
 // ─── Coach tier → feature mapping ────────────────────────────────────────────
 
-const COACH_STARTER_FEATURES: Feature[] = [
+const COACH_SOLO_FEATURES: Feature[] = [
   FEATURES.CLIENT_MANAGEMENT,
   FEATURES.FORM_TEMPLATES,
   FEATURES.FORM_BUILDER_CUSTOM,
 ]
 
-export const COACH_GROWTH_FEATURES: Feature[] = [
-  ...COACH_STARTER_FEATURES,
+export const COACH_PRO_FEATURES: Feature[] = [
+  ...COACH_SOLO_FEATURES,
   FEATURES.COACH_CHECKIN_FEED,
   FEATURES.COACH_CHECKIN_FEEDBACK,
   FEATURES.COACH_NOTES,
@@ -91,16 +105,29 @@ export const COACH_GROWTH_FEATURES: Feature[] = [
   FEATURES.CUSTOM_PROGRAMS,
 ]
 
+export const COACH_BUSINESS_FEATURES: Feature[] = [
+  ...COACH_PRO_FEATURES,
+  FEATURES.MULTI_COACH,
+  FEATURES.ORG_DASHBOARD,
+  FEATURES.ORG_TEMPLATES,
+  FEATURES.ORG_PERMISSIONS,
+  FEATURES.CUSTOM_BRANDING,
+]
+
 export const TIER_FEATURES: Record<SubscriptionTier, Feature[]> = {
-  tier_1: TIER_1_FEATURES,
-  tier_2: TIER_2_FEATURES,
-  tier_3: TIER_3_FEATURES,
-  coached: TIER_3_FEATURES, // coached clients get full Elite-level access
+  individual_free:      INDIVIDUAL_FREE_FEATURES,
+  individual_optimiser: INDIVIDUAL_OPTIMISER_FEATURES,
+  individual_elite:     INDIVIDUAL_ELITE_FEATURES,
+  coached:              INDIVIDUAL_ELITE_FEATURES, // coached clients get full Elite-level access
+  coach_solo:           COACH_SOLO_FEATURES,
+  coach_pro:            COACH_PRO_FEATURES,
+  coach_business:       COACH_BUSINESS_FEATURES,
 }
 
 export const COACH_TIER_FEATURES: Record<string, Feature[]> = {
-  tier_1: COACH_STARTER_FEATURES,
-  tier_2: COACH_GROWTH_FEATURES,
+  coach_solo:     COACH_SOLO_FEATURES,
+  coach_pro:      COACH_PRO_FEATURES,
+  coach_business: COACH_BUSINESS_FEATURES,
 }
 
 // ─── canAccess helper ─────────────────────────────────────────────────────────
@@ -114,7 +141,7 @@ export function canAccess(
   if (userType === 'coach') {
     return (COACH_TIER_FEATURES[tier] ?? []).includes(feature)
   }
-  return TIER_FEATURES[tier].includes(feature)
+  return (TIER_FEATURES[tier] ?? []).includes(feature)
 }
 
 // ─── Pricing config ───────────────────────────────────────────────────────────
@@ -129,11 +156,12 @@ export type PricingPlan = {
   features: string[]
   highlighted: boolean
   clientLimit?: number      // coach plans only
+  seatLimit?: number        // coach_business only
 }
 
 export const INDIVIDUAL_PLANS: PricingPlan[] = [
   {
-    id: 'tier_1',
+    id: 'individual_free',
     planKey: 'individual_tier_1',
     name: 'Tracker',
     tagline: 'Free forever',
@@ -151,7 +179,7 @@ export const INDIVIDUAL_PLANS: PricingPlan[] = [
     highlighted: false,
   },
   {
-    id: 'tier_2',
+    id: 'individual_optimiser',
     planKey: 'individual_tier_2',
     name: 'Optimiser',
     tagline: 'Most popular',
@@ -169,7 +197,7 @@ export const INDIVIDUAL_PLANS: PricingPlan[] = [
     highlighted: true,
   },
   {
-    id: 'tier_3',
+    id: 'individual_elite',
     planKey: 'individual_tier_3',
     name: 'Elite',
     tagline: 'For serious athletes',
@@ -190,9 +218,9 @@ export const INDIVIDUAL_PLANS: PricingPlan[] = [
 
 export const COACH_PLANS: PricingPlan[] = [
   {
-    id: 'tier_1',
+    id: 'coach_solo',
     planKey: 'coach_starter',
-    name: 'Starter',
+    name: 'Solo',
     tagline: 'Begin coaching',
     priceMonthly: 29,
     priceAnnualMonthly: 26,
@@ -208,16 +236,16 @@ export const COACH_PLANS: PricingPlan[] = [
     highlighted: false,
   },
   {
-    id: 'tier_2',
+    id: 'coach_pro',
     planKey: 'coach_growth',
-    name: 'Growth',
+    name: 'Pro',
     tagline: 'Scale your practice',
     priceMonthly: 69,
     priceAnnualMonthly: 62,
     clientLimit: 20,
     features: [
       'Up to 20 clients',
-      'Everything in Starter',
+      'Everything in Solo',
       'Check-in feed + client feedback',
       'Coach notes (private per client)',
       'JotForm integration',
@@ -225,5 +253,25 @@ export const COACH_PLANS: PricingPlan[] = [
       'Full client data: food, weight, workouts',
     ],
     highlighted: true,
+  },
+  {
+    id: 'coach_business',
+    planKey: 'coach_business',
+    name: 'Business',
+    tagline: 'For teams & studios',
+    priceMonthly: 199,
+    priceAnnualMonthly: 179,
+    clientLimit: 100,
+    seatLimit: 100,
+    features: [
+      'Up to 100 clients',
+      'Everything in Pro',
+      'Multi-coach team management',
+      'Organisation dashboard',
+      'Shared template library',
+      'Role-based permissions',
+      'Custom branding',
+    ],
+    highlighted: false,
   },
 ]

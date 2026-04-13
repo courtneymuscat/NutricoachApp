@@ -5,11 +5,12 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { createClient } from '@/lib/supabase/server'
 
 const PLAN_KEY_TO_TIER: Record<string, string> = {
-  individual_tier_1: 'tier_1',
-  individual_tier_2: 'tier_2',
-  individual_tier_3: 'tier_3',
-  coach_starter: 'tier_1',
-  coach_growth: 'tier_2',
+  individual_tier_1: 'individual_free',
+  individual_tier_2: 'individual_optimiser',
+  individual_tier_3: 'individual_elite',
+  coach_starter:     'coach_solo',
+  coach_growth:      'coach_pro',
+  coach_business:    'coach_business',
 }
 
 const PLAN_KEY_TO_USER_TYPE: Record<string, string> = {
@@ -43,7 +44,7 @@ export default async function SubscribeSuccessPage({
       }
 
       if (resolvedUserId && planKey) {
-        const tier = PLAN_KEY_TO_TIER[planKey] ?? 'tier_2'
+        const tier = PLAN_KEY_TO_TIER[planKey] ?? 'individual_optimiser'
         const resolvedUserType = userType ?? PLAN_KEY_TO_USER_TYPE[planKey] ?? 'individual'
         const service = createServiceClient()
         await service.from('profiles').upsert({

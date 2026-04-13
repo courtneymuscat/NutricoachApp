@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
       target_fat:           target_fat ?? null,
       adjustment_pct:       adjustment_pct ?? null,
       onboarding_completed: true,
-      subscription_tier:    existing?.subscription_tier ?? 'tier_1',
+      subscription_tier:    existing?.subscription_tier ?? 'individual_free',
     }, { onConflict: 'id' })
 
   if (error) return Response.json({ error: error.message }, { status: 500 })

@@ -35,14 +35,25 @@ export default async function ClientProfilePage({
     .eq('id', clientId)
     .single()
 
-  const tierLabel: Record<string, string> = { tier_1: 'Free', tier_2: 'Pro', tier_3: 'Elite', coached: 'Coached' }
-  const tierColor: Record<string, string> = {
-    tier_1: 'bg-gray-100 text-gray-500',
-    tier_2: 'bg-blue-100 text-blue-600',
-    tier_3: 'bg-purple-100 text-purple-600',
-    coached: 'bg-green-100 text-green-600',
+  const tierLabel: Record<string, string> = {
+    individual_free:      'Free',
+    individual_optimiser: 'Optimiser',
+    individual_elite:     'Elite',
+    coached:              'Coached',
+    coach_solo:           'Solo',
+    coach_pro:            'Pro',
+    coach_business:       'Business',
   }
-  const tier = profile?.subscription_tier ?? 'tier_1'
+  const tierColor: Record<string, string> = {
+    individual_free:      'bg-gray-100 text-gray-500',
+    individual_optimiser: 'bg-blue-100 text-blue-600',
+    individual_elite:     'bg-purple-100 text-purple-600',
+    coached:              'bg-green-100 text-green-600',
+    coach_solo:           'bg-gray-100 text-gray-500',
+    coach_pro:            'bg-blue-100 text-blue-600',
+    coach_business:       'bg-indigo-100 text-indigo-600',
+  }
+  const tier = profile?.subscription_tier ?? 'individual_free'
 
   return (
     <main className="flex-1 flex flex-col min-h-0">

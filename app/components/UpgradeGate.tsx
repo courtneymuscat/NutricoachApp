@@ -35,7 +35,7 @@ export default function UpgradeGate({ feature, children, message, overlay = fals
         .select('subscription_tier')
         .eq('id', session.user.id)
         .single()
-      setTier((profile?.subscription_tier as SubscriptionTier | null) ?? 'tier_1')
+      setTier((profile?.subscription_tier as SubscriptionTier | null) ?? 'individual_free')
       setLoading(false)
     }
     load()

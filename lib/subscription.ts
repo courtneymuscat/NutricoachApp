@@ -8,9 +8,9 @@ export type Subscription = {
 }
 
 const DEFAULTS: Subscription = {
-  tier: 'tier_1',
+  tier: 'individual_free',
   userType: 'individual',
-  canAccess: (f) => canAccess(f, 'tier_1', 'individual'),
+  canAccess: (f) => canAccess(f, 'individual_free', 'individual'),
 }
 
 export async function getSubscription(): Promise<Subscription> {
@@ -24,13 +24,13 @@ export async function getSubscription(): Promise<Subscription> {
     .eq('id', user.id)
     .single()
 
-  const tier = (profile?.subscription_tier as SubscriptionTier | null) ?? 'tier_1'
+  const tier = (profile?.subscription_tier as SubscriptionTier | null) ?? 'individual_free'
   const userType = (profile?.user_type as UserType | null) ?? 'individual'
 
   // Coaches get their coach-specific features plus full elite individual features
   const features = userType === 'coach'
-    ? [...(COACH_TIER_FEATURES[tier] ?? []), ...TIER_FEATURES['tier_3']]
-    : (TIER_FEATURES[tier] ?? TIER_FEATURES['tier_1'])
+    ? [...(COACH_TIER_FEATURES[tier] ?? []), ...TIER_FEATURES['individual_elite']]
+    : (TIER_FEATURES[tier] ?? TIER_FEATURES['individual_free'])
 
   return {
     tier,

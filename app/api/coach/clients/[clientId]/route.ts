@@ -122,7 +122,7 @@ export async function PATCH(
   const admin = createAdminClient()
   await admin
     .from('profiles')
-    .update({ subscription_tier: 'tier_1' })
+    .update({ subscription_tier: 'individual_free' })
     .eq('id', clientId)
 
   return Response.json({ ok: true })
@@ -148,7 +148,7 @@ export async function DELETE(
   const admin = createAdminClient()
   await admin
     .from('profiles')
-    .update({ subscription_tier: 'tier_1' })
+    .update({ subscription_tier: 'individual_free' })
     .eq('id', clientId)
 
   return Response.json({ ok: true })

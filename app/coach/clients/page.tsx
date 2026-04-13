@@ -48,7 +48,7 @@ export default async function CoachClientsPage() {
         id: r.client_id,
         email: p?.email ?? 'Unknown',
         name: ((p as Record<string, unknown>)?.full_name as string | null) ?? ((p as Record<string, unknown>)?.first_name as string | null) ?? null,
-        tier: p?.subscription_tier ?? 'tier_1',
+        tier: p?.subscription_tier ?? 'individual_free',
         joinedAt: r.accepted_at,
         lastCheckIn: lastCheckIn[r.client_id] ?? null,
       }

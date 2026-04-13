@@ -5,11 +5,12 @@ import type Stripe from 'stripe'
 
 // Plan key → subscription_tier mapping
 const PLAN_KEY_TO_TIER: Record<string, string> = {
-  individual_tier_1: 'tier_1',
-  individual_tier_2: 'tier_2',
-  individual_tier_3: 'tier_3',
-  coach_starter: 'tier_1',
-  coach_growth: 'tier_2',
+  individual_tier_1: 'individual_free',
+  individual_tier_2: 'individual_optimiser',
+  individual_tier_3: 'individual_elite',
+  coach_starter:     'coach_solo',
+  coach_growth:      'coach_pro',
+  coach_business:    'coach_business',
 }
 
 const PLAN_KEY_TO_USER_TYPE: Record<string, string> = {
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest) {
       console.log('Webhook checkout.session.completed', { userId, planKey, userType })
 
       if (userId && planKey) {
-        const tier = PLAN_KEY_TO_TIER[planKey] ?? 'tier_1'
+        const tier = PLAN_KEY_TO_TIER[planKey] ?? 'individual_free'
         const resolvedUserType = userType ?? PLAN_KEY_TO_USER_TYPE[planKey] ?? 'individual'
 
         const { error } = await supabase.from('profiles').upsert({
@@ -74,7 +75,7 @@ export async function POST(req: NextRequest) {
 
       if (profile) {
         await supabase.from('profiles').update({
-          subscription_tier: 'tier_1',
+          subscription_tier: 'individual_free',
           stripe_subscription_id: null,
         }).eq('id', profile.id)
       }

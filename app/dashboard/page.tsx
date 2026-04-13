@@ -141,14 +141,14 @@ export default async function DashboardPage() {
           </div>
           {/* Tier badge */}
           <a href="/pricing" className="text-xs font-semibold px-3 py-1.5 rounded-full border hover:opacity-80 transition-colors" style={{
-            backgroundColor: isCoach ? '#eff6ff' : sub.tier === 'tier_3' ? '#f3e8ff' : sub.tier === 'tier_2' || sub.tier === 'coached' ? '#FFF5D0' : '#f3f4f6',
-            color: isCoach ? '#1d4ed8' : sub.tier === 'tier_3' ? '#7c3aed' : sub.tier === 'tier_2' || sub.tier === 'coached' ? '#B08000' : '#6b7280',
-            borderColor: isCoach ? '#bfdbfe' : sub.tier === 'tier_3' ? '#e9d5ff' : sub.tier === 'tier_2' || sub.tier === 'coached' ? '#FFE9A8' : '#e5e7eb',
+            backgroundColor: isCoach ? '#eff6ff' : sub.tier === 'individual_elite' ? '#f3e8ff' : sub.tier === 'individual_optimiser' || sub.tier === 'coached' ? '#FFF5D0' : '#f3f4f6',
+            color: isCoach ? '#1d4ed8' : sub.tier === 'individual_elite' ? '#7c3aed' : sub.tier === 'individual_optimiser' || sub.tier === 'coached' ? '#B08000' : '#6b7280',
+            borderColor: isCoach ? '#bfdbfe' : sub.tier === 'individual_elite' ? '#e9d5ff' : sub.tier === 'individual_optimiser' || sub.tier === 'coached' ? '#FFE9A8' : '#e5e7eb',
           }}>
             {isCoach
-              ? `Coach — ${sub.tier === 'tier_2' ? 'Growth' : 'Starter'}`
-              : sub.tier === 'tier_3' ? 'Elite'
-              : sub.tier === 'tier_2' ? 'Optimiser'
+              ? `Coach — ${sub.tier === 'coach_business' ? 'Business' : sub.tier === 'coach_pro' ? 'Pro' : 'Solo'}`
+              : sub.tier === 'individual_elite' ? 'Elite'
+              : sub.tier === 'individual_optimiser' ? 'Optimiser'
               : sub.tier === 'coached' ? 'Coached'
               : 'Tracker — Free'}
           </a>

@@ -52,7 +52,7 @@ export default async function CoachDashboard() {
       id: r.client_id,
       email: (p?.email as string) ?? 'Unknown',
       name: displayName,
-      tier: (p?.subscription_tier as string) ?? 'tier_1',
+      tier: (p?.subscription_tier as string) ?? 'individual_free',
       joinedAt: r.accepted_at,
     }
   })
