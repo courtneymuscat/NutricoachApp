@@ -1,6 +1,6 @@
 'use client'
 
-import { usePathname } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 
 const NAV = [
   {
@@ -106,8 +106,41 @@ const NAV = [
   },
 ]
 
-export default function CoachSidebar({ unreadCount, unreadMessages }: { unreadCount: number; unreadMessages: number }) {
+const ORG_NAV = [
+  {
+    href: '/coach/dashboard?tab=org',
+    tab: 'org',
+    label: 'Organisation',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+      </svg>
+    ),
+  },
+  {
+    href: '/coach/dashboard?tab=org-templates',
+    tab: 'org-templates',
+    label: 'Org Templates',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
+      </svg>
+    ),
+  },
+]
+
+export default function CoachSidebar({
+  unreadCount,
+  unreadMessages,
+  isBusinessTier,
+}: {
+  unreadCount: number
+  unreadMessages: number
+  isBusinessTier: boolean
+}) {
   const path = usePathname()
+  const searchParams = useSearchParams()
+  const activeTab = searchParams.get('tab')
 
   return (
     <>
@@ -120,7 +153,7 @@ export default function CoachSidebar({ unreadCount, unreadMessages }: { unreadCo
           </a>
         </div>
 
-        <nav className="flex-1 px-3 pb-4 space-y-0.5">
+        <nav className="flex-1 px-3 pb-4 space-y-0.5 overflow-y-auto">
           {NAV.map((item) => {
             const active = path === item.href || (item.href !== '/coach/dashboard' && path.startsWith(item.href))
             return (
@@ -148,6 +181,35 @@ export default function CoachSidebar({ unreadCount, unreadMessages }: { unreadCo
               </a>
             )
           })}
+
+          {/* Business-only org items */}
+          {isBusinessTier && (
+            <>
+              <div className="pt-3 pb-1 px-3">
+                <p className="text-[10px] font-semibold text-gray-300 uppercase tracking-wider">Business</p>
+              </div>
+              {ORG_NAV.map((item) => {
+                const active = path === '/coach/dashboard' && activeTab === item.tab
+                return (
+                  <a
+                    key={item.href}
+                    href={item.href}
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13.5px] font-medium transition-all ${
+                      active
+                        ? 'bg-purple-50 text-purple-700'
+                        : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'
+                    }`}
+                  >
+                    <span className={`flex-shrink-0 ${active ? 'text-purple-500' : 'text-gray-400'}`}>{item.icon}</span>
+                    <span>{item.label}</span>
+                    <span className="ml-auto text-[10px] bg-purple-100 text-purple-600 font-semibold px-1.5 py-0.5 rounded leading-none">
+                      Biz
+                    </span>
+                  </a>
+                )
+              })}
+            </>
+          )}
         </nav>
 
         <div className="px-3 pt-3 pb-5 border-t border-gray-100 space-y-0.5">
