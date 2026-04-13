@@ -1,55 +1,4 @@
--- Step 1: Update the check constraint to allow new values alongside old ones
-ALTER TABLE public.profiles
-DROP CONSTRAINT profiles_subscription_tier_check;
-
-ALTER TABLE public.profiles
-ADD CONSTRAINT profiles_subscription_tier_check CHECK (
-  subscription_tier = any (array[
-    'individual_free'::text,
-    'individual_optimiser'::text,
-    'individual_elite'::text,
-    'coached'::text,
-    'coach_solo'::text,
-    'coach_pro'::text,
-    'coach_business'::text
-  ])
-);
-
--- Step 2: Migrate existing data
-UPDATE public.profiles SET subscription_tier = 'individual_free'
-  WHERE subscription_tier = 'tier_1' AND user_type = 'individual';
-UPDATE public.profiles SET subscription_tier = 'individual_optimiser'
-  WHERE subscription_tier = 'tier_2' AND user_type = 'individual';
-UPDATE public.profiles SET subscription_tier = 'individual_elite'
-  WHERE subscription_tier = 'tier_3' AND user_type = 'individual';
-UPDATE public.profiles SET subscription_tier = 'coach_solo'
-  WHERE subscription_tier = 'tier_1' AND user_type = 'coach';
-UPDATE public.profiles SET subscription_tier = 'coach_pro'
-  WHERE subscription_tier = 'tier_2' AND user_type = 'coach';
--- coached stays as-is
-
--- Step 3: Add org_id and coach_discipline to profiles
-ALTER TABLE public.profiles
-ADD COLUMN IF NOT EXISTS org_id uuid null references public.organisations(id) on delete set null,
-ADD COLUMN IF NOT EXISTS coach_discipline text null,
-ADD COLUMN IF NOT EXISTS subscription_seat_count integer not null default 0,
-ADD CONSTRAINT profiles_coach_discipline_check CHECK (
-  coach_discipline is null or
-  coach_discipline = any (array[
-    'pt'::text,
-    'nutrition'::text,
-    'both'::text
-  ])
-);
-
--- Step 4: Add org_id to coach_clients
-ALTER TABLE public.coach_clients
-ADD COLUMN IF NOT EXISTS org_id uuid null references public.organisations(id) on delete set null;
-
-CREATE INDEX IF NOT EXISTS coach_clients_org_id_idx
-  ON public.coach_clients(org_id);
-
--- Step 5: Create organisations table
+-- Step 5: Create organisations table (must exist before anything references it)
 CREATE TABLE IF NOT EXISTS public.organisations (
   id uuid not null default gen_random_uuid(),
   name text not null,
@@ -76,15 +25,7 @@ CREATE TABLE IF NOT EXISTS public.organisations (
 
 ALTER TABLE public.organisations ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "org members can view their org"
-  ON public.organisations FOR SELECT
-  USING (
-    id IN (
-      SELECT org_id FROM public.profiles
-      WHERE id = auth.uid() AND org_id IS NOT NULL
-    )
-  );
-
+-- These two policies do NOT reference profiles.org_id so they can run now
 CREATE POLICY "org owner can update"
   ON public.organisations FOR UPDATE
   USING (owner_id = auth.uid());
@@ -98,7 +39,7 @@ CREATE POLICY "platform admin full access"
     )
   );
 
--- Step 6: Create org_members table (maps coaches to orgs with roles)
+-- Step 6: Create org_members table
 CREATE TABLE IF NOT EXISTS public.org_members (
   id uuid not null default gen_random_uuid(),
   org_id uuid not null references public.organisations(id) on delete cascade,
@@ -121,15 +62,7 @@ CREATE TABLE IF NOT EXISTS public.org_members (
 
 ALTER TABLE public.org_members ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "org members can view teammates"
-  ON public.org_members FOR SELECT
-  USING (
-    org_id IN (
-      SELECT org_id FROM public.profiles
-      WHERE id = auth.uid() AND org_id IS NOT NULL
-    )
-  );
-
+-- This policy does NOT reference profiles.org_id so it can run now
 CREATE POLICY "org owner and admin can manage members"
   ON public.org_members FOR ALL
   USING (
@@ -138,5 +71,77 @@ CREATE POLICY "org owner and admin can manage members"
       WHERE user_id = auth.uid()
       AND role IN ('owner', 'admin')
       AND is_active = true
+    )
+  );
+
+-- Step 1: Drop the old check constraint so data can be updated freely
+ALTER TABLE public.profiles
+DROP CONSTRAINT profiles_subscription_tier_check;
+
+-- Step 2: Migrate existing data (must run before new constraint is added)
+UPDATE public.profiles SET subscription_tier = 'individual_free'
+  WHERE subscription_tier = 'tier_1' AND user_type = 'individual';
+UPDATE public.profiles SET subscription_tier = 'individual_optimiser'
+  WHERE subscription_tier = 'tier_2' AND user_type = 'individual';
+UPDATE public.profiles SET subscription_tier = 'individual_elite'
+  WHERE subscription_tier = 'tier_3' AND user_type = 'individual';
+UPDATE public.profiles SET subscription_tier = 'coach_solo'
+  WHERE subscription_tier = 'tier_1' AND user_type = 'coach';
+UPDATE public.profiles SET subscription_tier = 'coach_pro'
+  WHERE subscription_tier = 'tier_2' AND user_type = 'coach';
+-- coached stays as-is
+
+-- Step 1b: Add new constraint now that all rows have valid values
+ALTER TABLE public.profiles
+ADD CONSTRAINT profiles_subscription_tier_check CHECK (
+  subscription_tier = any (array[
+    'individual_free'::text,
+    'individual_optimiser'::text,
+    'individual_elite'::text,
+    'coached'::text,
+    'coach_solo'::text,
+    'coach_pro'::text,
+    'coach_business'::text
+  ])
+);
+
+-- Step 3: Add org_id and coach_discipline to profiles
+-- profiles.org_id must exist before the two RLS policies below that reference it
+ALTER TABLE public.profiles
+ADD COLUMN IF NOT EXISTS org_id uuid null references public.organisations(id) on delete set null,
+ADD COLUMN IF NOT EXISTS coach_discipline text null,
+ADD COLUMN IF NOT EXISTS subscription_seat_count integer not null default 0,
+ADD CONSTRAINT profiles_coach_discipline_check CHECK (
+  coach_discipline is null or
+  coach_discipline = any (array[
+    'pt'::text,
+    'nutrition'::text,
+    'both'::text
+  ])
+);
+
+-- Step 4: Add org_id to coach_clients
+ALTER TABLE public.coach_clients
+ADD COLUMN IF NOT EXISTS org_id uuid null references public.organisations(id) on delete set null;
+
+CREATE INDEX IF NOT EXISTS coach_clients_org_id_idx
+  ON public.coach_clients(org_id);
+
+-- RLS policies that reference profiles.org_id — must run after Step 3
+CREATE POLICY "org members can view their org"
+  ON public.organisations FOR SELECT
+  USING (
+    id IN (
+      SELECT org_id FROM public.profiles
+      WHERE id = auth.uid() AND org_id IS NOT NULL
+    )
+  );
+
+CREATE POLICY "org members can view teammates"
+  ON public.org_members FOR SELECT
+  USING (
+    org_id IN (
+      SELECT org_id FROM public.profiles
+      WHERE id = auth.uid() AND org_id IS NOT NULL
     )
   );
