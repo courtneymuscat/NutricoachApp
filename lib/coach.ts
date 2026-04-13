@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { reportSeatUsage } from '@/lib/billing'
 
 /**
  * Accept a coach invite by token.
@@ -48,6 +49,11 @@ export async function acceptInvite(token: string, clientId: string): Promise<voi
 
   await admin.from('coach_clients').upsert(clientRow, { onConflict: 'coach_id,client_id' })
   await admin.from('profiles').update({ subscription_tier: 'coached' }).eq('id', clientId)
+
+  // Report seat usage for overage billing (non-blocking)
+  reportSeatUsage(invite.coach_id).catch((err) =>
+    console.error('reportSeatUsage error:', err instanceof Error ? err.message : String(err))
+  )
 
   // Auto-assign autoflow if one was specified in the invite
   if (autoflowId) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { getStripe, getStripePriceId } from '@/lib/stripe'
+import { getStripe, getStripePriceId, getStripeOveragePriceId } from '@/lib/stripe'
+import type Stripe from 'stripe'
 
 export async function POST(req: NextRequest) {
   try {
@@ -26,11 +27,20 @@ export async function POST(req: NextRequest) {
       'http://localhost:3000'
     )
 
+    // For coach plans include both the flat price and the metered overage price
+    const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
+      { price: priceId, quantity: 1 },
+    ]
+    const overagePriceId = getStripeOveragePriceId(planKey)
+    if (overagePriceId) {
+      lineItems.push({ price: overagePriceId }) // no quantity — metered billing
+    }
+
     const checkoutSession = await stripe.checkout.sessions.create({
       mode: 'subscription',
       payment_method_types: ['card'],
       ...(user?.email ? { customer_email: user.email } : {}),
-      line_items: [{ price: priceId, quantity: 1 }],
+      line_items: lineItems,
       metadata: {
         userId: user?.id ?? '',
         planKey,

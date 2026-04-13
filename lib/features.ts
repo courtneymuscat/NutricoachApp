@@ -219,7 +219,7 @@ export const INDIVIDUAL_PLANS: PricingPlan[] = [
 export const COACH_PLANS: PricingPlan[] = [
   {
     id: 'coach_solo',
-    planKey: 'coach_starter',
+    planKey: 'coach_solo',
     name: 'Solo',
     tagline: 'Begin coaching',
     priceMonthly: 29,
@@ -237,7 +237,7 @@ export const COACH_PLANS: PricingPlan[] = [
   },
   {
     id: 'coach_pro',
-    planKey: 'coach_growth',
+    planKey: 'coach_pro',
     name: 'Pro',
     tagline: 'Scale your practice',
     priceMonthly: 69,

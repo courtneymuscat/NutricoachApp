@@ -12,4 +12,9 @@ export function getStripePriceId(planKey: string, billing: 'monthly' | 'annual')
   return process.env[key] ?? null
 }
 
-// e.g. STRIPE_PRICE_INDIVIDUAL_TIER_2_MONTHLY, STRIPE_PRICE_COACH_STARTER_ANNUAL
+// e.g. STRIPE_PRICE_INDIVIDUAL_TIER_2_MONTHLY, STRIPE_PRICE_COACH_SOLO_MONTHLY
+
+export function getStripeOveragePriceId(planKey: string): string | null {
+  const key = `STRIPE_PRICE_${planKey.toUpperCase()}_OVERAGE`
+  return process.env[key] ?? null
+}

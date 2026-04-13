@@ -1,15 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getStripe } from '@/lib/stripe'
 import { createServiceClient } from '@/lib/supabase/service'
+import { TIER_TO_METER_EVENT } from '@/lib/billing'
 import type Stripe from 'stripe'
 
-// Plan key → subscription_tier mapping
+// planKey (Stripe metadata) → subscription_tier (DB column)
 const PLAN_KEY_TO_TIER: Record<string, string> = {
   individual_tier_1: 'individual_free',
   individual_tier_2: 'individual_optimiser',
   individual_tier_3: 'individual_elite',
+  // Legacy coach planKeys (kept for any existing checkout sessions in flight)
   coach_starter:     'coach_solo',
   coach_growth:      'coach_pro',
+  // Current coach planKeys
+  coach_solo:        'coach_solo',
+  coach_pro:         'coach_pro',
   coach_business:    'coach_business',
 }
 
@@ -17,8 +22,46 @@ const PLAN_KEY_TO_USER_TYPE: Record<string, string> = {
   individual_tier_1: 'individual',
   individual_tier_2: 'individual',
   individual_tier_3: 'individual',
-  coach_starter: 'coach',
-  coach_growth: 'coach',
+  coach_starter:     'coach',
+  coach_growth:      'coach',
+  coach_solo:        'coach',
+  coach_pro:         'coach',
+  coach_business:    'coach',
+}
+
+// Overage meter price ID → meter event name
+const OVERAGE_PRICE_TO_EVENT: Record<string, string> = {
+  'price_1TLdMADCfk3knikLyYyCzBOZ': TIER_TO_METER_EVENT.coach_solo,
+  'price_1TLdVnDCfk3knikL5PqNQgqH': TIER_TO_METER_EVENT.coach_pro,
+  'price_1TLdalDCfk3knikLPjnHAWQ9': TIER_TO_METER_EVENT.coach_business,
+}
+
+// Built at request time so env vars are loaded. Maps flat (non-overage) price ID → tier.
+function buildPriceToTierMap(): Record<string, string> {
+  const entries: [string | undefined, string][] = [
+    [process.env.STRIPE_PRICE_INDIVIDUAL_TIER_2_MONTHLY, 'individual_optimiser'],
+    [process.env.STRIPE_PRICE_INDIVIDUAL_TIER_2_ANNUAL,  'individual_optimiser'],
+    [process.env.STRIPE_PRICE_INDIVIDUAL_TIER_3_MONTHLY, 'individual_elite'],
+    [process.env.STRIPE_PRICE_INDIVIDUAL_TIER_3_ANNUAL,  'individual_elite'],
+    // Legacy coach prices
+    [process.env.STRIPE_PRICE_COACH_STARTER_MONTHLY,     'coach_solo'],
+    [process.env.STRIPE_PRICE_COACH_GROWTH_MONTHLY,      'coach_pro'],
+    // Current coach prices
+    [process.env.STRIPE_PRICE_COACH_SOLO_MONTHLY,        'coach_solo'],
+    [process.env.STRIPE_PRICE_COACH_PRO_MONTHLY,         'coach_pro'],
+    [process.env.STRIPE_PRICE_COACH_BUSINESS_MONTHLY,    'coach_business'],
+  ]
+  const map: Record<string, string> = {}
+  for (const [priceId, tier] of entries) {
+    if (priceId) map[priceId] = tier
+  }
+  return map
+}
+
+const COACH_TIER_ORDER = ['coach_solo', 'coach_pro', 'coach_business']
+
+function isCoachUpgrade(from: string, to: string): boolean {
+  return COACH_TIER_ORDER.indexOf(to) > COACH_TIER_ORDER.indexOf(from)
 }
 
 export async function POST(req: NextRequest) {
@@ -38,6 +81,7 @@ export async function POST(req: NextRequest) {
   try {
     const supabase = createServiceClient()
 
+    // ── Checkout completed ─────────────────────────────────────────────────────
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object as Stripe.Checkout.Session
       const { userId, planKey, userType } = session.metadata ?? {}
@@ -63,6 +107,38 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ── Subscription updated (upgrade / downgrade) ─────────────────────────────
+    if (event.type === 'customer.subscription.updated') {
+      const subscription = event.data.object as Stripe.Subscription
+      const customerId = subscription.customer as string
+      const priceToTier = buildPriceToTierMap()
+
+      // Identify the flat (non-overage) price to determine current plan tier
+      const flatItem = subscription.items.data.find(
+        (item) => !OVERAGE_PRICE_TO_EVENT[item.price.id]
+      )
+      const tier = flatItem ? priceToTier[flatItem.price.id] : undefined
+
+      if (tier) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id, subscription_tier')
+          .eq('stripe_customer_id', customerId)
+          .single()
+
+        if (profile && profile.subscription_tier !== tier) {
+          const updates: Record<string, unknown> = { subscription_tier: tier }
+          // Reset overage counter on coach plan upgrades
+          if (isCoachUpgrade(profile.subscription_tier as string, tier)) {
+            updates.subscription_seat_count = 0
+          }
+          await supabase.from('profiles').update(updates).eq('id', profile.id)
+          console.log('Webhook: tier updated', profile.subscription_tier, '→', tier)
+        }
+      }
+    }
+
+    // ── Subscription cancelled ─────────────────────────────────────────────────
     if (event.type === 'customer.subscription.deleted') {
       const subscription = event.data.object as Stripe.Subscription
       const customerId = subscription.customer as string
