@@ -19,22 +19,37 @@ export async function searchOpenFoodFacts(q: string, pageSize = 50, page = 1): P
   }
 }
 
-// Rank results by how closely the name matches the query
-function getRelevanceScore(name: string, q: string): number {
+// Rank results by how closely the name matches all query terms.
+// Multi-word queries (e.g. "chicken raw") get a big bonus when ALL terms appear.
+function getRelevanceScore(name: string, terms: string[]): number {
+  if (terms.length === 0) return 0
   const n = name.toLowerCase()
-  if (n === q) return 5
-  if (n.startsWith(q + ' ') || n.startsWith(q + ',') || n === q) return 4
-  if (n.startsWith(q)) return 3
-  const words = n.split(/[\s,\-—]+/)
-  if (words.some(w => w.startsWith(q))) return 2
-  if (n.includes(q)) return 1
-  return 0
+  const words = n.split(/[\s,\-—\/]+/)
+
+  // Exact full-name match
+  if (n === terms.join(' ')) return 200
+
+  let score = 0
+  let allFound = true
+
+  for (const term of terms) {
+    if (words.some(w => w === term))            { score += 15; continue }
+    if (words.some(w => w.startsWith(term)))    { score += 10; continue }
+    if (n.startsWith(term))                     { score += 8;  continue }
+    if (n.includes(term))                       { score += 4;  continue }
+    allFound = false
+  }
+
+  // Large bonus when every query term appears somewhere in the name
+  if (allFound) score += 50
+
+  return score
 }
 
 function sortByRelevance<T extends { name: string }>(items: T[], query: string): T[] {
-  const q = query.toLowerCase().trim()
-  if (!q) return items
-  return [...items].sort((a, b) => getRelevanceScore(b.name, q) - getRelevanceScore(a.name, q))
+  const terms = query.toLowerCase().trim().split(/\s+/).filter(Boolean)
+  if (terms.length === 0) return items
+  return [...items].sort((a, b) => getRelevanceScore(b.name, terms) - getRelevanceScore(a.name, terms))
 }
 
 // Merge local + OFF results, deduplicate by name, sort by relevance
@@ -85,9 +100,10 @@ const FOOD_UNIT_GRAMS: Array<[RegExp, Partial<Record<VolumeUnit, number>>]> = [
   [/\bmilk\b/i,                                                                 { cup: 240, tbsp: 15   }],
   [/\bpeanut butter\b/i,                                                        { cup: 256, tbsp: 16, tsp: 5 }],
   [/\balmond butter\b|\bcashew butter\b|\bnut butter\b/i,                      { cup: 256, tbsp: 16, tsp: 5 }],
-  [/\bcoconut oil\b/i,                                                          { cup: 218, tbsp: 14, tsp: 5 }],
-  [/\bolive oil\b|\bvegetable oil\b|\bcanola oil\b|\bsunflower oil\b/i,        { cup: 218, tbsp: 14, tsp: 4 }],
-  [/\bbutter\b/i,                                                               { cup: 227, tbsp: 14, tsp: 5 }],
+  [/\bcoconut oil\b/i,                                                                               { cup: 218, tbsp: 14, tsp: 5 }],
+  [/\bolive oil\b|\bvegetable oil\b|\bcanola oil\b|\bsunflower oil\b|\bsesame oil\b|\bavocado oil\b/i, { cup: 218, tbsp: 14, tsp: 4 }],
+  [/\boil\b/i,                                                                                        { cup: 218, tbsp: 14, tsp: 4 }],
+  [/\bbutter\b/i,                                                                                     { cup: 227, tbsp: 14, tsp: 5 }],
   [/\bhoney\b/i,                                                                { cup: 340, tbsp: 21, tsp: 7 }],
   [/\bmaple syrup\b/i,                                                          { cup: 322, tbsp: 20, tsp: 7 }],
   [/\bbrown sugar\b/i,                                                          { cup: 200, tbsp: 12, tsp: 4 }],
@@ -883,8 +899,8 @@ export default function FoodSearch({ onSelect }: Props) {
               </select>
             </div>
 
-            {/* Gram-equivalent row for volume units */}
-            {(servingUnit === 'cup' || servingUnit === 'tbsp' || servingUnit === 'tsp') && (
+            {/* Volume unit gram-equivalent: auto-populated from lookup, editable */}
+            {(servingUnit === 'cup' || servingUnit === 'tbsp' || servingUnit === 'tsp') && grams === 0 && (
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs text-gray-500">1 {servingUnit} =</span>
                 <input
@@ -892,35 +908,42 @@ export default function FoodSearch({ onSelect }: Props) {
                   min={1}
                   value={gramsPerUnit}
                   onChange={(e) => handleGramsPerUnitChange(e.target.value)}
-                  placeholder="?"
+                  placeholder="grams"
                   className="w-16 border border-blue-200 rounded-lg px-2 py-1 text-sm text-center bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
                 />
                 <span className="text-xs text-gray-500">g</span>
-                {!gramsPerUnit && (() => {
-                  const hint = getStaticGramsPerUnit(selected.name, servingUnit as VolumeUnit)
-                  return hint
-                    ? <button type="button" onClick={() => handleGramsPerUnitChange(String(hint))} className="text-xs text-blue-600 hover:text-blue-800 font-medium underline">Use ~{hint}g</button>
-                    : <span className="text-xs text-amber-600">Enter to calculate macros</span>
-                })()}
+                <span className="text-xs text-amber-600">Enter to calculate macros</span>
               </div>
             )}
-            {grams > 0 ? (
-              <div className="grid grid-cols-4 gap-1.5 pt-1">
-                {[
-                  { label: 'Calories', value: Math.round((selected.calories_per_100g ?? 0) * factor), unit: 'kcal', color: 'text-gray-900' },
-                  { label: 'Protein', value: Math.round((selected.protein_per_100g ?? 0) * factor * 10) / 10, unit: 'g', color: 'text-macro-p' },
-                  { label: 'Carbs', value: Math.round((selected.carbs_per_100g ?? 0) * factor * 10) / 10, unit: 'g', color: 'text-macro-c' },
-                  { label: 'Fat', value: Math.round((selected.fat_per_100g ?? 0) * factor * 10) / 10, unit: 'g', color: 'text-macro-f' },
-                ].map(({ label, value, unit, color }) => (
-                  <div key={label} className="bg-white rounded-lg p-2 text-center">
-                    <p className={`text-sm font-bold ${color}`}>{value}</p>
-                    <p className="text-xs text-gray-400">{unit}</p>
-                    <p className="text-xs text-gray-400 hidden sm:block">{label}</p>
+            {grams > 0 && (
+              <>
+                <div className="grid grid-cols-4 gap-1.5 pt-1">
+                  {[
+                    { label: 'Calories', value: Math.round((selected.calories_per_100g ?? 0) * factor), unit: 'kcal', color: 'text-gray-900' },
+                    { label: 'Protein', value: Math.round((selected.protein_per_100g ?? 0) * factor * 10) / 10, unit: 'g', color: 'text-macro-p' },
+                    { label: 'Carbs', value: Math.round((selected.carbs_per_100g ?? 0) * factor * 10) / 10, unit: 'g', color: 'text-macro-c' },
+                    { label: 'Fat', value: Math.round((selected.fat_per_100g ?? 0) * factor * 10) / 10, unit: 'g', color: 'text-macro-f' },
+                  ].map(({ label, value, unit, color }) => (
+                    <div key={label} className="bg-white rounded-lg p-2 text-center">
+                      <p className={`text-sm font-bold ${color}`}>{value}</p>
+                      <p className="text-xs text-gray-400">{unit}</p>
+                      <p className="text-xs text-gray-400 hidden sm:block">{label}</p>
+                    </div>
+                  ))}
+                </div>
+                {(servingUnit === 'cup' || servingUnit === 'tbsp' || servingUnit === 'tsp') && gramsPerUnit && (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-xs text-gray-400">1 {servingUnit} ≈ {gramsPerUnit}g</span>
+                    <button
+                      type="button"
+                      onClick={() => { setGramsPerUnit(''); setGrams(0) }}
+                      className="text-xs text-gray-400 hover:text-blue-600 underline"
+                    >
+                      change
+                    </button>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-amber-600 pt-1">Enter grams per {servingUnit} above to see macros</p>
+                )}
+              </>
             )}
           </div>
         )}
