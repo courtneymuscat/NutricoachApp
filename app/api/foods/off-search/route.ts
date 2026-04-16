@@ -55,15 +55,6 @@ export async function GET(req: NextRequest) {
         if (pro > 0 || carb > 0 || fat > 0) kcal = pro * 4 + carb * 4 + fat * 9
       }
 
-      // Parse serving size from OFF if available (e.g. "1 biscuit (35g)", "30 g")
-      // Use typeof guards — serving_size can be a number in some OFF products which causes .trim() to throw
-      const servingSizes: Array<{ label: string; grams: number }> = []
-      const servingLabel = typeof p.serving_size === 'string' ? p.serving_size.trim() : undefined
-      const servingG = typeof p.serving_quantity === 'number' ? p.serving_quantity : undefined
-      if (servingLabel && servingG && servingG > 0) {
-        servingSizes.push({ label: servingLabel, grams: Math.round(servingG * 10) / 10 })
-      }
-
       return [{
         id: `off:${encodeURIComponent(name)}`,
         name,
@@ -72,7 +63,6 @@ export async function GET(req: NextRequest) {
         carbs_per_100g:    Math.round((n['carbohydrates_100g'] ?? 0) * 10) / 10,
         fat_per_100g:      Math.round((n['fat_100g']           ?? 0) * 10) / 10,
         source: 'off',
-        serving_sizes: servingSizes,
       }]
     })
 

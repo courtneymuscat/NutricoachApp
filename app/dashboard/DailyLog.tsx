@@ -886,9 +886,6 @@ export default function DailyLog({
                                   <p className="text-sm text-gray-800 font-medium truncate">
                                     {log.food_name ?? 'Food entry'}
                                   </p>
-                                  {log.serving_description && (
-                                    <p className="text-xs text-gray-400 truncate">{log.serving_description}</p>
-                                  )}
                                   {ingredients && (
                                     <p className="text-xs text-gray-400 truncate">
                                       {ingredients.map((i) => i.name).join(', ')}
@@ -1045,7 +1042,7 @@ export default function DailyLog({
                     <button
                       type="button"
                       onClick={handleLog}
-                      disabled={!pendingEntry || saving || (pendingEntry?.grams ?? 0) <= 0}
+                      disabled={!pendingEntry || saving}
                       className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors"
                     >
                       {saving ? 'Adding...' : `Add to ${meal.label}`}
