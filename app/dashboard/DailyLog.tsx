@@ -24,6 +24,7 @@ type FoodLog = {
   notes: string | null        // AI scan ingredient JSON
   meal_notes: string | null   // user-entered notes
   meal_photo_url: string | null
+  serving_description: string | null
 }
 
 function todayString() {
@@ -81,7 +82,7 @@ export default function DailyLog({
   })
   const [loading, setLoading] = useState(true)
   const [addingTo, setAddingTo] = useState<MealKey | null>(null)
-  const [pendingEntry, setPendingEntry] = useState<{ food: FoodResult; grams: number } | null>(null)
+  const [pendingEntry, setPendingEntry] = useState<{ food: FoodResult; grams: number; servingDescription?: string } | null>(null)
   const [saving, setSaving] = useState(false)
   const [logError, setLogError] = useState<string | null>(null)
   const [justAdded, setJustAdded] = useState(false)
@@ -119,7 +120,7 @@ export default function DailyLog({
     const [{ data }, { data: mealNoteData }] = await Promise.all([
       supabase
         .from('food_logs')
-        .select('id, food_name, calories, protein, carbs, fat, notes, meal_notes, meal_photo_url, meal_type')
+        .select('id, food_name, calories, protein, carbs, fat, notes, meal_notes, meal_photo_url, meal_type, serving_description')
         .eq('user_id', session.user.id)
         .eq('log_date', date)
         .order('created_at', { ascending: true }),
@@ -173,6 +174,7 @@ export default function DailyLog({
       fat: fmt1(food.fat_per_100g * factor),
       meal_type: addingTo,
       log_date: date,
+      serving_description: pendingEntry.servingDescription ?? null,
     })
 
     if (error) {
@@ -884,6 +886,9 @@ export default function DailyLog({
                                   <p className="text-sm text-gray-800 font-medium truncate">
                                     {log.food_name ?? 'Food entry'}
                                   </p>
+                                  {log.serving_description && (
+                                    <p className="text-xs text-gray-400 truncate">{log.serving_description}</p>
+                                  )}
                                   {ingredients && (
                                     <p className="text-xs text-gray-400 truncate">
                                       {ingredients.map((i) => i.name).join(', ')}
@@ -1030,7 +1035,7 @@ export default function DailyLog({
                 {/* Add food panel */}
                 {!noteOnly && isAdding && (
                   <div className="border-t border-gray-100 p-4 space-y-3 bg-gray-50/40">
-                    <FoodSearch key={searchKey} onSelect={(food, grams) => setPendingEntry({ food, grams })} />
+                    <FoodSearch key={searchKey} onSelect={(food, grams, servingDescription) => setPendingEntry({ food, grams, servingDescription })} />
                     {logError && (
                       <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{logError}</p>
                     )}
@@ -1040,7 +1045,7 @@ export default function DailyLog({
                     <button
                       type="button"
                       onClick={handleLog}
-                      disabled={!pendingEntry || saving}
+                      disabled={!pendingEntry || saving || (pendingEntry?.grams ?? 0) <= 0}
                       className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors"
                     >
                       {saving ? 'Adding...' : `Add to ${meal.label}`}

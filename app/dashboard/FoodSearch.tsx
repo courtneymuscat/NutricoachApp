@@ -56,6 +56,7 @@ export type FoodResult = {
   unit?: string
   custom?: boolean
   source?: string
+  serving_sizes?: Array<{ label: string; grams: number }>
 }
 
 type BarcodeState =
@@ -64,8 +65,78 @@ type BarcodeState =
   | { status: 'not_found'; code: string }
   | { status: 'saving' }
 
+type DisplayUnit = 'g' | 'ml' | 'oz' | 'cup' | 'tbsp' | 'tsp'
+type VolumeUnit = 'cup' | 'tbsp' | 'tsp'
+
+// Gram-per-unit lookup for common whole foods. Ordered most-specific first.
+const FOOD_UNIT_GRAMS: Array<[RegExp, Partial<Record<VolumeUnit, number>>]> = [
+  [/\b(rolled |steel[- ]cut |instant )?oats?\b|\boatmeal\b/i,                    { cup: 90,  tbsp: 10, tsp: 3  }],
+  [/\bbasmati\b|\blong[- ]grain rice\b/i,                                         { cup: 185              }],
+  [/\bbrown rice\b/i,                                                              { cup: 190              }],
+  [/\bwhite rice\b/i,                                                              { cup: 185              }],
+  [/\brice\b/i,                                                                    { cup: 185              }],
+  [/\bquinoa\b/i,                                                                  { cup: 170, tbsp: 11   }],
+  [/\balmond flour\b/i,                                                            { cup: 96,  tbsp: 7    }],
+  [/\bcoconut flour\b/i,                                                           { cup: 112, tbsp: 8    }],
+  [/\bself[- ]rai?sing flour\b|\ball[- ]purpose flour\b|\bplain flour\b/i,        { cup: 120, tbsp: 8, tsp: 3 }],
+  [/\bflour\b/i,                                                                   { cup: 120, tbsp: 8, tsp: 3 }],
+  [/\bgreek yogh?urt\b|\bgreek yogurt\b/i,                                        { cup: 245, tbsp: 15   }],
+  [/\byogh?urt\b|\byogurt\b/i,                                                    { cup: 245, tbsp: 15   }],
+  [/\balmond milk\b|\boat milk\b|\bsoy milk\b|\bcoconut milk\b/i,                 { cup: 240, tbsp: 15   }],
+  [/\bmilk\b/i,                                                                    { cup: 240, tbsp: 15   }],
+  [/\bpeanut butter\b/i,                                                           { cup: 256, tbsp: 16, tsp: 5 }],
+  [/\balmond butter\b|\bcashew butter\b|\bnut butter\b/i,                         { cup: 256, tbsp: 16, tsp: 5 }],
+  [/\bcoconut oil\b/i,                                                             { cup: 218, tbsp: 14, tsp: 5 }],
+  [/\bolive oil\b|\bvegetable oil\b|\bcanola oil\b|\bsunflower oil\b/i,           { cup: 218, tbsp: 14, tsp: 4 }],
+  [/\bbutter\b/i,                                                                  { cup: 227, tbsp: 14, tsp: 5 }],
+  [/\bhoney\b/i,                                                                   { cup: 340, tbsp: 21, tsp: 7 }],
+  [/\bmaple syrup\b/i,                                                             { cup: 322, tbsp: 20, tsp: 7 }],
+  [/\bbrown sugar\b/i,                                                             { cup: 200, tbsp: 12, tsp: 4 }],
+  [/\bsugar\b/i,                                                                   { cup: 200, tbsp: 12, tsp: 4 }],
+  [/\bcocoa powder\b/i,                                                            { cup: 85,  tbsp: 7,  tsp: 2 }],
+  [/\bchia seeds?\b/i,                                                             { cup: 160, tbsp: 12, tsp: 4 }],
+  [/\bflax(seed|s)?\b/i,                                                           { cup: 149, tbsp: 10, tsp: 3 }],
+  [/\bhemp seeds?\b/i,                                                             { cup: 160, tbsp: 10, tsp: 3 }],
+  [/\bprotein powder\b|\bwhey protein\b|\bpea protein\b/i,                        { cup: 120, tbsp: 15   }],
+  [/\bcottage cheese\b/i,                                                          { cup: 225, tbsp: 14   }],
+  [/\bcream cheese\b/i,                                                            { cup: 232, tbsp: 15   }],
+  [/\bsour cream\b/i,                                                              { cup: 230, tbsp: 14   }],
+  [/\bmayonnaise\b|\bmayo\b/i,                                                     { cup: 220, tbsp: 14   }],
+  [/\blentils?\b/i,                                                                { cup: 192              }],
+  [/\bchickpeas?\b|\bgarbanzo\b/i,                                                 { cup: 164              }],
+  [/\bbeans?\b/i,                                                                  { cup: 172              }],
+  [/\bricotta\b/i,                                                                 { cup: 246, tbsp: 15   }],
+  [/\bcinnamon\b/i,                                                                {            tbsp: 8, tsp: 3 }],
+  [/\bsalt\b/i,                                                                    {            tbsp: 18, tsp: 6 }],
+]
+
+function getStaticGramsPerUnit(name: string, unit: VolumeUnit): number | null {
+  for (const [pattern, grams] of FOOD_UNIT_GRAMS) {
+    if (pattern.test(name)) return grams[unit] ?? null
+  }
+  return null
+}
+
+function computeEffectiveGrams(qty: number, unit: DisplayUnit, gramsPerUnit: string): number | null {
+  if (unit === 'g') return qty
+  if (unit === 'ml') return qty
+  if (unit === 'oz') return Math.round(qty * 28.35 * 10) / 10
+  const gpUnit = Number(gramsPerUnit)
+  if (gpUnit > 0) return Math.round(qty * gpUnit * 10) / 10
+  return null
+}
+
+function buildServingDescription(qty: number, unit: DisplayUnit): string {
+  if (unit === 'g') return `${qty}g`
+  if (unit === 'ml') return `${qty}ml`
+  if (unit === 'oz') return `${qty}oz`
+  if (unit === 'tbsp') return `${qty} tbsp`
+  if (unit === 'tsp') return `${qty} tsp`
+  return `${qty} cup${qty !== 1 ? 's' : ''}`
+}
+
 type Props = {
-  onSelect: (food: FoodResult, grams: number) => void
+  onSelect: (food: FoodResult, grams: number, servingDescription?: string) => void
 }
 
 function Spinner() {
@@ -259,8 +330,9 @@ export default function FoodSearch({ onSelect }: Props) {
   }, [])
 
   useEffect(() => { fetchRecent() }, [fetchRecent])
-  const [grams, setGrams] = useState(100)
-  const [unit, setUnit] = useState<'g' | 'ml'>('g')
+  const [qty, setQty] = useState(100)
+  const [displayUnit, setDisplayUnit] = useState<DisplayUnit>('g')
+  const [gramsPerUnit, setGramsPerUnit] = useState<string>('')
   const [scannerOpen, setScannerOpen] = useState(false)
   const [expandedSearch, setExpandedSearch] = useState(false)
   const [barcode, setBarcode] = useState<BarcodeState>({ status: 'idle' })
@@ -321,18 +393,51 @@ export default function FoodSearch({ onSelect }: Props) {
         // save failed — use food as-is (food_id will be null-ish, that's acceptable)
       }
     }
+    const initUnit: DisplayUnit = resolvedFood.unit === 'ml' ? 'ml' : 'g'
+    const initQty = 100
+    const initGPU = ''
     setSelected(resolvedFood)
     setHighlightedId(resolvedFood.id)
     setQuery(resolvedFood.name)
     setOpen(false)
     setBarcode({ status: 'idle' })
-    setUnit(resolvedFood.unit === 'ml' ? 'ml' : 'g')
-    onSelect(resolvedFood, grams)
+    setDisplayUnit(initUnit)
+    setQty(initQty)
+    setGramsPerUnit(initGPU)
+    const initEffG = computeEffectiveGrams(initQty, initUnit, initGPU) ?? 0
+    onSelect(resolvedFood, initEffG, buildServingDescription(initQty, initUnit))
   }
 
-  function handleGramsChange(val: number) {
-    setGrams(val)
-    if (selected) onSelect(selected, val)
+  function handleQtyChange(val: number) {
+    setQty(val)
+    if (selected) {
+      const effG = computeEffectiveGrams(val, displayUnit, gramsPerUnit) ?? 0
+      onSelect(selected, effG, buildServingDescription(val, displayUnit))
+    }
+  }
+
+  function handleUnitChange(val: DisplayUnit) {
+    setDisplayUnit(val)
+    const newQty = val === 'g' || val === 'ml' ? 100 : 1
+    let newGPU = ''
+    if ((val === 'cup' || val === 'tbsp' || val === 'tsp') && selected) {
+      const staticG = getStaticGramsPerUnit(selected.name, val)
+      if (staticG) newGPU = String(staticG)
+    }
+    setQty(newQty)
+    setGramsPerUnit(newGPU)
+    if (selected) {
+      const effG = computeEffectiveGrams(newQty, val, newGPU) ?? 0
+      onSelect(selected, effG, buildServingDescription(newQty, val))
+    }
+  }
+
+  function handleGramsPerUnitChange(val: string) {
+    setGramsPerUnit(val)
+    if (selected) {
+      const effG = computeEffectiveGrams(qty, displayUnit, val) ?? 0
+      onSelect(selected, effG, buildServingDescription(qty, displayUnit))
+    }
   }
 
   function handleClear() {
@@ -340,8 +445,9 @@ export default function FoodSearch({ onSelect }: Props) {
     setHighlightedId(null)
     setQuery('')
     setResults([])
-    setGrams(100)
-    setUnit('g')
+    setQty(100)
+    setDisplayUnit('g')
+    setGramsPerUnit('')
     setBarcode({ status: 'idle' })
     setAddingNew(false)
     inputRef.current?.focus()
@@ -408,7 +514,9 @@ export default function FoodSearch({ onSelect }: Props) {
     setBarcode({ status: 'idle' })
   }
 
-  const factor = grams / 100
+  const effectiveGrams = selected ? computeEffectiveGrams(qty, displayUnit, gramsPerUnit) : null
+  const factor = effectiveGrams != null ? effectiveGrams / 100 : 0
+  const isVolumeUnit = displayUnit === 'cup' || displayUnit === 'tbsp' || displayUnit === 'tsp'
 
   return (
     <>
@@ -734,30 +842,82 @@ export default function FoodSearch({ onSelect }: Props) {
               </button>
             </div>
             <p className="text-sm font-semibold text-gray-900 leading-tight">{selected.name}</p>
-            <div className="flex items-center gap-2">
+
+            {/* Serving size row */}
+            <div className="flex items-center gap-2 flex-wrap">
               <label className="text-xs text-gray-600 whitespace-nowrap">Serving size:</label>
               <input
                 type="number"
-                min={1}
-                value={grams}
-                onChange={(e) => handleGramsChange(Number(e.target.value))}
-                className="w-20 border border-blue-200 rounded-lg px-2 py-1 text-sm text-center font-medium bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                min={0.1}
+                step={isVolumeUnit ? 0.25 : 1}
+                value={qty}
+                onChange={(e) => handleQtyChange(Number(e.target.value))}
+                className="w-16 border border-blue-200 rounded-lg px-2 py-1 text-sm text-center font-medium bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
               />
-              <span className="px-2 py-1 text-xs font-semibold text-blue-700 bg-blue-100 rounded-lg">{unit}</span>
+              <select
+                value={displayUnit}
+                onChange={(e) => handleUnitChange(e.target.value as DisplayUnit)}
+                className="border border-blue-200 rounded-lg px-2 py-1 text-sm font-medium bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 text-blue-700"
+              >
+                <option value="g">g</option>
+                <option value="ml">ml</option>
+                <option value="oz">oz</option>
+                <option value="cup">cup</option>
+                <option value="tbsp">tbsp</option>
+                <option value="tsp">tsp</option>
+              </select>
             </div>
+
+            {/* Gram-per-unit field — shown for cup / tbsp / tsp */}
+            {isVolumeUnit && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-gray-500">1 {displayUnit} =</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={gramsPerUnit}
+                  onChange={(e) => handleGramsPerUnitChange(e.target.value)}
+                  placeholder="?"
+                  className="w-16 border border-blue-200 rounded-lg px-2 py-1 text-sm text-center bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                />
+                <span className="text-xs text-gray-500">g</span>
+                {!gramsPerUnit && (() => {
+                  const hint = getStaticGramsPerUnit(selected.name, displayUnit as VolumeUnit)
+                  return hint ? (
+                    <button
+                      type="button"
+                      onClick={() => handleGramsPerUnitChange(String(hint))}
+                      className="text-xs text-blue-600 hover:text-blue-800 font-medium underline"
+                    >
+                      Use ~{hint}g
+                    </button>
+                  ) : (
+                    <span className="text-xs text-amber-600">Enter to calculate macros</span>
+                  )
+                })()}
+              </div>
+            )}
+
+            {/* Macro preview */}
             <div className="grid grid-cols-4 gap-1.5 pt-1">
-              {[
-                { label: 'Calories', value: Math.round((selected.calories_per_100g ?? 0) * factor), unit: 'kcal', color: 'text-gray-900' },
-                { label: 'Protein', value: Math.round((selected.protein_per_100g ?? 0) * factor * 10) / 10, unit: 'g', color: 'text-macro-p' },
-                { label: 'Carbs', value: Math.round((selected.carbs_per_100g ?? 0) * factor * 10) / 10, unit: 'g', color: 'text-macro-c' },
-                { label: 'Fat', value: Math.round((selected.fat_per_100g ?? 0) * factor * 10) / 10, unit: 'g', color: 'text-macro-f' },
-              ].map(({ label, value, unit, color }) => (
-                <div key={label} className="bg-white rounded-lg p-2 text-center">
-                  <p className={`text-sm font-bold ${color}`}>{value}</p>
-                  <p className="text-xs text-gray-400">{unit}</p>
-                  <p className="text-xs text-gray-400 hidden sm:block">{label}</p>
+              {effectiveGrams != null && effectiveGrams > 0 ? (
+                [
+                  { label: 'Calories', value: Math.round((selected.calories_per_100g ?? 0) * factor), unit: 'kcal', color: 'text-gray-900' },
+                  { label: 'Protein', value: Math.round((selected.protein_per_100g ?? 0) * factor * 10) / 10, unit: 'g', color: 'text-macro-p' },
+                  { label: 'Carbs', value: Math.round((selected.carbs_per_100g ?? 0) * factor * 10) / 10, unit: 'g', color: 'text-macro-c' },
+                  { label: 'Fat', value: Math.round((selected.fat_per_100g ?? 0) * factor * 10) / 10, unit: 'g', color: 'text-macro-f' },
+                ].map(({ label, value, unit, color }) => (
+                  <div key={label} className="bg-white rounded-lg p-2 text-center">
+                    <p className={`text-sm font-bold ${color}`}>{value}</p>
+                    <p className="text-xs text-gray-400">{unit}</p>
+                    <p className="text-xs text-gray-400 hidden sm:block">{label}</p>
+                  </div>
+                ))
+              ) : isVolumeUnit ? (
+                <div className="col-span-4 py-2 text-xs text-center text-amber-600">
+                  Enter grams per {displayUnit} above to see macros
                 </div>
-              ))}
+              ) : null}
             </div>
           </div>
         )}

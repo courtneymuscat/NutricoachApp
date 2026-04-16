@@ -18,19 +18,19 @@ export async function GET(req: NextRequest) {
   ] = await Promise.all([
     supabase
       .from('food_database')
-      .select('id, name, calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g, unit')
+      .select('id, name, calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g, unit, serving_sizes')
       .ilike('name', `${q}%`)
       .order('name')
       .limit(8),
     supabase
       .from('food_database')
-      .select('id, name, calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g, unit')
+      .select('id, name, calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g, unit, serving_sizes')
       .ilike('name', `%${q}%`)
       .order('name')
       .limit(12),
     supabase
       .from('foods')
-      .select('id, name, calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g, unit')
+      .select('id, name, calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g, unit, serving_sizes')
       .ilike('name', `%${q}%`)
       .order('name')
       .limit(5),
