@@ -12,6 +12,12 @@ export async function GET(req: NextRequest) {
 
   if (!q || q.length < 2) return Response.json({ results: [], total: 0 })
 
+  // Split query into individual terms for name-matching filter below.
+  // OFF searches all product fields (brand, category, labels) so it returns
+  // e.g. "Campbell's Chicken Soup" for "chicken raw". We only keep results
+  // where at least one query term actually appears in the product name.
+  const queryTerms = q.toLowerCase().split(/\s+/).filter(t => t.length >= 2)
+
   try {
     const url = new URL('https://search.openfoodfacts.org/search')
     url.searchParams.set('q', q)
@@ -38,6 +44,11 @@ export async function GET(req: NextRequest) {
 
       const name = brand && !base.toLowerCase().includes(brand.toLowerCase())
         ? `${brand} — ${base}` : base
+
+      // Require at least one query term to appear in the product name (base, not brand prefix).
+      // This filters out products matched only via category/label/ingredient fields.
+      const baseLower = base.toLowerCase()
+      if (queryTerms.length > 0 && !queryTerms.some(t => baseLower.includes(t))) return []
 
       const n = (p.nutriments ?? {}) as Record<string, number>
 
