@@ -52,10 +52,35 @@ function sortByRelevance<T extends { name: string }>(items: T[], query: string):
   return [...items].sort((a, b) => getRelevanceScore(b.name, terms) - getRelevanceScore(a.name, terms))
 }
 
-// Merge local + OFF results, deduplicate by name, sort by relevance
+// Merge local + OFF results, deduplicate by name, sort by relevance.
+// For multi-word queries, OFF results that don't contain ALL terms are deprioritised
+// so branded noise (e.g. Campbell's Chicken Soup when querying "chicken raw") stays out.
 export function mergeResults(local: FoodResult[], off: FoodResult[], query: string): FoodResult[] {
+  const terms = query.toLowerCase().trim().split(/\s+/).filter(t => t.length >= 2)
   const localNames = new Set(local.map(f => f.name.toLowerCase()))
-  const combined = [...local, ...off.filter(f => !localNames.has(f.name.toLowerCase()))]
+
+  let offFiltered: FoodResult[]
+  if (terms.length >= 2) {
+    // Tier 1: ALL terms present in name
+    const tier1 = off.filter(f => {
+      const n = f.name.toLowerCase()
+      return terms.every(t => n.includes(t))
+    })
+    // Tier 2: at least ONE term present (fills gaps if tier1 is sparse)
+    const tier1Set = new Set(tier1.map(f => f.name.toLowerCase()))
+    const tier2 = off.filter(f => {
+      const n = f.name.toLowerCase()
+      return !tier1Set.has(n) && terms.some(t => n.includes(t))
+    })
+    offFiltered = [...tier1, ...tier2]
+  } else {
+    // Single-term query: require the term to appear somewhere in the name
+    offFiltered = terms.length === 1
+      ? off.filter(f => f.name.toLowerCase().includes(terms[0]))
+      : off
+  }
+
+  const combined = [...local, ...offFiltered.filter(f => !localNames.has(f.name.toLowerCase()))]
   return sortByRelevance(combined, query)
 }
 
