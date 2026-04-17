@@ -20,8 +20,9 @@ export async function GET() {
       try {
         const stripe = getStripe()
         const sub = await stripe.subscriptions.retrieve(profile.stripe_subscription_id)
-        if (sub.current_period_end) {
-          next_billing_date = new Date(sub.current_period_end * 1000).toISOString()
+        const periodEnd = sub.items.data[0]?.current_period_end
+        if (periodEnd) {
+          next_billing_date = new Date(periodEnd * 1000).toISOString()
         }
       } catch {
         // Ignore Stripe errors — date just won't show
