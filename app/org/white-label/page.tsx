@@ -201,7 +201,7 @@ export default function WhiteLabelPage() {
                 type="text"
                 value={appName}
                 onChange={e => setAppName(e.target.value)}
-                placeholder="e.g. Beit Studio"
+                placeholder="e.g. Peak Performance"
                 required
                 className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
@@ -216,7 +216,7 @@ export default function WhiteLabelPage() {
                 type="text"
                 value={customDomain}
                 onChange={e => setCustomDomain(e.target.value)}
-                placeholder="e.g. app.beit.studio"
+                placeholder="e.g. app.yourstudio.com"
                 required
                 pattern="^[a-zA-Z0-9][a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}$"
                 className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"

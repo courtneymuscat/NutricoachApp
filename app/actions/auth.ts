@@ -65,6 +65,8 @@ export async function signup(prevState: AuthState, formData: FormData): Promise<
         role: resolvedUserType === 'coach' ? 'coach' : 'client',
         user_type: resolvedUserType,
         subscription_tier: resolvedTier,
+        terms_accepted_at: new Date().toISOString(),
+        terms_version: 'april_2026',
       },
       { onConflict: 'id' }
     )

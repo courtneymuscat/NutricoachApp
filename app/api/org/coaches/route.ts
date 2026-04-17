@@ -180,7 +180,7 @@ export async function POST(req: NextRequest) {
       <p>You've been invited to join <strong>${org.name}</strong> as a coach on Prokol.</p>
       <p><a href="${inviteUrl}">Accept your invite</a></p>
       <p>This link expires in 7 days. If you don't have a Prokol account yet, you'll be guided to create one.</p>
-      <p>— The Prokol team</p>
+      <p>— The Prokol Health team</p>
     `,
   })
 

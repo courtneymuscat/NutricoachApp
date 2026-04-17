@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { login } from '@/app/actions/auth'
 import { useBranding } from '@/app/components/BrandingProvider'
+import PublicFooter from '@/app/components/PublicFooter'
 
 function LoginForm() {
   const branding = useBranding()
@@ -16,7 +17,8 @@ function LoginForm() {
   const linkExpired = searchParams.get('error') === 'link_expired'
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="flex-1 flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="text-center mb-8">
@@ -108,6 +110,8 @@ function LoginForm() {
           </p>
         </div>
       </div>
+    </div>
+    <PublicFooter />
     </div>
   )
 }

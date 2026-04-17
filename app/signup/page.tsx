@@ -1,10 +1,11 @@
 'use client'
 
-import { useActionState, Suspense } from 'react'
+import { useActionState, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { signup } from '@/app/actions/auth'
 import { useBranding } from '@/app/components/BrandingProvider'
+import PublicFooter from '@/app/components/PublicFooter'
 
 const PLAN_LABELS: Record<string, string> = {
   individual_tier_2:    'Optimiser — $19.99 AUD/mo',
@@ -19,6 +20,7 @@ const PLAN_LABELS: Record<string, string> = {
 function SignupForm() {
   const branding = useBranding()
   const [state, action, pending] = useActionState(signup, null)
+  const [agreed, setAgreed] = useState(false)
   const searchParams = useSearchParams()
   const invite = searchParams.get('invite')
   const planKey = searchParams.get('plan') ?? ''
@@ -28,7 +30,8 @@ function SignupForm() {
   const planLabel = PLAN_LABELS[planKey]
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
+    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="flex-1 flex items-center justify-center p-6">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-sm border p-8 space-y-6">
         <div>
           {branding.logoUrl ? (
@@ -103,9 +106,29 @@ function SignupForm() {
             </p>
           )}
 
+          {/* Consent checkbox */}
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={agreed}
+              onChange={(e) => setAgreed(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-gray-300 accent-yellow-500 flex-shrink-0"
+            />
+            <span className="text-sm text-gray-600">
+              I agree to the{' '}
+              <Link href="/terms" target="_blank" className="text-gray-900 font-medium hover:underline">
+                Terms of Service
+              </Link>{' '}
+              and{' '}
+              <Link href="/privacy" target="_blank" className="text-gray-900 font-medium hover:underline">
+                Privacy Policy
+              </Link>
+            </span>
+          </label>
+
           <button
             type="submit"
-            disabled={pending}
+            disabled={pending || !agreed}
             className="w-full py-3 rounded-xl text-sm font-semibold hover:opacity-90 disabled:opacity-50 transition-colors"
             style={{ backgroundColor: 'var(--brand-primary)', color: 'var(--brand-text)' }}
           >
@@ -118,6 +141,8 @@ function SignupForm() {
           <Link href={invite ? `/login?invite=${invite}` : '/login'} className="text-gray-900 font-medium hover:underline">Log in</Link>
         </p>
       </div>
+    </div>
+    <PublicFooter />
     </div>
   )
 }

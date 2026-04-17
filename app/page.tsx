@@ -54,7 +54,13 @@ export default function LandingPage() {
             <Link href="/login" className="hover:text-gray-300 transition-colors">Log in</Link>
             <Link href="/signup" className="hover:text-gray-300 transition-colors">Sign up</Link>
           </div>
-          <span>© {new Date().getFullYear()} Prokol. All rights reserved.</span>
+          <div className="flex flex-col items-center md:items-end gap-1.5">
+            <span>© {new Date().getFullYear()} Prokol Health (ABN 33 972 014 877) trading as Prokol</span>
+            <div className="flex items-center gap-4 text-xs">
+              <Link href="/privacy" className="hover:text-gray-300 transition-colors">Privacy Policy</Link>
+              <Link href="/terms" className="hover:text-gray-300 transition-colors">Terms of Service</Link>
+            </div>
+          </div>
         </div>
       </footer>
 

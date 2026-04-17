@@ -40,10 +40,10 @@ export async function POST(req: NextRequest) {
       subject: `You've been invited to join ${coachName} on Prokol`,
       html: `
         <p>Hi,</p>
-        <p>${coachName} has invited you to join them on Prokol, a coaching platform for nutrition and fitness.</p>
+        <p>${coachName} has invited you to join them on Prokol Health, a coaching platform for nutrition and fitness.</p>
         <p><a href="${url}">Accept your invite</a></p>
         <p>This link expires in 7 days.</p>
-        <p>— The Prokol team</p>
+        <p>— The Prokol Health team</p>
       `,
     })
     return Response.json({ url, token: existing.token })
@@ -63,10 +63,10 @@ export async function POST(req: NextRequest) {
     subject: `You've been invited to join ${coachName} on Prokol`,
     html: `
       <p>Hi,</p>
-      <p>${coachName} has invited you to join them on Prokol, a coaching platform for nutrition and fitness.</p>
+      <p>${coachName} has invited you to join them on Prokol Health, a coaching platform for nutrition and fitness.</p>
       <p><a href="${url}">Accept your invite</a></p>
       <p>This link expires in 7 days.</p>
-      <p>— The Prokol team</p>
+      <p>— The Prokol Health team</p>
     `,
   })
   return Response.json({ url, token: invite.token })

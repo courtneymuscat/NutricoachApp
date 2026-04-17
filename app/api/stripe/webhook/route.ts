@@ -201,7 +201,7 @@ export async function POST(req: NextRequest) {
             <p>Your 14-day free trial ends on <strong>${trialEndDate}</strong>.</p>
             <p>You won't be charged if you cancel before then. If you love Prokol, do nothing — your plan continues automatically.</p>
             <p>Questions? Reply to this email.</p>
-            <p>— The Prokol team</p>
+            <p>— The Prokol Health team</p>
           `,
         })
       }
