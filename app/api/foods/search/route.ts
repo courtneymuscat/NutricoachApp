@@ -14,31 +14,23 @@ export async function GET(req: NextRequest) {
   // For multi-word queries (e.g. "chicken raw"), search each word individually
   // so "Chicken, raw breast" is found even though "chicken raw" isn't a substring.
   const terms = q.split(/\s+/).filter(t => t.length >= 2)
-  const primaryTerm = terms[0]
+
+  // Build queries that require ALL terms to be present in the name.
+  // Each .ilike() call adds an AND condition in Supabase.
+  function applyTerms(base: ReturnType<typeof supabase.from>) {
+    let query = base.select('id, name, calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g, unit')
+    for (const t of terms) query = query.ilike('name', `%${t}%`)
+    return query
+  }
 
   const [
     { data: dbStarts },
     { data: dbContains },
     { data: customFoods },
   ] = await Promise.all([
-    supabase
-      .from('food_database')
-      .select('id, name, calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g, unit')
-      .ilike('name', `${primaryTerm}%`)
-      .order('name')
-      .limit(20),
-    supabase
-      .from('food_database')
-      .select('id, name, calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g, unit')
-      .ilike('name', `%${primaryTerm}%`)
-      .order('name')
-      .limit(30),
-    supabase
-      .from('foods')
-      .select('id, name, calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g, unit')
-      .ilike('name', `%${primaryTerm}%`)
-      .order('name')
-      .limit(10),
+    applyTerms(supabase.from('food_database')).ilike('name', `${terms[0]}%`).order('name').limit(20),
+    applyTerms(supabase.from('food_database')).order('name').limit(30),
+    applyTerms(supabase.from('foods')).order('name').limit(10),
   ])
 
   // Score each DB result by how many query terms appear in the name,

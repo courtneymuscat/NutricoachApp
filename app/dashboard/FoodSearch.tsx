@@ -59,26 +59,13 @@ export function mergeResults(local: FoodResult[], off: FoodResult[], query: stri
   const terms = query.toLowerCase().trim().split(/\s+/).filter(t => t.length >= 2)
   const localNames = new Set(local.map(f => f.name.toLowerCase()))
 
-  let offFiltered: FoodResult[]
-  if (terms.length >= 2) {
-    // Tier 1: ALL terms present in name
-    const tier1 = off.filter(f => {
-      const n = f.name.toLowerCase()
-      return terms.every(t => n.includes(t))
-    })
-    // Tier 2: at least ONE term present (fills gaps if tier1 is sparse)
-    const tier1Set = new Set(tier1.map(f => f.name.toLowerCase()))
-    const tier2 = off.filter(f => {
-      const n = f.name.toLowerCase()
-      return !tier1Set.has(n) && terms.some(t => n.includes(t))
-    })
-    offFiltered = [...tier1, ...tier2]
-  } else {
-    // Single-term query: require the term to appear somewhere in the name
-    offFiltered = terms.length === 1
-      ? off.filter(f => f.name.toLowerCase().includes(terms[0]))
-      : off
-  }
+  // Require ALL terms to appear in the name — same rule as the server routes.
+  const offFiltered = terms.length > 0
+    ? off.filter(f => {
+        const n = f.name.toLowerCase()
+        return terms.every(t => n.includes(t))
+      })
+    : off
 
   const combined = [...local, ...offFiltered.filter(f => !localNames.has(f.name.toLowerCase()))]
   return sortByRelevance(combined, query)

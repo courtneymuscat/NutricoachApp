@@ -45,10 +45,10 @@ export async function GET(req: NextRequest) {
       const name = brand && !base.toLowerCase().includes(brand.toLowerCase())
         ? `${brand} — ${base}` : base
 
-      // Require at least one query term to appear in the product name (base, not brand prefix).
+      // Require EVERY query term to appear in the product name (base, not brand prefix).
       // This filters out products matched only via category/label/ingredient fields.
       const baseLower = base.toLowerCase()
-      if (queryTerms.length > 0 && !queryTerms.some(t => baseLower.includes(t))) return []
+      if (queryTerms.length > 0 && !queryTerms.every(t => baseLower.includes(t))) return []
 
       const n = (p.nutriments ?? {}) as Record<string, number>
 
