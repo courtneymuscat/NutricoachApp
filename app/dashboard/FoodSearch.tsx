@@ -19,29 +19,37 @@ export async function searchOpenFoodFacts(q: string, pageSize = 50, page = 1): P
   }
 }
 
-// Rank results by how closely the name matches all query terms.
-// Multi-word queries (e.g. "chicken raw") get a big bonus when ALL terms appear.
+// Rank results by relevance to all query terms.
+// Factors: exact word match, position in name (earlier = better), name length (shorter = more specific).
 function getRelevanceScore(name: string, terms: string[]): number {
   if (terms.length === 0) return 0
   const n = name.toLowerCase()
   const words = n.split(/[\s,\-—\/]+/)
 
   // Exact full-name match
-  if (n === terms.join(' ')) return 200
+  if (n === terms.join(' ') || n === terms.join(', ')) return 1000
 
   let score = 0
   let allFound = true
 
   for (const term of terms) {
-    if (words.some(w => w === term))            { score += 15; continue }
-    if (words.some(w => w.startsWith(term)))    { score += 10; continue }
-    if (n.startsWith(term))                     { score += 8;  continue }
-    if (n.includes(term))                       { score += 4;  continue }
-    allFound = false
+    const pos = n.indexOf(term)
+    if (pos === -1) { allFound = false; continue }
+
+    // Earlier position in name = higher score (max +20 bonus at pos 0, tapers off)
+    const posBonus = Math.max(0, 20 - Math.floor(pos / 4))
+
+    if (words.some(w => w === term))            score += 15 + posBonus  // exact word match
+    else if (words.some(w => w.startsWith(term))) score += 10 + posBonus  // word starts with term
+    else                                        score += 4  + posBonus  // substring
   }
 
-  // Large bonus when every query term appears somewhere in the name
-  if (allFound) score += 50
+  if (allFound) {
+    // All terms present: big bonus
+    score += 50
+    // Prefer shorter names — "Chicken, raw" beats "Chicken breast, raw, skinless, boneless"
+    score += Math.max(0, 40 - Math.floor(n.length / 4))
+  }
 
   return score
 }
