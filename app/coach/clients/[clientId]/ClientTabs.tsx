@@ -4796,9 +4796,222 @@ function ClientResourcesTab({ clientId }: { clientId: string }) {
   )
 }
 
+// ─── ClientServeGuide ─────────────────────────────────────────────────────────
+
+type ServeFood = {
+  id: string; name: string; serving_desc: string | null
+  calories: number | null; protein_g: number; carbs_g: number; fat_g: number
+  primary_category: string; secondary_categories: string[]; is_hidden?: boolean
+}
+type ServeTargets = {
+  protein_serves: number; carb_serves: number; fat_serves: number
+  fruit_serves: number; veg_unlimited: boolean; notes: string | null
+} | null
+
+const CAT_CONFIG: Record<string, { label: string; serve: string; badge: string; color: string }> = {
+  protein:   { label: 'Protein',      serve: '1 serve ≈ 30g protein',  badge: 'bg-pink-100 text-pink-700',    color: 'bg-pink-50' },
+  carb:      { label: 'Carbs',        serve: '1 serve ≈ 20g carbs',    badge: 'bg-purple-100 text-purple-700',color: 'bg-purple-50' },
+  fruit:     { label: 'Fruit',        serve: '1 serve ≈ 20g carbs',    badge: 'bg-orange-100 text-orange-700',color: 'bg-orange-50' },
+  fat:       { label: 'Fats',         serve: '1 serve ≈ 10g fat',      badge: 'bg-green-100 text-green-700',  color: 'bg-green-50' },
+  condiment: { label: 'Condiments',   serve: '~1 fat or carb serve',   badge: 'bg-blue-100 text-blue-700',    color: 'bg-blue-50' },
+  free:      { label: 'Free Foods',   serve: 'Unlimited',              badge: 'bg-gray-100 text-gray-600',    color: 'bg-gray-50' },
+}
+const SEC_LABELS: Record<string, string> = { fat: '+ 1 fat', carb: '+ 1 carb' }
+const SEC_COLORS: Record<string, string> = { fat: 'bg-green-100 text-green-700', carb: 'bg-purple-100 text-purple-700' }
+
+function ClientServeGuide({ clientId }: { clientId: string }) {
+  const [foods, setFoods] = useState<ServeFood[]>([])
+  const [targets, setTargets] = useState<ServeTargets>(null)
+  const [loading, setLoading] = useState(true)
+  const [view, setView] = useState<'simple' | 'detailed'>('simple')
+  const [editingTargets, setEditingTargets] = useState(false)
+  const [draft, setDraft] = useState({ protein_serves: 0, carb_serves: 0, fat_serves: 0, fruit_serves: 0, veg_unlimited: true, notes: '' })
+  const [savingTargets, setSavingTargets] = useState(false)
+
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/coach/cheat-sheet').then(r => r.json()),
+      fetch(`/api/coach/clients/serve-targets?clientId=${clientId}`).then(r => r.json()),
+    ]).then(([fd, td]) => {
+      setFoods((fd.foods ?? []).filter((f: ServeFood) => !f.is_hidden))
+      if (td.targets) {
+        setTargets(td.targets)
+        setDraft({ ...td.targets, notes: td.targets.notes ?? '' })
+      }
+    }).finally(() => setLoading(false))
+  }, [clientId])
+
+  async function saveTargets() {
+    setSavingTargets(true)
+    const r = await fetch('/api/coach/clients/serve-targets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_id: clientId, ...draft }),
+    })
+    const d = await r.json()
+    setTargets(d.targets)
+    setEditingTargets(false)
+    setSavingTargets(false)
+  }
+
+  if (loading) return <div className="py-12 text-center text-gray-400 text-sm animate-pulse">Loading…</div>
+
+  return (
+    <div className="space-y-5">
+      {/* Serve targets panel */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900">Daily Serve Targets</h3>
+            <p className="text-xs text-gray-400 mt-0.5">Set how many serves per day for this client</p>
+          </div>
+          <button onClick={() => setEditingTargets(v => !v)} className="text-xs text-blue-600 hover:text-blue-700 font-medium">
+            {editingTargets ? 'Cancel' : targets ? 'Edit' : 'Set Targets'}
+          </button>
+        </div>
+
+        {editingTargets ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {([
+                { key: 'protein_serves', label: 'Protein', color: 'text-pink-600' },
+                { key: 'carb_serves', label: 'Carbs', color: 'text-purple-600' },
+                { key: 'fat_serves', label: 'Fats', color: 'text-green-600' },
+                { key: 'fruit_serves', label: 'Fruit', color: 'text-orange-500' },
+              ] as const).map(({ key, label, color }) => (
+                <div key={key}>
+                  <label className={`text-xs font-medium block mb-1 ${color}`}>{label} serves</label>
+                  <input type="number" min="0" max="20" step="0.5"
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={draft[key]} onChange={e => setDraft(d => ({ ...d, [key]: parseFloat(e.target.value) || 0 }))} />
+                </div>
+              ))}
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Notes for client</label>
+              <textarea rows={2} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={draft.notes} onChange={e => setDraft(d => ({ ...d, notes: e.target.value }))} placeholder="e.g. Choose 2 protein serves at dinner, 1 at lunch…" />
+            </div>
+            <div className="flex justify-end">
+              <button onClick={saveTargets} disabled={savingTargets} className="text-sm font-medium bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                {savingTargets ? 'Saving…' : 'Save Targets'}
+              </button>
+            </div>
+          </div>
+        ) : targets ? (
+          <div className="space-y-3">
+            <div className="flex flex-wrap gap-3">
+              {[
+                { label: 'Protein', value: targets.protein_serves, color: 'bg-pink-50 text-pink-700 border-pink-100' },
+                { label: 'Carbs', value: targets.carb_serves, color: 'bg-purple-50 text-purple-700 border-purple-100' },
+                { label: 'Fats', value: targets.fat_serves, color: 'bg-green-50 text-green-700 border-green-100' },
+                { label: 'Fruit', value: targets.fruit_serves, color: 'bg-orange-50 text-orange-700 border-orange-100' },
+                { label: 'Veg', value: targets.veg_unlimited ? '∞' : '—', color: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
+              ].map(s => (
+                <div key={s.label} className={`border rounded-xl px-4 py-2.5 text-center min-w-[80px] ${s.color}`}>
+                  <p className="text-xl font-bold">{s.value}</p>
+                  <p className="text-xs mt-0.5 font-medium">{s.label}</p>
+                </div>
+              ))}
+            </div>
+            {targets.notes && <p className="text-xs text-gray-500 bg-gray-50 rounded-xl px-3 py-2">{targets.notes}</p>}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-400">No targets set yet. Click "Set Targets" above.</p>
+        )}
+      </div>
+
+      {/* View toggle */}
+      <div className="flex items-center gap-3">
+        <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
+          <button onClick={() => setView('simple')} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${view === 'simple' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`}>Simple</button>
+          <button onClick={() => setView('detailed')} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${view === 'detailed' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`}>Detailed</button>
+        </div>
+        <p className="text-xs text-gray-400">Manage the food list in <a href="/coach/cheat-sheet" className="text-blue-500 hover:underline">Cheat Sheet settings</a></p>
+      </div>
+
+      {/* Food categories */}
+      {Object.entries(CAT_CONFIG).map(([catId, cfg]) => {
+        const catFoods = foods.filter(f => f.primary_category === catId)
+        if (catFoods.length === 0) return null
+        return (
+          <div key={catId} className={`rounded-2xl border border-gray-100 overflow-hidden ${cfg.color}`}>
+            <div className="px-5 py-3.5 flex items-center gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-gray-900">{cfg.label}</h3>
+                <p className="text-xs text-gray-500">{cfg.serve} · ~100 cal</p>
+              </div>
+              <span className={`ml-auto text-xs font-semibold px-2 py-0.5 rounded-full ${cfg.badge}`}>{catFoods.length}</span>
+            </div>
+            {view === 'detailed' ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-t border-white/60">
+                      <th className="text-left px-5 py-2 text-xs font-semibold text-gray-400">Food / Serving</th>
+                      <th className="px-3 py-2 text-xs font-semibold text-gray-400 text-right whitespace-nowrap">Cal</th>
+                      <th className="px-3 py-2 text-xs font-semibold text-gray-400 text-right whitespace-nowrap">Carbs</th>
+                      <th className="px-3 py-2 text-xs font-semibold text-gray-400 text-right whitespace-nowrap">Fat</th>
+                      <th className="px-3 py-2 text-xs font-semibold text-gray-400 text-right whitespace-nowrap">Protein</th>
+                      <th className="px-3 py-2 text-xs font-semibold text-gray-400 text-right">Extra</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/60 bg-white/50">
+                    {catFoods.map(f => (
+                      <tr key={f.id} className="hover:bg-white/80 transition-colors">
+                        <td className="px-5 py-2.5">
+                          <span className="font-medium text-gray-900">{f.name}</span>
+                          {f.serving_desc && <span className="text-gray-400 text-xs ml-2">{f.serving_desc}</span>}
+                        </td>
+                        <td className="px-3 py-2.5 text-right text-gray-600 tabular-nums text-xs">{f.calories ?? '—'}</td>
+                        <td className="px-3 py-2.5 text-right text-purple-700 font-medium tabular-nums text-xs">{f.carbs_g}</td>
+                        <td className="px-3 py-2.5 text-right text-green-700 font-medium tabular-nums text-xs">{f.fat_g}</td>
+                        <td className="px-3 py-2.5 text-right text-pink-700 font-medium tabular-nums text-xs">{f.protein_g}</td>
+                        <td className="px-3 py-2.5 text-right">
+                          <div className="flex gap-1 justify-end">
+                            {(f.secondary_categories ?? []).map(s => (
+                              <span key={s} className={`text-[10px] px-1.5 py-0.5 rounded font-semibold whitespace-nowrap ${SEC_COLORS[s] ?? 'bg-gray-100 text-gray-500'}`}>
+                                {SEC_LABELS[s] ?? s}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="px-5 pb-4 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                {catFoods.map(f => (
+                  <div key={f.id} className="bg-white rounded-xl px-3.5 py-2.5 flex items-start gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900">{f.name}</p>
+                      {f.serving_desc && <p className="text-xs text-gray-400">{f.serving_desc}</p>}
+                      {(f.secondary_categories ?? []).length > 0 && (
+                        <div className="flex gap-1 mt-1">
+                          {f.secondary_categories.map(s => (
+                            <span key={s} className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${SEC_COLORS[s] ?? 'bg-gray-100 text-gray-500'}`}>
+                              {SEC_LABELS[s] ?? s}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
-type TabId = 'overview' | 'checkins' | 'nutrition' | 'training' | 'program' | 'calendar' | 'mealplan' | 'habits' | 'notes' | 'files' | 'flows' | 'preview' | 'resources'
+type TabId = 'overview' | 'checkins' | 'nutrition' | 'training' | 'program' | 'calendar' | 'mealplan' | 'habits' | 'notes' | 'files' | 'flows' | 'preview' | 'resources' | 'cheatsheet'
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'overview', label: 'Overview' },
@@ -4808,6 +5021,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'calendar', label: 'Calendar' },
   { id: 'program', label: 'Training' },
   { id: 'mealplan', label: 'Meal Plan' },
+  { id: 'cheatsheet', label: 'Serve Guide' },
   { id: 'nutrition', label: 'Food Logs' },
   { id: 'habits', label: 'Habits' },
   { id: 'checkins', label: 'Check-ins' },
@@ -4992,6 +5206,9 @@ export default function ClientTabs({ clientId }: { clientId: string }) {
 
       {/* Notes */}
       {tab === 'notes' && <NotesTab clientId={clientId} />}
+
+      {/* Serve Guide / Cheat Sheet */}
+      {tab === 'cheatsheet' && <ClientServeGuide clientId={clientId} />}
 
       {/* Files */}
       {tab === 'files' && <FilesTab clientId={clientId} />}
