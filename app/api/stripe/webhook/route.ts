@@ -10,43 +10,49 @@ const PLAN_KEY_TO_TIER: Record<string, string> = {
   individual_tier_1: 'individual_free',
   individual_tier_2: 'individual_optimiser',
   individual_tier_3: 'individual_elite',
-  // Legacy coach planKeys (kept for any existing checkout sessions in flight)
+  // Legacy coach planKeys
   coach_starter:     'coach_solo',
   coach_growth:      'coach_pro',
-  // Current coach planKeys
   coach_solo:        'coach_solo',
+  // New solo specialisation planKeys
+  coach_pt_solo:              'coach_pt_solo',
+  coach_nutritionist_solo:    'coach_nutritionist_solo',
+  // Pro / business
   coach_pro:         'coach_pro',
   coach_business:    'coach_business',
-  // White-label planKeys
+  // White-label
   wl_starter:        'wl_starter',
   wl_pro:            'wl_pro',
 }
 
 const PLAN_KEY_TO_USER_TYPE: Record<string, string> = {
-  individual_tier_1: 'individual',
-  individual_tier_2: 'individual',
-  individual_tier_3: 'individual',
-  coach_starter:     'coach',
-  coach_growth:      'coach',
-  coach_solo:        'coach',
-  coach_pro:         'coach',
-  coach_business:    'coach',
-  wl_starter:        'business',
-  wl_pro:            'business',
+  individual_tier_1:           'individual',
+  individual_tier_2:           'individual',
+  individual_tier_3:           'individual',
+  coach_starter:               'coach',
+  coach_growth:                'coach',
+  coach_solo:                  'coach',
+  coach_pt_solo:               'coach',
+  coach_nutritionist_solo:     'coach',
+  coach_pro:                   'coach',
+  coach_business:              'coach',
+  wl_starter:                  'business',
+  wl_pro:                      'business',
 }
 
-// Authoritative tier → user_type mapping. Used as final override so even if
-// planKey metadata is stale/wrong, the user_type always matches the actual tier.
+// Authoritative tier → user_type mapping
 const TIER_TO_USER_TYPE: Record<string, string> = {
-  individual_free:      'individual',
-  individual_optimiser: 'individual',
-  individual_elite:     'individual',
-  coached:              'individual',
-  coach_solo:           'coach',
-  coach_pro:            'coach',
-  coach_business:       'coach',
-  wl_starter:           'business',
-  wl_pro:               'business',
+  individual_free:           'individual',
+  individual_optimiser:      'individual',
+  individual_elite:          'individual',
+  coached:                   'individual',
+  coach_solo:                'coach',
+  coach_pt_solo:             'coach',
+  coach_nutritionist_solo:   'coach',
+  coach_pro:                 'coach',
+  coach_business:            'coach',
+  wl_starter:                'business',
+  wl_pro:                    'business',
 }
 
 // Overage meter price ID → meter event name
@@ -71,11 +77,14 @@ function buildPriceToTierMap(): Record<string, string> {
     // Legacy coach prices
     [process.env.STRIPE_PRICE_COACH_STARTER_MONTHLY,     'coach_solo'],
     [process.env.STRIPE_PRICE_COACH_GROWTH_MONTHLY,      'coach_pro'],
-    // Current coach prices
     [process.env.STRIPE_PRICE_COACH_SOLO_MONTHLY,        'coach_solo'],
+    // New solo specialisation prices
+    [process.env.STRIPE_PRICE_COACH_PT_SOLO_MONTHLY,             'coach_pt_solo'],
+    [process.env.STRIPE_PRICE_COACH_NUTRITIONIST_SOLO_MONTHLY,   'coach_nutritionist_solo'],
+    // Pro / business
     [process.env.STRIPE_PRICE_COACH_PRO_MONTHLY,         'coach_pro'],
     [process.env.STRIPE_PRICE_COACH_BUSINESS_MONTHLY,    'coach_business'],
-    // White-label plans
+    // White-label
     [process.env.STRIPE_PRICE_WL_STARTER_MONTHLY,        'wl_starter'],
     [process.env.STRIPE_PRICE_WL_PRO_MONTHLY,            'wl_pro'],
   ]
@@ -86,11 +95,13 @@ function buildPriceToTierMap(): Record<string, string> {
   return map
 }
 
-const COACH_TIER_ORDER = ['coach_solo', 'coach_pro', 'coach_business', 'wl_starter', 'wl_pro']
+const COACH_TIER_ORDER = ['coach_solo', 'coach_pt_solo', 'coach_nutritionist_solo', 'coach_pro', 'coach_business', 'wl_starter', 'wl_pro']
 
 function isCoachUpgrade(from: string, to: string): boolean {
   return COACH_TIER_ORDER.indexOf(to) > COACH_TIER_ORDER.indexOf(from)
 }
+
+const COACH_TIERS = new Set(['coach_solo', 'coach_pt_solo', 'coach_nutritionist_solo', 'coach_pro', 'coach_business', 'wl_starter', 'wl_pro'])
 
 export async function POST(req: NextRequest) {
   const body = await req.text()
@@ -118,8 +129,6 @@ export async function POST(req: NextRequest) {
 
       if (userId && planKey) {
         const tier = PLAN_KEY_TO_TIER[planKey] ?? 'individual_free'
-        // TIER_TO_USER_TYPE is the authoritative source — corrects any wrong
-        // user_type on the profile regardless of what planKey metadata says.
         const resolvedUserType =
           TIER_TO_USER_TYPE[tier] ??
           userType ??
@@ -147,7 +156,6 @@ export async function POST(req: NextRequest) {
       const customerId = subscription.customer as string
       const priceToTier = buildPriceToTierMap()
 
-      // Identify the flat (non-overage) price to determine current plan tier
       const flatItem = subscription.items.data.find(
         (item) => !OVERAGE_PRICE_TO_EVENT[item.price.id]
       )
@@ -162,10 +170,13 @@ export async function POST(req: NextRequest) {
 
         if (profile && profile.subscription_tier !== tier) {
           const updates: Record<string, unknown> = { subscription_tier: tier }
-          // Reset overage counter on coach plan upgrades
           if (isCoachUpgrade(profile.subscription_tier as string, tier)) {
             updates.subscription_seat_count = 0
           }
+          // Ensure user_type stays consistent with tier
+          const resolvedUserType = TIER_TO_USER_TYPE[tier]
+          if (resolvedUserType) updates.user_type = resolvedUserType
+
           await supabase.from('profiles').update(updates).eq('id', profile.id)
           console.log('Webhook: tier updated', profile.subscription_tier, '→', tier)
         }
@@ -214,15 +225,63 @@ export async function POST(req: NextRequest) {
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('id, user_type')
+        .select('id, user_type, subscription_tier, email, full_name')
         .eq('stripe_customer_id', customerId)
         .single()
 
       if (profile) {
+        const wasCoach = COACH_TIERS.has(profile.subscription_tier as string)
+
+        // Downgrade the account to free individual
         await supabase.from('profiles').update({
           subscription_tier: 'individual_free',
+          user_type: 'individual',
           stripe_subscription_id: null,
         }).eq('id', profile.id)
+
+        console.log('Webhook: subscription cancelled, downgraded', profile.id, 'to individual_free')
+
+        // If the user was a coach, downgrade all their active coached clients to individual_free
+        if (wasCoach) {
+          const { data: coachClients } = await supabase
+            .from('coach_clients')
+            .select('client_id')
+            .eq('coach_id', profile.id)
+            .eq('status', 'active')
+
+          if (coachClients && coachClients.length > 0) {
+            const clientIds = coachClients.map((r: { client_id: string }) => r.client_id)
+
+            // Only downgrade clients who are on the 'coached' tier
+            // (clients on their own paid plan keep their own subscription)
+            await supabase
+              .from('profiles')
+              .update({
+                subscription_tier: 'individual_free',
+                user_type: 'individual',
+              })
+              .in('id', clientIds)
+              .eq('subscription_tier', 'coached')
+
+            console.log('Webhook: downgraded', clientIds.length, 'coached clients to individual_free')
+          }
+
+          // Send notification email to the coach
+          if (profile.email) {
+            const name = profile.full_name ?? 'there'
+            await sendEmail({
+              to: profile.email,
+              subject: 'Your Prokol coaching subscription has ended',
+              html: `
+                <p>Hi ${name},</p>
+                <p>Your Prokol coaching subscription has been cancelled. Your account has been moved to the free Tracker plan.</p>
+                <p>Your clients who were on the Coached plan have also been moved to the free Tracker plan. Their data has been saved and will be available again if you or they subscribe in the future.</p>
+                <p>To reactivate your coaching subscription, visit <a href="${process.env.NEXT_PUBLIC_APP_URL ?? 'https://prokol.app'}/pricing">our pricing page</a>.</p>
+                <p>— The Prokol Health team</p>
+              `,
+            })
+          }
+        }
       }
     }
   } catch (err) {

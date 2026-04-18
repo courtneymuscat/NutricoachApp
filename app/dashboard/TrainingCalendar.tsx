@@ -1008,9 +1008,139 @@ function AddEventModal({ dateStr, onClose, onCreated }: {
   )
 }
 
+// ─── Day Detail Sheet ─────────────────────────────────────────────────────────
+
+function DayDetailSheet({ date, workouts, events, onClose, onWorkoutTap, onAddEvent, onDeleteEvent }: {
+  date: Date
+  workouts: WorkoutForDate[]
+  events: CalendarEvent[]
+  onClose: () => void
+  onWorkoutTap: (w: WorkoutForDate) => void
+  onAddEvent: (dateStr: string) => void
+  onDeleteEvent: (id: string) => void
+}) {
+  const dateStr = toDateStr(date)
+  const displayDate = date.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })
+  const visibleEvents = events.filter((e) => e.type !== 'program_workout_result')
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="bg-white w-full sm:rounded-2xl shadow-2xl sm:max-w-sm rounded-t-2xl overflow-hidden max-h-[85vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b flex-shrink-0">
+          <div>
+            <p className="text-base font-bold text-gray-900">{displayDate}</p>
+            {workouts.length === 0 && visibleEvents.length === 0 && (
+              <p className="text-xs text-gray-400 mt-0.5">Rest day</p>
+            )}
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2">
+          {/* Workouts */}
+          {workouts.map((w, i) => {
+            const sections = (w.day.items ?? []).filter((it) => it.type === 'section' && it.title?.trim())
+            const exCount = (w.day.items ?? []).filter((it) => it.type === 'exercise').length
+            return (
+              <button
+                key={i}
+                onClick={() => { onClose(); onWorkoutTap(w) }}
+                className={`w-full text-left rounded-xl border px-4 py-3 transition-colors hover:opacity-90 active:scale-[0.98] ${
+                  w.result ? 'bg-green-50 border-green-200' : 'bg-indigo-50 border-indigo-200'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-indigo-900 truncate">{w.day.name ?? w.programName}</p>
+                    <p className="text-xs text-indigo-500 mt-0.5">
+                      {sections.length > 0 ? sections.map((s) => s.title).join(' · ') : `${exCount} exercise${exCount !== 1 ? 's' : ''}`}
+                    </p>
+                  </div>
+                  {w.result ? (
+                    <span className="flex items-center gap-1 text-xs font-semibold text-green-600 flex-shrink-0">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                      </svg>
+                      Done
+                    </span>
+                  ) : (
+                    <svg className="w-4 h-4 text-indigo-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  )}
+                </div>
+              </button>
+            )
+          })}
+
+          {/* Events */}
+          {visibleEvents.map((ev) => {
+            const isClientEvent = ['personal', 'travel', 'extra_activity', 'note'].includes(ev.type)
+            const autoflowLink = ev.type === 'autoflow' ? (ev.content as Record<string, unknown>)?.link as string | undefined : undefined
+            const eventIcons: Record<string, string> = {
+              personal: '🎉', travel: '✈️', extra_activity: '🏃', note: '📝',
+              birthday: '🎂', autoflow: '📋',
+            }
+            const icon = eventIcons[ev.type] ?? '📌'
+
+            const inner = (
+              <div className="flex items-center gap-3">
+                <span className="text-base flex-shrink-0">{icon}</span>
+                <p className="text-sm text-gray-800 flex-1 truncate">{ev.title}</p>
+                {isClientEvent && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); e.preventDefault(); onDeleteEvent(ev.id) }}
+                    className="flex-shrink-0 text-gray-300 hover:text-red-400 transition-colors"
+                    title="Remove"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            )
+
+            return autoflowLink ? (
+              <a key={ev.id} href={autoflowLink} className="block rounded-xl border border-gray-200 bg-white px-4 py-3 hover:bg-gray-50 transition-colors">
+                {inner}
+              </a>
+            ) : (
+              <div key={ev.id} className="rounded-xl border border-gray-200 bg-white px-4 py-3">
+                {inner}
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 pb-5 pt-3 border-t flex-shrink-0">
+          <button
+            type="button"
+            onClick={() => { onClose(); onAddEvent(dateStr) }}
+            className="w-full py-2.5 border-2 border-dashed border-gray-200 text-gray-400 text-sm font-medium rounded-xl hover:border-indigo-300 hover:text-indigo-500 transition-colors"
+          >
+            + Add event
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Day Cell ─────────────────────────────────────────────────────────────────
 
-function DayCell({ date, workouts, events, isToday, isPast, compact, onWorkoutTap, onAddEvent, onDeleteEvent }: {
+function DayCell({ date, workouts, events, isToday, isPast, compact, onWorkoutTap, onAddEvent, onDeleteEvent, onDayTap }: {
   date: Date
   workouts: WorkoutForDate[]
   events: CalendarEvent[]
@@ -1020,6 +1150,7 @@ function DayCell({ date, workouts, events, isToday, isPast, compact, onWorkoutTa
   onWorkoutTap: (w: WorkoutForDate) => void
   onAddEvent?: (dateStr: string) => void
   onDeleteEvent?: (id: string) => void
+  onDayTap?: (dateStr: string) => void
 }) {
   const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
   const dayNameIndex = date.getDay() === 0 ? 6 : date.getDay() - 1
@@ -1049,12 +1180,17 @@ function DayCell({ date, workouts, events, isToday, isPast, compact, onWorkoutTa
               </svg>
             </button>
           )}
-          <span className={[
-            'w-7 h-7 flex items-center justify-center rounded-full text-sm font-semibold',
-            isToday ? 'bg-blue-500 text-white' : 'text-gray-700',
-          ].join(' ')}>
+          <button
+            type="button"
+            onClick={() => onDayTap?.(toDateStr(date))}
+            title="View day"
+            className={[
+              'w-7 h-7 flex items-center justify-center rounded-full text-sm font-semibold transition-all',
+              isToday ? 'bg-blue-500 text-white hover:bg-blue-600' : 'text-gray-700 hover:bg-gray-100',
+            ].join(' ')}
+          >
             {date.getDate()}
-          </span>
+          </button>
         </div>
       </div>
 
@@ -1137,6 +1273,7 @@ export default function TrainingCalendar() {
   const [error, setError] = useState<string | null>(null)
   const [viewingWorkout, setViewingWorkout] = useState<WorkoutForDate | null>(null)
   const [addingEventDate, setAddingEventDate] = useState<string | null>(null)
+  const [viewingDay, setViewingDay] = useState<string | null>(null)
 
   const weekEnd = addDays(weekStart, 6)
 
@@ -1306,7 +1443,8 @@ export default function TrainingCalendar() {
                     isToday={toDateStr(date) === toDateStr(today)} isPast={date < today && toDateStr(date) !== toDateStr(today)}
                     onWorkoutTap={setViewingWorkout}
                     onAddEvent={setAddingEventDate}
-                    onDeleteEvent={handleDeleteEvent} />
+                    onDeleteEvent={handleDeleteEvent}
+                    onDayTap={setViewingDay} />
                 )
               })}
             </div>
@@ -1320,13 +1458,33 @@ export default function TrainingCalendar() {
                     isToday={toDateStr(date) === toDateStr(today)} isPast={date < today && toDateStr(date) !== toDateStr(today)}
                     compact onWorkoutTap={setViewingWorkout}
                     onAddEvent={setAddingEventDate}
-                    onDeleteEvent={handleDeleteEvent} />
+                    onDeleteEvent={handleDeleteEvent}
+                    onDayTap={setViewingDay} />
                 )
               })}
             </div>
           </>
         )}
       </div>
+
+      {/* Day detail sheet */}
+      {viewingDay && (() => {
+        const [y, m, d] = viewingDay.split('-').map(Number)
+        const dayDate = new Date(y, m - 1, d)
+        const dayWorkouts = getWorkoutsForDate(programs, dayDate, events)
+        const dayEvents = events.filter((e) => e.event_date === viewingDay)
+        return (
+          <DayDetailSheet
+            date={dayDate}
+            workouts={dayWorkouts}
+            events={dayEvents}
+            onClose={() => setViewingDay(null)}
+            onWorkoutTap={setViewingWorkout}
+            onAddEvent={setAddingEventDate}
+            onDeleteEvent={handleDeleteEvent}
+          />
+        )
+      })()}
 
       {/* Workout modal */}
       {viewingWorkout && (

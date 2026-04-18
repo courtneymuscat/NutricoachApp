@@ -25,24 +25,28 @@ export const FEATURES = {
   CYCLE_INTELLIGENCE:   'cycle_intelligence',   // predictions + personalised insights
   EXERCISE_VIDEO_UPLOAD: 'exercise_video_upload', // upload form-check videos to exercises
 
-  // ── Coach features ────────────────────────────────────────────────────────
+  // ── Coach features (all solo+ plans) ─────────────────────────────────────
   CLIENT_MANAGEMENT:      'client_management',
   FORM_TEMPLATES:         'form_templates',
   FORM_BUILDER_CUSTOM:    'form_builder_custom',
+  JOTFORM_IMPORT:         'jotform_import',       // available from solo upward
   COACH_CHECKIN_FEED:     'coach_checkin_feed',
   COACH_CHECKIN_FEEDBACK: 'coach_checkin_feedback',
   COACH_NOTES:            'coach_notes',
-  JOTFORM_IMPORT:         'jotform_import',
   EXERCISE_LIBRARY_EDIT:  'exercise_library_edit',
-  CUSTOM_PROGRAMS:        'custom_programs',
-  TEAM_MANAGEMENT:        'team_management',
+
+  // ── Specialisation features ───────────────────────────────────────────────
+  PROGRAM_COACH:     'program_coach',    // build + assign training programs (PT plans)
+  MEAL_PLAN_COACH:   'meal_plan_coach',  // build + assign meal plans (nutritionist plans)
 
   // ── Coach Business features ───────────────────────────────────────────────
+  CUSTOM_PROGRAMS:        'custom_programs',     // kept for legacy Pro compatibility
+  TEAM_MANAGEMENT:        'team_management',
   MULTI_COACH:        'multi_coach',
   ORG_DASHBOARD:      'org_dashboard',
   ORG_TEMPLATES:      'org_templates',
   ORG_PERMISSIONS:    'org_permissions',
-  CUSTOM_BRANDING:    'custom_branding',
+  CUSTOM_BRANDING:    'custom_branding',   // Pro and above
 
   // ── White-label features ──────────────────────────────────────────────────
   WHITE_LABEL_WEB:    'white_label_web',   // custom domain + full branding on web
@@ -56,7 +60,9 @@ export type SubscriptionTier =
   | 'individual_optimiser'
   | 'individual_elite'
   | 'coached'
-  | 'coach_solo'
+  | 'coach_solo'           // legacy — existing subscribers only
+  | 'coach_pt_solo'        // new PT-specialised solo plan
+  | 'coach_nutritionist_solo' // new Nutritionist-specialised solo plan
   | 'coach_pro'
   | 'coach_business'
   | 'wl_starter'
@@ -94,22 +100,46 @@ const INDIVIDUAL_ELITE_FEATURES: Feature[] = [
   FEATURES.EXERCISE_VIDEO_UPLOAD,
 ]
 
-// ─── Coach tier → feature mapping ────────────────────────────────────────────
+// ─── Coach base features (shared by all solo variants) ───────────────────────
 
-const COACH_SOLO_FEATURES: Feature[] = [
+const COACH_BASE_FEATURES: Feature[] = [
   FEATURES.CLIENT_MANAGEMENT,
   FEATURES.FORM_TEMPLATES,
   FEATURES.FORM_BUILDER_CUSTOM,
+  FEATURES.JOTFORM_IMPORT,    // available from solo upward
 ]
+
+// ─── Solo specialisation tiers ───────────────────────────────────────────────
+
+const COACH_PT_SOLO_FEATURES: Feature[] = [
+  ...COACH_BASE_FEATURES,
+  FEATURES.PROGRAM_COACH,       // build + assign programs
+  FEATURES.EXERCISE_LIBRARY_EDIT, // manage exercise library
+]
+
+const COACH_NUTRITIONIST_SOLO_FEATURES: Feature[] = [
+  ...COACH_BASE_FEATURES,
+  FEATURES.MEAL_PLAN_COACH,     // build + assign meal plans
+]
+
+// ─── Legacy coach_solo (existing subscribers) — gets combined solo features ──
+
+const COACH_SOLO_FEATURES: Feature[] = [
+  ...COACH_PT_SOLO_FEATURES,
+  ...COACH_NUTRITIONIST_SOLO_FEATURES.filter((f) => !COACH_PT_SOLO_FEATURES.includes(f)),
+]
+
+// ─── Pro and above ────────────────────────────────────────────────────────────
 
 export const COACH_PRO_FEATURES: Feature[] = [
   ...COACH_SOLO_FEATURES,
   FEATURES.COACH_CHECKIN_FEED,
   FEATURES.COACH_CHECKIN_FEEDBACK,
   FEATURES.COACH_NOTES,
-  FEATURES.JOTFORM_IMPORT,
-  FEATURES.EXERCISE_LIBRARY_EDIT,
   FEATURES.CUSTOM_PROGRAMS,
+  FEATURES.PROGRAM_COACH,
+  FEATURES.MEAL_PLAN_COACH,
+  FEATURES.CUSTOM_BRANDING,
 ]
 
 export const COACH_BUSINESS_FEATURES: Feature[] = [
@@ -118,7 +148,6 @@ export const COACH_BUSINESS_FEATURES: Feature[] = [
   FEATURES.ORG_DASHBOARD,
   FEATURES.ORG_TEMPLATES,
   FEATURES.ORG_PERMISSIONS,
-  FEATURES.CUSTOM_BRANDING,
 ]
 
 export const WL_STARTER_FEATURES: Feature[] = [
@@ -133,23 +162,27 @@ export const WL_PRO_FEATURES: Feature[] = [
 ]
 
 export const TIER_FEATURES: Record<SubscriptionTier, Feature[]> = {
-  individual_free:      INDIVIDUAL_FREE_FEATURES,
-  individual_optimiser: INDIVIDUAL_OPTIMISER_FEATURES,
-  individual_elite:     INDIVIDUAL_ELITE_FEATURES,
-  coached:              INDIVIDUAL_ELITE_FEATURES, // coached clients get full Elite-level access
-  coach_solo:           COACH_SOLO_FEATURES,
-  coach_pro:            COACH_PRO_FEATURES,
-  coach_business:       COACH_BUSINESS_FEATURES,
-  wl_starter:           WL_STARTER_FEATURES,
-  wl_pro:               WL_PRO_FEATURES,
+  individual_free:           INDIVIDUAL_FREE_FEATURES,
+  individual_optimiser:      INDIVIDUAL_OPTIMISER_FEATURES,
+  individual_elite:          INDIVIDUAL_ELITE_FEATURES,
+  coached:                   INDIVIDUAL_ELITE_FEATURES, // coached clients get full Elite-level access
+  coach_solo:                COACH_SOLO_FEATURES,       // legacy
+  coach_pt_solo:             COACH_PT_SOLO_FEATURES,
+  coach_nutritionist_solo:   COACH_NUTRITIONIST_SOLO_FEATURES,
+  coach_pro:                 COACH_PRO_FEATURES,
+  coach_business:            COACH_BUSINESS_FEATURES,
+  wl_starter:                WL_STARTER_FEATURES,
+  wl_pro:                    WL_PRO_FEATURES,
 }
 
 export const COACH_TIER_FEATURES: Record<string, Feature[]> = {
-  coach_solo:     COACH_SOLO_FEATURES,
-  coach_pro:      COACH_PRO_FEATURES,
-  coach_business: COACH_BUSINESS_FEATURES,
-  wl_starter:     WL_STARTER_FEATURES,
-  wl_pro:         WL_PRO_FEATURES,
+  coach_solo:                COACH_SOLO_FEATURES,
+  coach_pt_solo:             COACH_PT_SOLO_FEATURES,
+  coach_nutritionist_solo:   COACH_NUTRITIONIST_SOLO_FEATURES,
+  coach_pro:                 COACH_PRO_FEATURES,
+  coach_business:            COACH_BUSINESS_FEATURES,
+  wl_starter:                WL_STARTER_FEATURES,
+  wl_pro:                    WL_PRO_FEATURES,
 }
 
 // ─── canAccess helper ─────────────────────────────────────────────────────────
@@ -174,13 +207,14 @@ export type PricingPlan = {
   name: string
   tagline: string
   priceMonthly: number      // AUD per month
-  priceAnnualMonthly: number // AUD per month when billed annually
+  priceAnnualMonthly: number // AUD per month when billed annually (0 = no annual option)
   features: string[]
   highlighted: boolean
-  clientLimit?: number      // coach plans only
-  seatLimit?: number        // coach_business only
-  includedSeats?: number    // white-label plans — included client seats
-  includedCoaches?: number  // white-label plans — included coach seats
+  includedClients?: number  // clients included in base price before overages
+  clientOveragePrice?: number // AUD per additional client per month
+  includedCoaches?: number  // coaches included (business plans)
+  coachOveragePrice?: number // AUD per additional coach per month
+  isMonthlyOnly?: boolean   // no annual billing option
 }
 
 export const INDIVIDUAL_PLANS: PricingPlan[] = [
@@ -198,7 +232,7 @@ export const INDIVIDUAL_PLANS: PricingPlan[] = [
       'Basic workout logging',
       'Period dates + cycle phase bar',
       'Basic daily check-in (sleep + energy)',
-      'Personalised TDEE + macro targets (calorie needs calculated from your actual workouts, not just an activity level guess)',
+      'Personalised TDEE + macro targets',
     ],
     highlighted: false,
   },
@@ -240,41 +274,74 @@ export const INDIVIDUAL_PLANS: PricingPlan[] = [
   },
 ]
 
-export const COACH_PLANS: PricingPlan[] = [
+// Solo coach plans — choose your specialisation
+export const COACH_SOLO_PLANS: PricingPlan[] = [
   {
-    id: 'coach_solo',
-    planKey: 'coach_solo',
-    name: 'Solo',
-    tagline: 'Begin coaching',
-    priceMonthly: 29,
-    priceAnnualMonthly: 26,
-    clientLimit: 5,
+    id: 'coach_pt_solo',
+    planKey: 'coach_pt_solo',
+    name: 'Solo — Personal Trainer',
+    tagline: 'Programs & training focus',
+    priceMonthly: 39,
+    priceAnnualMonthly: 0, // monthly only
+    isMonthlyOnly: true,
+    includedClients: 5,
+    clientOveragePrice: 4,
     features: [
-      'Up to 5 clients',
+      '5 clients included (+$4/mo per extra client)',
       'Client dashboard + profiles',
-      'Template forms (onboarding, check-in)',
-      'Custom form builder',
+      'Custom form builder + template forms',
+      'JotForm import (no rebuilding old forms)',
       'Client messaging',
       'Client invitations',
+      'Training program builder + assignment',
+      'Exercise library management',
+      'View client cycle & nutrition data',
     ],
     highlighted: false,
   },
+  {
+    id: 'coach_nutritionist_solo',
+    planKey: 'coach_nutritionist_solo',
+    name: 'Solo — Nutritionist',
+    tagline: 'Meal plans & nutrition focus',
+    priceMonthly: 39,
+    priceAnnualMonthly: 0, // monthly only
+    isMonthlyOnly: true,
+    includedClients: 5,
+    clientOveragePrice: 4,
+    features: [
+      '5 clients included (+$4/mo per extra client)',
+      'Client dashboard + profiles',
+      'Custom form builder + template forms',
+      'JotForm import (no rebuilding old forms)',
+      'Client messaging',
+      'Client invitations',
+      'Meal plan templates + meal plan builder',
+      'Assign meal plans to clients',
+      'View client workout & cycle data',
+    ],
+    highlighted: false,
+  },
+]
+
+export const COACH_PLANS: PricingPlan[] = [
   {
     id: 'coach_pro',
     planKey: 'coach_pro',
     name: 'Pro',
     tagline: 'Scale your practice',
-    priceMonthly: 69,
-    priceAnnualMonthly: 62,
-    clientLimit: 20,
+    priceMonthly: 89,
+    priceAnnualMonthly: 0, // monthly only
+    isMonthlyOnly: true,
+    includedClients: 20,
+    clientOveragePrice: 3,
     features: [
-      'Up to 20 clients',
-      'Everything in Solo',
+      '20 clients included (+$3/mo per extra client)',
+      'Everything in Solo (PT + Nutritionist)',
       'Check-in feed + client feedback',
       'Coach notes (private per client)',
-      'JotForm integration',
-      'Exercise library editing',
       'Full client data: food, weight, workouts',
+      'Custom branding (logo + colours)',
     ],
     highlighted: true,
   },
@@ -284,17 +351,20 @@ export const COACH_PLANS: PricingPlan[] = [
     name: 'Business',
     tagline: 'For teams & studios',
     priceMonthly: 199,
-    priceAnnualMonthly: 179,
-    clientLimit: 100,
-    seatLimit: 100,
+    priceAnnualMonthly: 0, // monthly only
+    isMonthlyOnly: true,
+    includedClients: 100,
+    clientOveragePrice: 2,
+    includedCoaches: 3,
+    coachOveragePrice: 19,
     features: [
-      'Up to 100 clients',
+      '3 coaches included (+$19/mo per extra coach)',
+      '100 clients included (+$2/mo per extra client)',
       'Everything in Pro',
       'Multi-coach team management',
       'Organisation dashboard',
       'Shared template library',
       'Role-based permissions',
-      'Custom branding',
     ],
     highlighted: false,
   },
@@ -304,8 +374,9 @@ export const COACH_PLANS: PricingPlan[] = [
     name: 'Web White-label',
     tagline: 'Your brand, your domain',
     priceMonthly: 299,
-    priceAnnualMonthly: 269,
-    includedSeats: 200,
+    priceAnnualMonthly: 0, // monthly only
+    isMonthlyOnly: true,
+    includedClients: 200,
     includedCoaches: 5,
     features: [
       'Everything in Business',
@@ -324,8 +395,9 @@ export const COACH_PLANS: PricingPlan[] = [
     name: 'App Store White-label',
     tagline: 'Your app in the App Store',
     priceMonthly: 499,
-    priceAnnualMonthly: 449,
-    includedSeats: 500,
+    priceAnnualMonthly: 0, // monthly only
+    isMonthlyOnly: true,
+    includedClients: 500,
     includedCoaches: 10,
     features: [
       'Everything in Web White-label',

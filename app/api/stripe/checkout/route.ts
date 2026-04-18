@@ -5,11 +5,15 @@ import type Stripe from 'stripe'
 
 export async function POST(req: NextRequest) {
   try {
-    const { planKey, billing, userType } = await req.json() as {
+    const { planKey, billing: billingParam, userType } = await req.json() as {
       planKey: string
       billing: 'monthly' | 'annual'
       userType: 'individual' | 'coach'
     }
+
+    // Coach and white-label plans are always monthly
+    const MONTHLY_ONLY_PLANS = new Set(['coach_solo', 'coach_pt_solo', 'coach_nutritionist_solo', 'coach_pro', 'coach_business', 'wl_starter', 'wl_pro'])
+    const billing = MONTHLY_ONLY_PLANS.has(planKey) ? 'monthly' : billingParam
 
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -36,7 +40,7 @@ export async function POST(req: NextRequest) {
       lineItems.push({ price: overagePriceId }) // no quantity — metered billing
     }
 
-    const isCoachPlan = ['coach_solo', 'coach_pro', 'coach_business'].includes(planKey)
+    const isCoachPlan = ['coach_solo', 'coach_pt_solo', 'coach_nutritionist_solo', 'coach_pro', 'coach_business', 'wl_starter', 'wl_pro'].includes(planKey)
 
     const checkoutSession = await stripe.checkout.sessions.create({
       mode: 'subscription',

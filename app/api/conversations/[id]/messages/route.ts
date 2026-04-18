@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { sendPushToUser } from '@/lib/push'
 import type { NextRequest } from 'next/server'
 
 async function verifyAccess(supabase: Awaited<ReturnType<typeof createClient>>, conversationId: string, userId: string) {
@@ -69,6 +70,34 @@ export async function POST(
     .from('conversations')
     .update({ last_message_at: new Date().toISOString() })
     .eq('id', id)
+
+  // Push notification to the recipient
+  const recipientId = session.user.id === convo.coach_id ? convo.client_id : convo.coach_id
+  if (recipientId) {
+    // Get sender name for notification body
+    const { data: senderProfile } = await supabase
+      .from('profiles')
+      .select('first_name, full_name')
+      .eq('id', session.user.id)
+      .single()
+    const senderName = senderProfile?.first_name ?? senderProfile?.full_name ?? 'Someone'
+    const preview = body?.trim()
+      ? body.trim().slice(0, 80) + (body.trim().length > 80 ? '…' : '')
+      : 'Sent an attachment'
+
+    const isRecipientCoach = recipientId === convo.coach_id
+    const notifUrl = isRecipientCoach
+      ? `/coach/messages/${id}`
+      : `/messages/${id}`
+
+    sendPushToUser(recipientId, {
+      title: senderName,
+      body: preview,
+      url: notifUrl,
+      icon: '/icons/icon-192.png',
+      tag: `message-${id}`,
+    }).catch(() => {/* silent */})
+  }
 
   return Response.json(message, { status: 201 })
 }

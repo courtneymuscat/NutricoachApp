@@ -9,17 +9,19 @@ export async function GET() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('timezone, full_name, date_of_birth, phone, sex, subscription_tier')
+    .select('timezone, full_name, date_of_birth, phone, sex, subscription_tier, cycle_reminders')
     .eq('id', session.user.id)
     .single()
 
+  const p = profile as Record<string, unknown> | null
   return Response.json({
-    timezone: profile?.timezone ?? null,
-    full_name: (profile as Record<string, unknown>)?.full_name ?? null,
-    date_of_birth: (profile as Record<string, unknown>)?.date_of_birth ?? null,
-    phone: (profile as Record<string, unknown>)?.phone ?? null,
-    sex: profile?.sex ?? null,
-    subscription_tier: profile?.subscription_tier ?? null,
+    timezone: p?.timezone ?? null,
+    full_name: p?.full_name ?? null,
+    date_of_birth: p?.date_of_birth ?? null,
+    phone: p?.phone ?? null,
+    sex: p?.sex ?? null,
+    subscription_tier: p?.subscription_tier ?? null,
+    cycle_reminders: p?.cycle_reminders ?? true,
   })
 }
 
@@ -31,8 +33,8 @@ export async function PATCH(req: NextRequest) {
   const body = await req.json()
 
   // Allow patching timezone OR profile details (full_name, date_of_birth, phone)
-  const allowed = ['timezone', 'full_name', 'date_of_birth', 'phone', 'sex']
-  const update: Record<string, string> = {}
+  const allowed = ['timezone', 'full_name', 'date_of_birth', 'phone', 'sex', 'cycle_reminders']
+  const update: Record<string, unknown> = {}
   for (const key of allowed) {
     if (key in body) update[key] = body[key]
   }

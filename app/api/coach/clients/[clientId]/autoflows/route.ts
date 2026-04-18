@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireCoach } from '@/lib/coach'
+import { sendPushToUser } from '@/lib/push'
 import type { NextRequest } from 'next/server'
 
 type Ctx = { params: Promise<{ clientId: string }> }
@@ -102,6 +103,22 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       }
     }
   }
+
+  // Push notification to the client — let them know they have new tasks
+  const { data: coachProfile } = await supabase
+    .from('profiles')
+    .select('first_name, full_name')
+    .eq('id', coachId)
+    .single()
+  const coachName = coachProfile?.first_name ?? coachProfile?.full_name ?? 'Your coach'
+
+  sendPushToUser(clientId, {
+    title: 'New tasks from ' + coachName,
+    body: template.name,
+    url: '/dashboard',
+    icon: '/icons/icon-192.png',
+    tag: `autoflow-assigned-${clientId}`,
+  }).catch(() => {/* silent */})
 
   return Response.json({ id: flow.id })
 }

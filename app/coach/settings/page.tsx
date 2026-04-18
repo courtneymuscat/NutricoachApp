@@ -1,8 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import TimezoneSelector from '@/app/components/TimezoneSelector'
 import BillingSection from '@/app/components/BillingSection'
+
+// Tiers that have access to custom branding
+const BRANDING_TIERS = new Set(['coach_pro', 'coach_business', 'wl_starter', 'wl_pro'])
 
 type Service = {
   id: string
@@ -107,55 +110,27 @@ function ServicesSection() {
         </div>
       )}
 
-      {/* Add service form */}
       <div className="border-t pt-4 space-y-3">
         <p className="text-xs font-semibold text-gray-700">Add a service</p>
         <form onSubmit={handleAdd} className="space-y-3">
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Name <span className="text-red-500">*</span></label>
-            <input
-              value={addName}
-              onChange={(e) => setAddName(e.target.value)}
-              required
-              placeholder="e.g. 1-on-1 Coaching"
-              className={inputClass}
-            />
+            <input value={addName} onChange={(e) => setAddName(e.target.value)} required placeholder="e.g. 1-on-1 Coaching" className={inputClass} />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Price <span className="text-gray-400">(optional)</span></label>
-            <input
-              value={addPrice}
-              onChange={(e) => setAddPrice(e.target.value)}
-              placeholder="e.g. $150/mo"
-              className={inputClass}
-            />
+            <input value={addPrice} onChange={(e) => setAddPrice(e.target.value)} placeholder="e.g. $150/mo" className={inputClass} />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Payment link <span className="text-red-500">*</span></label>
-            <input
-              type="url"
-              value={addLink}
-              onChange={(e) => setAddLink(e.target.value)}
-              required
-              placeholder="https://buy.stripe.com/..."
-              className={inputClass}
-            />
+            <input type="url" value={addLink} onChange={(e) => setAddLink(e.target.value)} required placeholder="https://buy.stripe.com/..." className={inputClass} />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Description <span className="text-gray-400">(optional)</span></label>
-            <input
-              value={addDesc}
-              onChange={(e) => setAddDesc(e.target.value)}
-              placeholder="Brief description of this service"
-              className={inputClass}
-            />
+            <input value={addDesc} onChange={(e) => setAddDesc(e.target.value)} placeholder="Brief description of this service" className={inputClass} />
           </div>
           {addError && <p className="text-xs text-red-600 bg-red-50 rounded-xl px-3 py-2">{addError}</p>}
-          <button
-            type="submit"
-            disabled={adding}
-            className="bg-blue-600 text-white px-5 py-2 rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors"
-          >
+          <button type="submit" disabled={adding} className="bg-blue-600 text-white px-5 py-2 rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors">
             {adding ? 'Adding…' : 'Add service'}
           </button>
         </form>
@@ -164,9 +139,154 @@ function ServicesSection() {
   )
 }
 
+function BrandingSection({ initialColour, initialLogoUrl }: { initialColour: string | null; initialLogoUrl: string | null }) {
+  const [colour, setColour] = useState(initialColour ?? '#F5C842')
+  const [logoUrl, setLogoUrl] = useState(initialLogoUrl ?? '')
+  const [uploading, setUploading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 2 * 1024 * 1024) {
+      setError('Logo must be under 2 MB')
+      return
+    }
+    setUploading(true)
+    setError(null)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('type', 'coach_logo')
+      const res = await fetch('/api/coach/clients/upload-logo', {
+        method: 'POST',
+        body: formData,
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Upload failed')
+      setLogoUrl(json.url)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/coach/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brand_colour: colour, logo_url: logoUrl || null }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Failed to save')
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2500)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-2xl border p-6 space-y-5">
+      <div>
+        <h2 className="text-sm font-semibold text-gray-900">Branding</h2>
+        <p className="text-xs text-gray-500 mt-0.5">Your logo and brand colour appear in your clients&apos; app experience.</p>
+      </div>
+
+      {/* Logo upload */}
+      <div className="space-y-2">
+        <label className="block text-xs font-medium text-gray-700">Logo</label>
+        <div className="flex items-center gap-4">
+          {logoUrl ? (
+            <img src={logoUrl} alt="Brand logo" className="h-12 w-12 object-contain rounded-xl border" />
+          ) : (
+            <div className="h-12 w-12 rounded-xl border border-dashed border-gray-300 flex items-center justify-center text-gray-300 text-xs">
+              No logo
+            </div>
+          )}
+          <div className="space-y-1">
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+              className="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700 hover:border-gray-500 transition-colors disabled:opacity-50"
+            >
+              {uploading ? 'Uploading…' : 'Upload logo'}
+            </button>
+            <p className="text-xs text-gray-400">PNG or SVG, max 2 MB</p>
+          </div>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/png,image/svg+xml,image/jpeg,image/webp"
+            className="hidden"
+            onChange={handleLogoUpload}
+          />
+        </div>
+        {logoUrl && (
+          <button
+            type="button"
+            onClick={() => setLogoUrl('')}
+            className="text-xs text-red-500 hover:text-red-700"
+          >
+            Remove logo
+          </button>
+        )}
+      </div>
+
+      {/* Brand colour */}
+      <div className="space-y-2">
+        <label className="block text-xs font-medium text-gray-700">Brand colour</label>
+        <div className="flex items-center gap-3">
+          <input
+            type="color"
+            value={colour}
+            onChange={(e) => setColour(e.target.value)}
+            className="h-9 w-14 rounded-lg cursor-pointer border border-gray-200"
+          />
+          <input
+            type="text"
+            value={colour}
+            onChange={(e) => setColour(e.target.value)}
+            placeholder="#F5C842"
+            className="w-28 border border-gray-300 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <div
+            className="h-9 w-9 rounded-xl border border-gray-200"
+            style={{ backgroundColor: colour }}
+          />
+        </div>
+      </div>
+
+      {error && <p className="text-xs text-red-600 bg-red-50 rounded-xl px-3 py-2">{error}</p>}
+
+      <button
+        type="button"
+        onClick={handleSave}
+        disabled={saving}
+        className="bg-blue-600 text-white px-5 py-2 rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors"
+      >
+        {saving ? 'Saving…' : saved ? 'Saved!' : 'Save branding'}
+      </button>
+    </div>
+  )
+}
+
 export default function CoachSettingsPage() {
   const [firstName, setFirstName] = useState('')
   const [email, setEmail] = useState('')
+  const [subscriptionTier, setSubscriptionTier] = useState<string>('individual_free')
+  const [brandColour, setBrandColour] = useState<string | null>(null)
+  const [logoUrl, setLogoUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -178,6 +298,9 @@ export default function CoachSettingsPage() {
       .then((d) => {
         setFirstName(d.first_name ?? '')
         setEmail(d.email ?? '')
+        setSubscriptionTier(d.subscription_tier ?? 'individual_free')
+        setBrandColour(d.brand_colour ?? null)
+        setLogoUrl(d.logo_url ?? null)
         setLoading(false)
       })
   }, [])
@@ -199,6 +322,7 @@ export default function CoachSettingsPage() {
   }
 
   const inputClass = 'w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
+  const hasBranding = BRANDING_TIERS.has(subscriptionTier)
 
   return (
     <div className="flex-1 flex flex-col">
@@ -266,7 +390,20 @@ export default function CoachSettingsPage() {
               </button>
             </form>
 
-            {/* Services — outside the profile form */}
+            {/* Branding — Pro and above */}
+            {hasBranding ? (
+              <BrandingSection initialColour={brandColour} initialLogoUrl={logoUrl} />
+            ) : (
+              <div className="bg-gray-50 rounded-2xl border border-dashed border-gray-200 p-6 space-y-2">
+                <h2 className="text-sm font-semibold text-gray-400">Branding</h2>
+                <p className="text-xs text-gray-400">
+                  Upload your logo and set a brand colour on the{' '}
+                  <a href="/pricing" className="underline text-gray-500">Pro plan or above</a>.
+                </p>
+              </div>
+            )}
+
+            {/* Services */}
             <ServicesSection />
 
             {/* Billing & subscription */}

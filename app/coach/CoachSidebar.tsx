@@ -1,6 +1,7 @@
 'use client'
 
 import { usePathname, useSearchParams } from 'next/navigation'
+import { useState } from 'react'
 import { useBranding } from '@/app/components/BrandingProvider'
 
 const NAV = [
@@ -153,6 +154,7 @@ export default function CoachSidebar({
   const path = usePathname()
   const searchParams = useSearchParams()
   const activeTab = searchParams.get('tab')
+  const [moreOpen, setMoreOpen] = useState(false)
 
   return (
     <>
@@ -273,6 +275,86 @@ export default function CoachSidebar({
       {/* Mobile top spacer */}
       <div className="md:hidden h-14" />
 
+      {/* Mobile "More" drawer — full-screen overlay */}
+      {moreOpen && (
+        <div className="md:hidden fixed inset-0 z-50 flex flex-col justify-end">
+          {/* Backdrop */}
+          <button
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setMoreOpen(false)}
+            aria-label="Close menu"
+          />
+          {/* Sheet */}
+          <div className="relative bg-white rounded-t-2xl pb-safe overflow-hidden"
+               style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 80px)' }}>
+            <div className="flex items-center justify-between px-5 pt-5 pb-3">
+              <p className="text-sm font-bold text-gray-900">More</p>
+              <button onClick={() => setMoreOpen(false)} className="text-gray-400 hover:text-gray-700">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-px bg-gray-100">
+              {[
+                NAV[4], // Forms
+                NAV[5], // Autoflows
+                NAV[6], // Resources
+                NAV[7], // Exercises
+                NAV[8], // Programs
+                NAV[9], // Meal Plans
+                NAV[10], // Note Templates
+              ].map((item) => {
+                const active = path === item.href || path.startsWith(item.href)
+                return (
+                  <a
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMoreOpen(false)}
+                    className={`flex flex-col items-center justify-center gap-1.5 py-4 bg-white ${
+                      active ? 'text-blue-600' : 'text-gray-600'
+                    }`}
+                  >
+                    <span className={active ? 'text-blue-500' : 'text-gray-400'}>{item.icon}</span>
+                    <span className="text-[11px] font-medium text-center leading-tight">
+                      {item.label}
+                      {item.badge && unreadCount > 0 && (
+                        <span className="ml-1 inline-block w-2 h-2 bg-blue-500 rounded-full align-middle" />
+                      )}
+                    </span>
+                  </a>
+                )
+              })}
+              {/* Settings */}
+              <a
+                href="/coach/settings"
+                onClick={() => setMoreOpen(false)}
+                className={`flex flex-col items-center justify-center gap-1.5 py-4 bg-white ${
+                  path === '/coach/settings' ? 'text-blue-600' : 'text-gray-600'
+                }`}
+              >
+                <svg className={`w-5 h-5 ${path === '/coach/settings' ? 'text-blue-500' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                <span className="text-[11px] font-medium">Settings</span>
+              </a>
+              {/* My dashboard */}
+              <a
+                href="/dashboard"
+                onClick={() => setMoreOpen(false)}
+                className="flex flex-col items-center justify-center gap-1.5 py-4 bg-white text-gray-600"
+              >
+                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                <span className="text-[11px] font-medium text-center leading-tight">My Dashboard</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Mobile bottom tab bar */}
       <nav
         className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-100"
@@ -303,18 +385,20 @@ export default function CoachSidebar({
               </a>
             )
           })}
-          {/* Settings */}
-          <a
-            href="/coach/settings"
-            className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5"
+          {/* More tab */}
+          <button
+            onClick={() => setMoreOpen(true)}
+            className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 relative"
           >
-            <svg className={`w-6 h-6 ${path === '/coach/settings' ? 'text-blue-600' : 'text-gray-400'}`} fill={path === '/coach/settings' ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={path === '/coach/settings' ? 0 : 1.75} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
-            <span className={`text-[10px] font-semibold tracking-tight ${path === '/coach/settings' ? 'text-blue-600' : 'text-gray-400'}`}>
-              Profile
-            </span>
-          </a>
+            <span className="text-[10px] font-semibold tracking-tight text-gray-400">More</span>
+            {/* Badge if there are unread forms */}
+            {unreadCount > 0 && (
+              <span className="absolute top-2 right-[calc(50%-14px)] w-2 h-2 bg-blue-500 rounded-full" />
+            )}
+          </button>
         </div>
       </nav>
 

@@ -47,3 +47,50 @@ self.addEventListener('fetch', (e) => {
     )
   }
 })
+
+// ── Push notifications ─────────────────────────────────────────────────────────
+
+self.addEventListener('push', (e) => {
+  if (!e.data) return
+
+  let payload
+  try {
+    payload = e.data.json()
+  } catch {
+    payload = { title: 'Prokol', body: e.data.text() }
+  }
+
+  const { title, body, url, icon, tag } = payload
+
+  e.waitUntil(
+    self.registration.showNotification(title ?? 'Prokol', {
+      body: body ?? '',
+      icon: icon ?? '/icons/icon-192.png',
+      badge: '/icons/icon-72.png',
+      tag: tag ?? 'prokol-notification',
+      renotify: true,       // vibrate even if same tag is already showing
+      data: { url: url ?? '/' },
+    })
+  )
+})
+
+// Open the target URL when the user taps a notification
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close()
+  const targetUrl = e.notification.data?.url ?? '/'
+
+  e.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      // If app is already open — focus it and navigate
+      for (const client of windowClients) {
+        if (client.url.includes(self.location.origin)) {
+          client.focus()
+          client.navigate(targetUrl)
+          return
+        }
+      }
+      // Otherwise open a new window
+      return clients.openWindow(targetUrl)
+    })
+  )
+})

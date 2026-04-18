@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { requireCoach } from '@/lib/coach'
+import { sendPushToUser } from '@/lib/push'
 import type { NextRequest } from 'next/server'
 
 export async function POST(
@@ -47,6 +48,22 @@ export async function POST(
     .from('conversations')
     .update({ last_message_at: new Date().toISOString() })
     .eq('id', convo.id)
+
+  // Push notification to the client
+  const { data: coachProfile } = await supabase
+    .from('profiles')
+    .select('first_name, full_name')
+    .eq('id', coachId)
+    .single()
+  const coachName = coachProfile?.first_name ?? coachProfile?.full_name ?? 'Your coach'
+
+  sendPushToUser(clientId, {
+    title: coachName,
+    body: 'Just a friendly reminder to submit your check-in when you get a chance',
+    url: `/messages/${convo.id}`,
+    icon: '/icons/icon-192.png',
+    tag: `reminder-${clientId}`,
+  }).catch(() => {/* silent */})
 
   return Response.json({ ok: true, conversationId: convo.id })
 }

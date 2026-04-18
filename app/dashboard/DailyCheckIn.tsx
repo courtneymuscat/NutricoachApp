@@ -384,6 +384,9 @@ export default function DailyCheckIn({ fullAccess = true }: { fullAccess?: boole
     form.reset()
     setDate(todayLocal())
     setPending(false)
+
+    // Notify coach (fire and forget)
+    fetch('/api/push/notify-checkin', { method: 'POST' }).catch(() => {/* silent */})
   }
 
   const latest = checkIns[0] ?? null

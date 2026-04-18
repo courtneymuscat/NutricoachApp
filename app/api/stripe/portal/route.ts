@@ -27,12 +27,34 @@ export async function POST(req: NextRequest) {
     }
 
     const stripe = getStripe()
-    const session = await stripe.billingPortal.sessions.create({
-      customer: profile.stripe_customer_id,
-      return_url: `${BASE_URL}${returnPath}`,
-    })
 
-    return NextResponse.json({ url: session.url })
+    try {
+      const session = await stripe.billingPortal.sessions.create({
+        customer: profile.stripe_customer_id,
+        return_url: `${BASE_URL}${returnPath}`,
+      })
+      return NextResponse.json({ url: session.url })
+    } catch (stripeErr) {
+      const msg = stripeErr instanceof Error ? stripeErr.message : String(stripeErr)
+
+      // Test/live mode mismatch — customer exists in the other mode
+      if (msg.includes('similar object exists in test mode') || msg.includes('similar object exists in live mode')) {
+        return NextResponse.json({
+          error: 'billing_mode_mismatch',
+          message: 'Your billing account was set up in test mode. Please subscribe again to activate live billing.',
+        }, { status: 400 })
+      }
+
+      // Customer no longer exists in Stripe
+      if (msg.includes('No such customer')) {
+        return NextResponse.json({
+          error: 'billing_customer_not_found',
+          message: 'Your billing account could not be found. Please subscribe again.',
+        }, { status: 400 })
+      }
+
+      throw stripeErr
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     console.error('Stripe portal error:', message)

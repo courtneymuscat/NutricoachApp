@@ -5,16 +5,40 @@ export const COACH_SEAT_OVERAGE_PRICE = process.env.STRIPE_PRICE_COACH_BUSINESS_
 
 // ─── Individual coach client-seat limits ─────────────────────────────────────
 
-const INCLUDED_SEATS: Record<string, number> = {
-  coach_solo:     10,
-  coach_pro:      30,
-  coach_business: 100,
+export const INCLUDED_SEATS: Record<string, number> = {
+  coach_solo:                5,  // legacy
+  coach_pt_solo:             5,
+  coach_nutritionist_solo:   5,
+  coach_pro:                 20,
+  coach_business:            100,
+}
+
+export const INCLUDED_COACHES: Record<string, number> = {
+  coach_business: 3,
+  wl_starter:     5,
+  wl_pro:         10,
+}
+
+// AUD per extra client per month (used for display + Stripe meter)
+export const CLIENT_OVERAGE_PRICE: Record<string, number> = {
+  coach_solo:                4,  // legacy
+  coach_pt_solo:             4,
+  coach_nutritionist_solo:   4,
+  coach_pro:                 3,
+  coach_business:            2,
+}
+
+// AUD per extra coach per month (business plans only)
+export const COACH_OVERAGE_PRICE: Record<string, number> = {
+  coach_business: 19,
 }
 
 export const TIER_TO_METER_EVENT: Record<string, string> = {
-  coach_solo:     'coach_solo_seat_overage',
-  coach_pro:      'coach_pro_seat_overage',
-  coach_business: 'coach_business_seat_overage',
+  coach_solo:                'coach_solo_seat_overage',   // legacy
+  coach_pt_solo:             'coach_pt_solo_seat_overage',
+  coach_nutritionist_solo:   'coach_nutritionist_solo_seat_overage',
+  coach_pro:                 'coach_pro_seat_overage',
+  coach_business:            'coach_business_seat_overage',
 }
 
 // ─── White-label org seat limits ─────────────────────────────────────────────
@@ -111,23 +135,36 @@ export async function reportCoachSeatUsage(orgId: string): Promise<void> {
 
   const { data: ownerProfile } = await admin
     .from('profiles')
-    .select('stripe_customer_id')
+    .select('stripe_customer_id, subscription_tier, org_coach_seat_count')
     .eq('id', ownerMembership.user_id)
     .single()
 
   if (!ownerProfile?.stripe_customer_id) return
 
-  try {
-    const stripe = getStripe()
-    await stripe.billing.meterEvents.create({
-      event_name: 'coach_business_coach_overage',
-      payload: {
-        stripe_customer_id: ownerProfile.stripe_customer_id as string,
-        value: '1',
-      },
-    })
-  } catch (err) {
-    console.error('Stripe coach seat overage error:', err instanceof Error ? err.message : String(err))
+  const tier = ownerProfile.subscription_tier as string
+  const includedCoaches = INCLUDED_COACHES[tier] ?? 0
+  const coachSeatCount = (ownerProfile.org_coach_seat_count as number) ?? 0
+
+  // Increment coach seat count on the owner profile
+  await admin
+    .from('profiles')
+    .update({ org_coach_seat_count: coachSeatCount + 1 })
+    .eq('id', ownerMembership.user_id)
+
+  // Only fire overage event once included seats are exceeded
+  if (coachSeatCount >= includedCoaches) {
+    try {
+      const stripe = getStripe()
+      await stripe.billing.meterEvents.create({
+        event_name: 'coach_business_coach_overage',
+        payload: {
+          stripe_customer_id: ownerProfile.stripe_customer_id as string,
+          value: '1',
+        },
+      })
+    } catch (err) {
+      console.error('Stripe coach seat overage error:', err instanceof Error ? err.message : String(err))
+    }
   }
 }
 
@@ -136,12 +173,6 @@ export async function reportCoachSeatUsage(orgId: string): Promise<void> {
 /**
  * Increment the white-label org's seat count (coach or client) and report a
  * Stripe meter overage event when the org exceeds its plan's included limit.
- *
- * @param orgId  The organisation UUID
- * @param type   'coach' — a new coach joined the org
- *               'client' — a new coached client was added under the org
- *
- * Non-blocking — errors are logged but do not throw.
  */
 export async function reportWhiteLabelSeatUsage(
   orgId: string,
@@ -149,7 +180,6 @@ export async function reportWhiteLabelSeatUsage(
 ): Promise<void> {
   const admin = createAdminClient()
 
-  // Fetch org seat counts + subscription tier
   const { data: org } = await admin
     .from('organisations')
     .select('coach_seat_count, client_seat_count, subscription_tier, owner_id')
@@ -160,9 +190,8 @@ export async function reportWhiteLabelSeatUsage(
 
   const tier = org.subscription_tier as string
   const config = WL_SEAT_CONFIG[tier]
-  if (!config) return // not a WL tier — nothing to do
+  if (!config) return
 
-  // Get org owner's Stripe customer ID
   const { data: ownerProfile } = await admin
     .from('profiles')
     .select('stripe_customer_id')

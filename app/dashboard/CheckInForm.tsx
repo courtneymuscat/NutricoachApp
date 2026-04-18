@@ -84,6 +84,9 @@ export default function CheckInForm() {
     window.dispatchEvent(new Event('checkin-saved'))
     router.refresh()
     setPending(false)
+
+    // Notify coach (fire and forget)
+    fetch('/api/push/notify-checkin', { method: 'POST' }).catch(() => {/* silent */})
   }
 
   return (

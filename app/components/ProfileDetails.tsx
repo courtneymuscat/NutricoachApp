@@ -9,6 +9,7 @@ export default function ProfileDetails() {
   const [dob, setDob] = useState('')
   const [phone, setPhone] = useState('')
   const [sex, setSex] = useState<Sex>('')
+  const [cycleReminders, setCycleReminders] = useState(true)
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [loaded, setLoaded] = useState(false)
 
@@ -20,21 +21,24 @@ export default function ProfileDetails() {
         if (d.date_of_birth) setDob(d.date_of_birth)
         if (d.phone) setPhone(d.phone)
         if (d.sex) setSex(d.sex as Sex)
+        setCycleReminders(d.cycle_reminders !== false)
         setLoaded(true)
       })
   }, [])
 
   async function handleSave() {
     setStatus('saving')
+    const body: Record<string, unknown> = {
+      full_name: fullName,
+      date_of_birth: dob || null,
+      phone: phone || null,
+      sex: sex || null,
+    }
+    if (sex === 'female') body.cycle_reminders = cycleReminders
     const res = await fetch('/api/settings', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        full_name: fullName,
-        date_of_birth: dob || null,
-        phone: phone || null,
-        sex: sex || null,
-      }),
+      body: JSON.stringify(body),
     })
     setStatus(res.ok ? 'saved' : 'error')
     if (res.ok) setTimeout(() => setStatus('idle'), 2000)
@@ -98,6 +102,30 @@ export default function ProfileDetails() {
           ))}
         </div>
       </div>
+
+      {sex === 'female' && (
+        <div className="flex items-start justify-between gap-4 py-1">
+          <div>
+            <p className="text-sm font-medium text-gray-800">Cycle tracking reminders</p>
+            <p className="text-xs text-gray-400 mt-0.5">Daily 8pm reminder to log symptoms if you haven&apos;t already</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setCycleReminders((v) => !v)}
+            className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+              cycleReminders ? 'bg-blue-600' : 'bg-gray-200'
+            }`}
+            role="switch"
+            aria-checked={cycleReminders}
+          >
+            <span
+              className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform transition-transform duration-200 ${
+                cycleReminders ? 'translate-x-5' : 'translate-x-0'
+              }`}
+            />
+          </button>
+        </div>
+      )}
 
       <button
         onClick={handleSave}
