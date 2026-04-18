@@ -2886,6 +2886,7 @@ function CalendarTab({ clientId }: { clientId: string }) {
   const [habits, setHabits] = useState<CalHabit[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const datePickerRef = useRef<HTMLInputElement>(null)
   const [addingEvent, setAddingEvent] = useState<string | null>(null)
   const [newEvent, setNewEvent] = useState({ type: 'note', title: '', content: '' })
   const [saving, setSaving] = useState(false)
@@ -2959,6 +2960,19 @@ function CalendarTab({ clientId }: { clientId: string }) {
     setCalView(v)
   }
 
+  function handleDatePickerChange(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!e.target.value) return
+    const [y, m, d] = e.target.value.split('-').map(Number)
+    const picked = new Date(y, m - 1, d)
+    if (calView === 'week') {
+      setWeekStart(getWeekStart(picked))
+    } else {
+      setMonthStart(new Date(y, m - 1, 1))
+    }
+  }
+
+  const datePickerValue = calView === 'week' ? toDateStr(weekStart) : toDateStr(monthStart)
+
   async function saveEvent(date: string) {
     if (!newEvent.title.trim()) return
     setSaving(true)
@@ -2996,7 +3010,20 @@ function CalendarTab({ clientId }: { clientId: string }) {
           <button onClick={nextPeriod} className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50">
             <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
           </button>
-          <p className="text-sm font-semibold text-gray-700 ml-1">{periodLabel}</p>
+          <button
+            onClick={() => datePickerRef.current?.showPicker()}
+            className="text-sm font-semibold text-gray-700 ml-1 hover:text-blue-600 transition-colors cursor-pointer"
+            title="Jump to date"
+          >
+            {periodLabel}
+          </button>
+          <input
+            ref={datePickerRef}
+            type="date"
+            className="sr-only"
+            value={datePickerValue}
+            onChange={handleDatePickerChange}
+          />
         </div>
         {/* View toggle */}
         <div className="flex items-center rounded-lg border border-gray-200 overflow-hidden text-xs font-semibold">
@@ -3045,7 +3072,11 @@ function CalendarTab({ clientId }: { clientId: string }) {
                 <div className="flex items-center justify-between mb-0.5">
                   <div>
                     <p className="text-[10px] font-semibold text-gray-400 uppercase">{day.toLocaleDateString('en-AU', { weekday: 'short' })}</p>
-                    <p className={`text-sm font-bold leading-none ${isToday ? 'text-blue-600' : 'text-gray-800'}`}>{day.getDate()}</p>
+                    <button
+                    onClick={() => { setMonthStart(new Date(day.getFullYear(), day.getMonth(), 1)); switchView('month') }}
+                    title="View in month"
+                    className={`text-sm font-bold leading-none transition-colors ${isToday ? 'text-blue-600' : 'text-gray-800 hover:text-blue-500'}`}
+                  >{day.getDate()}</button>
                   </div>
                   <button onClick={() => setAddingEvent(dateStr)} className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-gray-200 text-gray-300 hover:text-gray-500">
                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
@@ -3117,9 +3148,15 @@ function CalendarTab({ clientId }: { clientId: string }) {
                 }`}>
                   {/* Date number + add button */}
                   <div className="flex items-center justify-between mb-0.5">
-                    <span className={`text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full ${
-                      isToday ? 'bg-blue-500 text-white' : isCurrentMonth ? 'text-gray-700' : 'text-gray-300'
-                    }`}>{day.getDate()}</span>
+                    <button
+                      onClick={() => { setWeekStart(getWeekStart(day)); switchView('week') }}
+                      title="View this week"
+                      className={`text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full transition-all ${
+                        isToday ? 'bg-blue-500 text-white' : isCurrentMonth ? 'text-gray-700 hover:bg-gray-100' : 'text-gray-300 hover:bg-gray-100'
+                      }`}
+                    >
+                      {day.getDate()}
+                    </button>
                     <button onClick={() => setAddingEvent(dateStr)} className="w-4 h-4 flex items-center justify-center text-gray-200 hover:text-gray-400">
                       <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
                     </button>

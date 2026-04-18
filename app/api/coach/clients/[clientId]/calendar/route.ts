@@ -36,6 +36,40 @@ export async function GET(
   if (start_date) foodQuery = foodQuery.gte('log_date', start_date)
   if (end_date) foodQuery = foodQuery.lte('log_date', end_date)
 
+  // ── Birthday backfill ─────────────────────────────────────────────────────
+  // If the client has a DOB but no birthday calendar events yet (e.g. account
+  // pre-dates the feature), create them now so the coach sees them immediately.
+  const { data: clientProfile } = await admin
+    .from('profiles')
+    .select('date_of_birth')
+    .eq('id', clientId)
+    .single()
+
+  const dob = (clientProfile as Record<string, unknown> | null)?.date_of_birth as string | null
+  if (dob) {
+    const { count: bdayCount } = await admin
+      .from('calendar_events')
+      .select('id', { count: 'exact', head: true })
+      .eq('client_id', clientId)
+      .eq('type', 'birthday')
+
+    if (!bdayCount) {
+      const [, bdayMonth, bdayDay] = dob.split('-').map(Number)
+      const thisYear = new Date().getFullYear()
+      await admin.from('calendar_events').insert(
+        Array.from({ length: 3 }, (_, i) => thisYear + i).map((y) => ({
+          event_date: `${y}-${String(bdayMonth).padStart(2, '0')}-${String(bdayDay).padStart(2, '0')}`,
+          type: 'birthday',
+          title: 'Birthday',
+          content: {},
+          client_id: clientId,
+          coach_id: null,
+        }))
+      )
+    }
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
   const [eventsResult, programsResult, foodResult, habitsResult, activeFlowsResult] = await Promise.all([
     eventsQuery,
     supabase
