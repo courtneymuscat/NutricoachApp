@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import FoodSearch, { type FoodResult } from './FoodSearch'
 import MealScanModal from './MealScanModal'
+import { calcServes, sumServes, isFruitByName, fmt as fmtServe, type ServeTargets } from '@/lib/serves'
 
 const MEALS = [
   { key: 'breakfast' as const, label: 'Breakfast' },
@@ -100,6 +101,10 @@ export default function DailyLog({
   const [mealNoteOpen, setMealNoteOpen] = useState<MealKey | null>(null)
   const [mealNoteDraft, setMealNoteDraft] = useState('')
   const [uploadingMealNote, setUploadingMealNote] = useState<MealKey | null>(null)
+  // Serve tracking
+  const [serveTargets, setServeTargets] = useState<ServeTargets | null>(null)
+  const [foodServeMap, setFoodServeMap] = useState<Record<string, { category: string; secondary: string[] }>>({})
+
   // Copy meal (copy current day/meal TO another date)
   const [copyingMeal, setCopyingMeal] = useState<MealKey | 'all' | null>(null)
   const [copyTargetDate, setCopyTargetDate] = useState('')
@@ -146,6 +151,16 @@ export default function DailyLog({
   }, [date])
 
   useEffect(() => { fetchLogs() }, [fetchLogs])
+
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/client/serve-targets').then(r => r.json()),
+      fetch('/api/client/food-serves').then(r => r.json()),
+    ]).then(([st, fs]) => {
+      if (st.targets) setServeTargets(st.targets)
+      if (fs.map) setFoodServeMap(fs.map)
+    }).catch(() => {})
+  }, [])
 
   useEffect(() => {
     function onMealLogged() { fetchLogs() }
@@ -424,9 +439,23 @@ export default function DailyLog({
     setUploadingMealNote(null)
   }
 
+  function getFoodCategory(foodName: string | null): string | null {
+    if (!foodName) return null
+    const tag = foodServeMap[foodName.toLowerCase()]
+    if (tag) return tag.category
+    if (isFruitByName(foodName)) return 'fruit'
+    return null
+  }
+
   const allLogs = Object.values(logsByMeal).flat()
   const totals = sumMacros(allLogs)
   const isToday = date === todayString()
+
+  const allLogsWithCategory = allLogs.map(l => ({
+    protein: l.protein, carbs: l.carbs, fat: l.fat,
+    serve_category: getFoodCategory(l.food_name),
+  }))
+  const serveUsed = sumServes(allLogsWithCategory)
 
   if (foodLogAccess === 'off') {
     return (
@@ -626,6 +655,40 @@ export default function DailyLog({
           </div>
         </div>
       )}
+
+      {/* Serve targets progress */}
+      {!noteOnly && serveTargets && allLogs.length > 0 && (() => {
+        const rows = [
+          { label: 'Protein', used: serveUsed.protein, target: serveTargets.protein_serves, bar: 'bg-pink-400', text: 'text-pink-600' },
+          { label: 'Carbs',   used: serveUsed.carb,    target: serveTargets.carb_serves,    bar: 'bg-purple-400', text: 'text-purple-600' },
+          { label: 'Fruit',   used: serveUsed.fruit,   target: serveTargets.fruit_serves,   bar: 'bg-orange-400', text: 'text-orange-500' },
+          { label: 'Fat',     used: serveUsed.fat,     target: serveTargets.fat_serves,     bar: 'bg-green-400', text: 'text-green-600' },
+        ].filter(r => r.target > 0)
+        if (rows.length === 0) return null
+        return (
+          <div className="bg-white border border-gray-100 rounded-xl px-4 py-3 space-y-2.5">
+            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Serve Targets</p>
+            {rows.map(r => {
+              const pct = Math.min((r.used / r.target) * 100, 100)
+              const over = r.used > r.target
+              return (
+                <div key={r.label} className="flex items-center gap-3">
+                  <p className={`text-xs font-semibold w-14 flex-shrink-0 ${r.text}`}>{r.label}</p>
+                  <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full transition-all ${over ? 'bg-red-400' : r.bar}`} style={{ width: `${pct}%` }} />
+                  </div>
+                  <p className={`text-xs font-semibold flex-shrink-0 w-16 text-right tabular-nums ${over ? 'text-red-500' : 'text-gray-600'}`}>
+                    {fmtServe(r.used)} / {fmtServe(r.target)}
+                  </p>
+                </div>
+              )
+            })}
+            {serveTargets.notes && (
+              <p className="text-xs text-gray-400 italic pt-0.5">{serveTargets.notes}</p>
+            )}
+          </div>
+        )
+      })()}
 
       {loading ? (
         <div className="flex items-center gap-2 text-sm text-gray-400 py-4">
@@ -907,6 +970,26 @@ export default function DailyLog({
                                   <span className="text-macro-c hidden sm:inline">C {log.carbs}g</span>
                                   <span className="text-macro-f hidden sm:inline">F {log.fat}g</span>
                                 </div>
+                                {/* Serve badges */}
+                                {(() => {
+                                  const cat = getFoodCategory(log.food_name)
+                                  const s = calcServes(log.protein, log.carbs, log.fat, cat)
+                                  const badges: { label: string; color: string }[] = []
+                                  if (s.protein > 0) badges.push({ label: `${fmtServe(s.protein)}P`, color: 'bg-pink-50 text-pink-600 border-pink-100' })
+                                  if (s.carb > 0)    badges.push({ label: `${fmtServe(s.carb)}C`,    color: 'bg-purple-50 text-purple-600 border-purple-100' })
+                                  if (s.fruit > 0)   badges.push({ label: `${fmtServe(s.fruit)} fruit`, color: 'bg-orange-50 text-orange-500 border-orange-100' })
+                                  if (s.fat > 0)     badges.push({ label: `${fmtServe(s.fat)}F`,    color: 'bg-green-50 text-green-600 border-green-100' })
+                                  if (badges.length === 0) return null
+                                  return (
+                                    <div className="hidden sm:flex items-center gap-1 flex-shrink-0">
+                                      {badges.map(b => (
+                                        <span key={b.label} className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${b.color}`}>
+                                          {b.label}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )
+                                })()}
                                 <div className="flex items-center gap-1 flex-shrink-0">
                                   {/* Note icon — always visible when note/photo exists */}
                                   <button

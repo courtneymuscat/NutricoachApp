@@ -4799,9 +4799,10 @@ function ClientResourcesTab({ clientId }: { clientId: string }) {
 // ─── ClientServeGuide ─────────────────────────────────────────────────────────
 
 type ServeFood = {
-  id: string; name: string; serving_desc: string | null
-  calories: number | null; protein_g: number; carbs_g: number; fat_g: number
-  primary_category: string; secondary_categories: string[]; is_hidden?: boolean
+  id: string; food_name: string; serving_desc: string | null
+  calories_per_serve: number | null; protein_per_serve: number | null
+  carbs_per_serve: number | null; fat_per_serve: number | null
+  serve_category: string; secondary_categories: string[]
 }
 type ServeTargets = {
   protein_serves: number; carb_serves: number; fat_serves: number
@@ -4830,10 +4831,10 @@ function ClientServeGuide({ clientId }: { clientId: string }) {
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/coach/cheat-sheet').then(r => r.json()),
+      fetch('/api/coach/food-serves').then(r => r.json()),
       fetch(`/api/coach/clients/serve-targets?clientId=${clientId}`).then(r => r.json()),
     ]).then(([fd, td]) => {
-      setFoods((fd.foods ?? []).filter((f: ServeFood) => !f.is_hidden))
+      setFoods(fd.foods ?? [])
       if (td.targets) {
         setTargets(td.targets)
         setDraft({ ...td.targets, notes: td.targets.notes ?? '' })
@@ -4931,15 +4932,21 @@ function ClientServeGuide({ clientId }: { clientId: string }) {
       </div>
 
       {/* Food categories */}
+      {foods.length === 0 && (
+        <div className="bg-white rounded-2xl border border-dashed border-gray-200 py-10 text-center">
+          <p className="text-sm text-gray-400">No foods in cheat sheet yet.</p>
+          <a href="/coach/cheat-sheet" className="text-xs text-blue-500 hover:underline mt-1 block">Add foods in Cheat Sheet settings →</a>
+        </div>
+      )}
       {Object.entries(CAT_CONFIG).map(([catId, cfg]) => {
-        const catFoods = foods.filter(f => f.primary_category === catId)
+        const catFoods = foods.filter(f => f.serve_category === catId)
         if (catFoods.length === 0) return null
         return (
           <div key={catId} className={`rounded-2xl border border-gray-100 overflow-hidden ${cfg.color}`}>
             <div className="px-5 py-3.5 flex items-center gap-3">
               <div>
                 <h3 className="text-sm font-bold text-gray-900">{cfg.label}</h3>
-                <p className="text-xs text-gray-500">{cfg.serve} · ~100 cal</p>
+                <p className="text-xs text-gray-500">{cfg.serve}</p>
               </div>
               <span className={`ml-auto text-xs font-semibold px-2 py-0.5 rounded-full ${cfg.badge}`}>{catFoods.length}</span>
             </div>
@@ -4960,13 +4967,13 @@ function ClientServeGuide({ clientId }: { clientId: string }) {
                     {catFoods.map(f => (
                       <tr key={f.id} className="hover:bg-white/80 transition-colors">
                         <td className="px-5 py-2.5">
-                          <span className="font-medium text-gray-900">{f.name}</span>
+                          <span className="font-medium text-gray-900">{f.food_name}</span>
                           {f.serving_desc && <span className="text-gray-400 text-xs ml-2">{f.serving_desc}</span>}
                         </td>
-                        <td className="px-3 py-2.5 text-right text-gray-600 tabular-nums text-xs">{f.calories ?? '—'}</td>
-                        <td className="px-3 py-2.5 text-right text-purple-700 font-medium tabular-nums text-xs">{f.carbs_g}</td>
-                        <td className="px-3 py-2.5 text-right text-green-700 font-medium tabular-nums text-xs">{f.fat_g}</td>
-                        <td className="px-3 py-2.5 text-right text-pink-700 font-medium tabular-nums text-xs">{f.protein_g}</td>
+                        <td className="px-3 py-2.5 text-right text-gray-600 tabular-nums text-xs">{f.calories_per_serve ?? '—'}</td>
+                        <td className="px-3 py-2.5 text-right text-purple-700 font-medium tabular-nums text-xs">{f.carbs_per_serve ?? '—'}</td>
+                        <td className="px-3 py-2.5 text-right text-green-700 font-medium tabular-nums text-xs">{f.fat_per_serve ?? '—'}</td>
+                        <td className="px-3 py-2.5 text-right text-pink-700 font-medium tabular-nums text-xs">{f.protein_per_serve ?? '—'}</td>
                         <td className="px-3 py-2.5 text-right">
                           <div className="flex gap-1 justify-end">
                             {(f.secondary_categories ?? []).map(s => (
@@ -4986,7 +4993,7 @@ function ClientServeGuide({ clientId }: { clientId: string }) {
                 {catFoods.map(f => (
                   <div key={f.id} className="bg-white rounded-xl px-3.5 py-2.5 flex items-start gap-2">
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900">{f.name}</p>
+                      <p className="text-sm font-medium text-gray-900">{f.food_name}</p>
                       {f.serving_desc && <p className="text-xs text-gray-400">{f.serving_desc}</p>}
                       {(f.secondary_categories ?? []).length > 0 && (
                         <div className="flex gap-1 mt-1">
