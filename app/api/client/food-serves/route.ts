@@ -3,15 +3,18 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 
 // GET /api/client/food-serves
-// Returns coach's food→category map so the client can resolve serve categories when logging
-export async function GET() {
+// ?list=true  → full food list for cheat sheet display
+// default     → lowercased name→category map for serve badge lookup
+export async function GET(req: Request) {
   const supabase = await createClient()
   const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return NextResponse.json({ map: {} })
+  if (!session) return NextResponse.json({ map: {}, foods: [] })
+
+  const { searchParams } = new URL(req.url)
+  const list = searchParams.get('list') === 'true'
 
   const admin = createAdminClient()
 
-  // Find this client's active coach
   const { data: rel } = await admin
     .from('coach_clients')
     .select('coach_id')
@@ -19,14 +22,17 @@ export async function GET() {
     .eq('status', 'active')
     .single()
 
-  if (!rel) return NextResponse.json({ map: {} })
+  if (!rel) return NextResponse.json({ map: {}, foods: [] })
 
   const { data: tags } = await admin
     .from('coach_food_serves')
-    .select('food_name, serve_category, secondary_categories')
+    .select('id, food_name, serve_category, secondary_categories, subcategory, serving_desc, calories_per_serve, protein_per_serve, carbs_per_serve, fat_per_serve')
     .eq('coach_id', rel.coach_id)
+    .order('serve_category')
+    .order('food_name')
 
-  // Return as lowercased name → category map for fast client-side lookup
+  if (list) return NextResponse.json({ foods: tags ?? [] })
+
   const map: Record<string, { category: string; secondary: string[] }> = {}
   for (const t of tags ?? []) {
     map[t.food_name.toLowerCase()] = {

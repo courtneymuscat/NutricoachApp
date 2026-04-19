@@ -74,7 +74,7 @@ function buildTabs(sex: string | null, tier: string | null): Tab[] {
 
 // ── Pages where the nav should appear ─────────────────────────────────────────
 
-const SHOW_ON = ['/dashboard', '/workouts', '/calendar', '/progress', '/cycle', '/messages', '/settings']
+const SHOW_ON = ['/dashboard', '/workouts', '/calendar', '/progress', '/cycle', '/messages', '/settings', '/cheat-sheet']
 
 const HIDE_PREFIXES = ['/coach', '/onboarding', '/login', '/signup', '/forms', '/invite', '/pricing', '/checkout', '/subscribe']
 

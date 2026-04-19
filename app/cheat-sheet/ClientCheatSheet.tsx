@@ -1,0 +1,371 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import Link from 'next/link'
+
+type CheatFood = {
+  id: string
+  food_name: string
+  serve_category: string
+  secondary_categories: string[]
+  subcategory: string | null
+  serving_desc: string | null
+  calories_per_serve: number | null
+  protein_per_serve: number | null
+  carbs_per_serve: number | null
+  fat_per_serve: number | null
+}
+
+type ServeTargets = {
+  protein_serves: number; carb_serves: number; fat_serves: number
+  fruit_serves: number; veg_unlimited: boolean; notes: string | null
+} | null
+
+const MEAL_KEYS = ['breakfast', 'lunch', 'dinner', 'snacks'] as const
+type MealKey = typeof MEAL_KEYS[number]
+const MEAL_LABELS: Record<MealKey, string> = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner', snacks: 'Snack' }
+
+const SERVE_OPTIONS = [0.5, 1, 1.5, 2]
+
+function todayString() {
+  const d = new Date()
+  return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-')
+}
+
+function serveBadge(cat: string, sub: string | null) {
+  if (sub === 'condiment_fat') return { label: '1F', color: 'bg-green-100 text-green-700' }
+  if (sub === 'condiment_carb') return { label: '1C', color: 'bg-purple-100 text-purple-700' }
+  if (sub === 'free_condiment') return { label: 'free', color: 'bg-gray-100 text-gray-500' }
+  if (cat === 'protein') return { label: '1P', color: 'bg-pink-100 text-pink-700' }
+  if (cat === 'carb') return { label: '1C', color: 'bg-purple-100 text-purple-700' }
+  if (cat === 'fat') return { label: '1F', color: 'bg-green-100 text-green-700' }
+  if (cat === 'fruit') return { label: '1 fruit', color: 'bg-orange-100 text-orange-700' }
+  return null
+}
+
+function secondaryBadge(sec: string) {
+  if (sec === 'fat') return { label: '+1F', color: 'bg-green-50 text-green-600 border border-green-200' }
+  if (sec === 'carb') return { label: '+1C', color: 'bg-purple-50 text-purple-600 border border-purple-200' }
+  return null
+}
+
+type CategoryGroup = { id: string; label: string; color: string; dot: string }
+
+const CATEGORY_GROUPS: CategoryGroup[] = [
+  { id: 'protein',    label: 'Protein',     color: 'bg-pink-50 text-pink-700',   dot: 'bg-pink-400' },
+  { id: 'carb',       label: 'Carbs',       color: 'bg-purple-50 text-purple-700', dot: 'bg-purple-400' },
+  { id: 'fat',        label: 'Fats',        color: 'bg-green-50 text-green-700', dot: 'bg-green-400' },
+  { id: 'fruit',      label: 'Fruit',       color: 'bg-orange-50 text-orange-700', dot: 'bg-orange-400' },
+  { id: 'condiment',  label: 'Condiments',  color: 'bg-amber-50 text-amber-700', dot: 'bg-amber-400' },
+  { id: 'free',       label: 'Free Foods',  color: 'bg-gray-50 text-gray-600',   dot: 'bg-gray-300' },
+]
+
+function getGroupId(food: CheatFood): string {
+  if (food.subcategory === 'condiment_fat' || food.subcategory === 'condiment_carb') return 'condiment'
+  if (food.subcategory === 'free_condiment' || food.serve_category === 'free') return 'free'
+  return food.serve_category
+}
+
+function getSubgroupLabel(sub: string | null): string | null {
+  const map: Record<string, string> = {
+    lean_protein: 'Lean', plant_protein: 'Plant-Based',
+    grain: 'Grains', bread: 'Bread', starchy_veg: 'Starchy Veg', cereal: 'Cereals',
+    seed: 'Seeds', nut: 'Nuts', nut_butter: 'Nut Butters', oil: 'Oils', cheese: 'Cheese',
+    condiment_fat: 'Counts as Fat Serve', condiment_carb: 'Counts as Carb Serve',
+  }
+  return sub ? (map[sub] ?? null) : null
+}
+
+export default function ClientCheatSheet() {
+  const [foods, setFoods] = useState<CheatFood[]>([])
+  const [targets, setTargets] = useState<ServeTargets>(null)
+  const [loading, setLoading] = useState(true)
+  const [activeGroup, setActiveGroup] = useState<string>('protein')
+  const [selected, setSelected] = useState<CheatFood | null>(null)
+  const [serves, setServes] = useState(1)
+  const [meal, setMeal] = useState<MealKey>('breakfast')
+  const [logging, setLogging] = useState(false)
+  const [loggedMsg, setLoggedMsg] = useState<string | null>(null)
+
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/client/food-serves?list=true').then(r => r.json()),
+      fetch('/api/client/serve-targets').then(r => r.json()),
+    ]).then(([fd, st]) => {
+      setFoods(fd.foods ?? [])
+      if (st.targets) setTargets(st.targets)
+      setLoading(false)
+    }).catch(() => setLoading(false))
+  }, [])
+
+  const groupedFoods = foods.reduce<Record<string, CheatFood[]>>((acc, f) => {
+    const g = getGroupId(f)
+    ;(acc[g] ??= []).push(f)
+    return acc
+  }, {})
+
+  const visibleFoods = groupedFoods[activeGroup] ?? []
+
+  // Sub-group within a category (lean/plant, grains/bread etc)
+  const subgrouped = visibleFoods.reduce<Record<string, CheatFood[]>>((acc, f) => {
+    const sg = getSubgroupLabel(f.subcategory) ?? '_'
+    ;(acc[sg] ??= []).push(f)
+    return acc
+  }, {})
+
+  async function handleLog() {
+    if (!selected) return
+    setLogging(true)
+    const supabase = createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) { setLogging(false); return }
+
+    const cal = Math.round((selected.calories_per_serve ?? 0) * serves)
+    const pro = Math.round((selected.protein_per_serve ?? 0) * serves * 10) / 10
+    const carb = Math.round((selected.carbs_per_serve ?? 0) * serves * 10) / 10
+    const fat = Math.round((selected.fat_per_serve ?? 0) * serves * 10) / 10
+    const servesLabel = serves === 1 ? '1 serve' : `${serves} serves`
+
+    const { error } = await supabase.from('food_logs').insert({
+      user_id: session.user.id,
+      food_name: selected.food_name,
+      calories: cal,
+      protein: pro,
+      carbs: carb,
+      fat: fat,
+      meal_type: meal,
+      log_date: todayString(),
+      serving_description: `${servesLabel} (${selected.serving_desc ?? ''})`.trim(),
+    })
+
+    setLogging(false)
+    if (!error) {
+      window.dispatchEvent(new Event('meal-logged'))
+      setLoggedMsg(`${selected.food_name} logged to ${MEAL_LABELS[meal]}`)
+      setSelected(null)
+      setTimeout(() => setLoggedMsg(null), 3000)
+    }
+  }
+
+  const activeGroupMeta = CATEGORY_GROUPS.find(g => g.id === activeGroup)!
+
+  return (
+    <div className="min-h-screen bg-gray-50 pb-24">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-100 sticky top-0 z-10">
+        <div className="max-w-2xl mx-auto px-4 py-3.5 flex items-center gap-3">
+          <Link href="/dashboard" className="text-gray-400 hover:text-gray-600 transition-colors">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </Link>
+          <div>
+            <h1 className="text-[15px] font-bold text-gray-900">Food Cheat Sheet</h1>
+            <p className="text-[11px] text-gray-400">Tap a food to log it</p>
+          </div>
+        </div>
+
+        {/* Category pills */}
+        <div className="max-w-2xl mx-auto px-4 pb-3 flex gap-2 overflow-x-auto scrollbar-hide">
+          {CATEGORY_GROUPS.filter(g => (groupedFoods[g.id]?.length ?? 0) > 0).map(g => (
+            <button
+              key={g.id}
+              onClick={() => setActiveGroup(g.id)}
+              className={`flex-shrink-0 text-xs font-semibold px-3.5 py-1.5 rounded-full transition-colors ${
+                activeGroup === g.id ? g.color + ' ring-1 ring-current ring-opacity-30' : 'bg-gray-100 text-gray-500'
+              }`}
+            >
+              {g.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="max-w-2xl mx-auto px-4 pt-4 space-y-5">
+        {loading ? (
+          <div className="text-center py-16 text-sm text-gray-400">Loading cheat sheet…</div>
+        ) : foods.length === 0 ? (
+          <div className="text-center py-16">
+            <p className="text-sm text-gray-400">Your coach hasn&apos;t set up a food list yet.</p>
+          </div>
+        ) : (
+          Object.entries(subgrouped).map(([sg, items]) => (
+            <div key={sg}>
+              {sg !== '_' && (
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-2">{sg}</p>
+              )}
+              <div className="space-y-2">
+                {items.map(food => {
+                  const badge = serveBadge(food.serve_category, food.subcategory)
+                  return (
+                    <button
+                      key={food.id}
+                      onClick={() => { setSelected(food); setServes(1); setLoggedMsg(null) }}
+                      className="w-full bg-white rounded-2xl border border-gray-100 px-4 py-3.5 flex items-center gap-3 text-left hover:border-gray-300 active:scale-[0.99] transition-all"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-semibold text-gray-900">{food.food_name}</span>
+                          {food.secondary_categories?.map(s => {
+                            const sb = secondaryBadge(s)
+                            return sb ? (
+                              <span key={s} className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${sb.color}`}>{sb.label}</span>
+                            ) : null
+                          })}
+                        </div>
+                        {food.serving_desc && (
+                          <p className="text-xs text-gray-400 mt-0.5">{food.serving_desc}</p>
+                        )}
+                        <p className="text-[11px] text-gray-400 mt-1">
+                          {food.calories_per_serve ?? 0} cal
+                          {' · '}
+                          <span className="text-pink-600">{food.protein_per_serve ?? 0}g P</span>
+                          {' · '}
+                          <span className="text-purple-600">{food.carbs_per_serve ?? 0}g C</span>
+                          {' · '}
+                          <span className="text-green-600">{food.fat_per_serve ?? 0}g F</span>
+                        </p>
+                      </div>
+                      {badge && (
+                        <span className={`flex-shrink-0 text-xs font-bold px-2.5 py-1 rounded-xl ${badge.color}`}>
+                          {badge.label}
+                        </span>
+                      )}
+                      <svg className="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Serve targets reminder */}
+      {targets && (
+        <div className="max-w-2xl mx-auto px-4 mt-6">
+          <div className="bg-white rounded-2xl border border-gray-100 px-4 py-3">
+            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-2">Daily targets</p>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { label: `${targets.protein_serves}P`, color: 'bg-pink-50 text-pink-700' },
+                { label: `${targets.carb_serves}C`, color: 'bg-purple-50 text-purple-700' },
+                { label: `${targets.fat_serves}F`, color: 'bg-green-50 text-green-700' },
+                { label: `${targets.fruit_serves} fruit`, color: 'bg-orange-50 text-orange-700' },
+                { label: 'veg ∞', color: 'bg-emerald-50 text-emerald-700' },
+              ].map(t => (
+                <span key={t.label} className={`text-xs font-semibold px-3 py-1 rounded-full ${t.color}`}>{t.label}</span>
+              ))}
+            </div>
+            {targets.notes && <p className="text-xs text-gray-500 mt-2">{targets.notes}</p>}
+          </div>
+        </div>
+      )}
+
+      {/* Success toast */}
+      {loggedMsg && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm font-medium px-4 py-2.5 rounded-2xl shadow-lg z-50 whitespace-nowrap">
+          {loggedMsg}
+        </div>
+      )}
+
+      {/* Log modal */}
+      {selected && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setSelected(null)} />
+          <div className="relative w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-3xl p-6 space-y-5 shadow-xl">
+            {/* Food info */}
+            <div>
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <h3 className="text-base font-bold text-gray-900">{selected.food_name}</h3>
+                  {selected.serving_desc && (
+                    <p className="text-xs text-gray-400 mt-0.5">1 serve = {selected.serving_desc}</p>
+                  )}
+                </div>
+                <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600 flex-shrink-0 mt-0.5">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Serves selector */}
+            <div>
+              <p className="text-xs font-semibold text-gray-500 mb-2">Serves</p>
+              <div className="flex gap-2">
+                {SERVE_OPTIONS.map(s => (
+                  <button
+                    key={s}
+                    onClick={() => setServes(s)}
+                    className={`flex-1 py-2 rounded-xl text-sm font-semibold border transition-colors ${
+                      serves === s
+                        ? 'bg-gray-900 text-white border-gray-900'
+                        : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400'
+                    }`}
+                  >
+                    ×{s}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Live macro preview */}
+            <div className="bg-gray-50 rounded-2xl px-4 py-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Calories</span>
+                <span className="font-semibold text-gray-900">{Math.round((selected.calories_per_serve ?? 0) * serves)}</span>
+              </div>
+              <div className="flex justify-between mt-1">
+                <span className="text-pink-600">Protein</span>
+                <span className="font-semibold text-pink-600">{Math.round((selected.protein_per_serve ?? 0) * serves * 10) / 10}g</span>
+              </div>
+              <div className="flex justify-between mt-1">
+                <span className="text-purple-600">Carbs</span>
+                <span className="font-semibold text-purple-600">{Math.round((selected.carbs_per_serve ?? 0) * serves * 10) / 10}g</span>
+              </div>
+              <div className="flex justify-between mt-1">
+                <span className="text-green-600">Fat</span>
+                <span className="font-semibold text-green-600">{Math.round((selected.fat_per_serve ?? 0) * serves * 10) / 10}g</span>
+              </div>
+            </div>
+
+            {/* Meal selector */}
+            <div>
+              <p className="text-xs font-semibold text-gray-500 mb-2">Log to</p>
+              <div className="grid grid-cols-2 gap-2">
+                {MEAL_KEYS.map(m => (
+                  <button
+                    key={m}
+                    onClick={() => setMeal(m)}
+                    className={`py-2.5 rounded-xl text-sm font-semibold border transition-colors ${
+                      meal === m
+                        ? 'bg-gray-900 text-white border-gray-900'
+                        : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400'
+                    }`}
+                  >
+                    {MEAL_LABELS[m]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Log button */}
+            <button
+              onClick={handleLog}
+              disabled={logging}
+              className="w-full py-3.5 rounded-2xl text-sm font-bold text-gray-900 disabled:opacity-50 transition-opacity"
+              style={{ backgroundColor: 'var(--brand-primary, #FFD885)' }}
+            >
+              {logging ? 'Logging…' : `Log to ${MEAL_LABELS[meal]}`}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

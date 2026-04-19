@@ -4888,6 +4888,22 @@ function ClientServeGuide({ clientId }: { clientId: string }) {
                 </div>
               ))}
             </div>
+            {/* Estimated daily calories */}
+            {(draft.protein_serves > 0 || draft.carb_serves > 0 || draft.fat_serves > 0) && (() => {
+              const estCal = Math.round(
+                draft.protein_serves * 130 +
+                draft.carb_serves   * 100 +
+                draft.fat_serves    * 100 +
+                draft.fruit_serves  *  90 +
+                (draft.veg_unlimited ? 80 : 0)
+              )
+              return (
+                <div className="bg-amber-50 border border-amber-100 rounded-xl px-3 py-2.5 flex items-center justify-between">
+                  <span className="text-xs text-amber-700">Estimated daily calories</span>
+                  <span className="text-sm font-bold text-amber-800">~{estCal} kcal</span>
+                </div>
+              )
+            })()}
             <div>
               <label className="text-xs text-gray-500 block mb-1">Notes for client</label>
               <textarea rows={2} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -4915,6 +4931,9 @@ function ClientServeGuide({ clientId }: { clientId: string }) {
                 </div>
               ))}
             </div>
+            <p className="text-xs text-gray-400">
+              ~{Math.round(targets.protein_serves * 130 + targets.carb_serves * 100 + targets.fat_serves * 100 + targets.fruit_serves * 90 + 80)} kcal/day estimated (excl. free condiments)
+            </p>
             {targets.notes && <p className="text-xs text-gray-500 bg-gray-50 rounded-xl px-3 py-2">{targets.notes}</p>}
           </div>
         ) : (

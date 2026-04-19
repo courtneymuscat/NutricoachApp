@@ -120,6 +120,7 @@ export default async function DashboardPage() {
               { href: '/progress', label: 'Progress Photos', id: undefined },
               ...(isCoach ? [{ href: '/coach/dashboard', label: 'Coach Dashboard', id: undefined }] : []),
               ...(isCoached ? [{ href: '/messages', label: 'Messages', id: undefined }] : []),
+              ...(isCoached ? [{ href: '/cheat-sheet', label: 'Cheat Sheet', id: undefined }] : []),
               ...(!isCoach && !branding.isWhiteLabel ? [{ href: '/pricing', label: 'Upgrade', id: undefined }] : []),
               { href: '/settings', label: 'Settings', id: 'tour-settings' },
             ].map(({ href, label, id }) => (
