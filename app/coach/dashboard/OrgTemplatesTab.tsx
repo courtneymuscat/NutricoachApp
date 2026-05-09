@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 type Template = {
   id: string
@@ -377,14 +377,19 @@ function AccessModal({
   template,
   table,
   onClose,
+  onChanged,
 }: {
   template: Template
   table: TableName
   onClose: () => void
+  onChanged: () => void
 }) {
   const [coaches, setCoaches] = useState<CoachAccess[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string | null>(null)
+  type Dep = { id: string; name: string; already_shared: boolean }
+  const [deps, setDeps] = useState<{ forms: Dep[]; resources: Dep[] }>({ forms: [], resources: [] })
+  const dirty = useRef(false)
 
   useEffect(() => {
     fetch(`/api/org/templates/${template.id}/coaches?table=${table}`)
@@ -392,6 +397,13 @@ function AccessModal({
       .then(setCoaches)
       .catch(() => setCoaches([]))
       .finally(() => setLoading(false))
+
+    if (table === 'autoflow_templates') {
+      fetch(`/api/org/templates/preview?template_id=${template.id}&table=${table}`)
+        .then((r) => r.json())
+        .then((d) => setDeps(d.dependencies ?? { forms: [], resources: [] }))
+        .catch(() => {/* silent */})
+    }
   }, [template.id, table])
 
   async function toggle(coach: CoachAccess) {
@@ -405,7 +417,13 @@ function AccessModal({
     setCoaches((prev) =>
       prev.map((c) => (c.id === coach.id ? { ...c, excluded: newExcluded } : c))
     )
+    dirty.current = true
     setSaving(null)
+  }
+
+  function close() {
+    if (dirty.current) onChanged()
+    onClose()
   }
 
   function initials(name: string | null, email: string | null) {
@@ -413,9 +431,11 @@ function AccessModal({
     return (email ?? '?')[0].toUpperCase()
   }
 
+  const hasDeps = deps.forms.length > 0 || deps.resources.length > 0
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/30" onClick={close} />
       <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
         <div>
           <h3 className="font-semibold text-gray-900">Manage access</h3>
@@ -424,6 +444,29 @@ function AccessModal({
         <p className="text-xs text-gray-400">
           Toggle which coaches can see this template. Admins always have access.
         </p>
+
+        {table === 'autoflow_templates' && hasDeps && (
+          <div className="border border-amber-100 bg-amber-50 rounded-xl px-4 py-3 space-y-2">
+            <p className="text-xs font-semibold text-amber-800 uppercase tracking-wider">Access mirrors these</p>
+            <div className="space-y-1">
+              {deps.forms.map((f) => (
+                <div key={f.id} className="flex items-center gap-2 text-xs">
+                  <span className="text-amber-600">📋</span>
+                  <span className="text-amber-900">{f.name}</span>
+                </div>
+              ))}
+              {deps.resources.map((r) => (
+                <div key={r.id} className="flex items-center gap-2 text-xs">
+                  <span className="text-amber-600">📚</span>
+                  <span className="text-amber-900">{r.name}</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-[11px] text-amber-700 pt-1">
+              Toggling a coach here also toggles their access to these forms and resources, so the autoflow keeps working end-to-end.
+            </p>
+          </div>
+        )}
 
         {loading ? (
           <div className="space-y-3">
@@ -477,7 +520,7 @@ function AccessModal({
         )}
 
         <button
-          onClick={onClose}
+          onClick={close}
           className="w-full border border-gray-200 text-gray-600 rounded-xl py-2.5 text-sm"
         >
           Done
@@ -496,11 +539,11 @@ export default function OrgTemplatesTab() {
   const [unpublishing, setUnpublishing] = useState<string | null>(null)
   const [accessTarget, setAccessTarget] = useState<{ template: Template; table: TableName } | null>(null)
 
-  async function fetchTemplates() {
-    setLoading(true)
+  async function fetchTemplates(silent = false) {
+    if (!silent) setLoading(true)
     const res = await fetch('/api/org/templates')
     if (res.ok) setTemplates(await res.json())
-    setLoading(false)
+    if (!silent) setLoading(false)
   }
 
   async function unpublish(templateId: string, table: TableName) {
@@ -613,6 +656,7 @@ export default function OrgTemplatesTab() {
           template={accessTarget.template}
           table={accessTarget.table}
           onClose={() => setAccessTarget(null)}
+          onChanged={() => fetchTemplates(true)}
         />
       )}
     </div>
