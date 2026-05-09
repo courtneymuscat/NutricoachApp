@@ -1,5 +1,7 @@
 import type { Metadata } from 'next'
 import LandingPage from './LandingPage'
+import { createClient } from '@/lib/supabase/server'
+import { getOrgForUser } from '@/lib/org'
 
 export const metadata: Metadata = {
   title: 'Prokol Health — Nutrition, Training & Health Data Coaching Platform',
@@ -19,6 +21,13 @@ export const metadata: Metadata = {
   },
 }
 
-export default function Page() {
-  return <LandingPage />
+export default async function Page() {
+  const supabase = await createClient()
+  const { data: { session } } = await supabase.auth.getSession()
+  const membership = session ? await getOrgForUser(session.user.id) : null
+  const orgManaged = membership && membership.role !== 'owner'
+    ? { orgName: membership.org_name }
+    : null
+
+  return <LandingPage orgManaged={orgManaged} />
 }

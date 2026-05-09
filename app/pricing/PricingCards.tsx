@@ -17,11 +17,13 @@ function PlanCard({
   billing,
   current,
   userType,
+  orgManaged,
 }: {
   plan: PricingPlan
   billing: 'monthly' | 'annual'
   current: boolean
   userType: 'individual' | 'coach'
+  orgManaged?: { orgName: string; role: string } | null
 }) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
@@ -134,7 +136,15 @@ function PlanCard({
 
       {error && <p className="text-xs text-red-500 mb-3">{error}</p>}
 
-      {current ? (
+      {orgManaged ? (
+        <button
+          disabled
+          className="w-full py-2.5 rounded-xl text-sm font-semibold bg-blue-50 text-blue-700 border border-blue-100 cursor-not-allowed"
+          title={`Plans are managed by ${orgManaged.orgName}`}
+        >
+          Managed by organisation
+        </button>
+      ) : current ? (
         <button disabled className="w-full py-2.5 rounded-xl text-sm font-semibold bg-gray-100 text-gray-400 cursor-not-allowed">
           Current plan
         </button>
@@ -160,9 +170,11 @@ function PlanCard({
 function SoloSection({
   billing,
   currentTier,
+  orgManaged,
 }: {
   billing: 'monthly' | 'annual'
   currentTier: string | null
+  orgManaged?: { orgName: string; role: string } | null
 }) {
   const [expanded, setExpanded] = useState(false)
 
@@ -214,6 +226,7 @@ function SoloSection({
             billing={billing}
             userType="coach"
             current={currentTier === plan.id}
+            orgManaged={orgManaged}
           />
         ))}
       </div>
@@ -225,10 +238,12 @@ export default function PricingCards({
   currentTier,
   currentUserType,
   initialTab = 'individual',
+  orgManaged = null,
 }: {
   currentTier: string | null
   currentUserType: 'individual' | 'coach' | null
   initialTab?: 'individual' | 'coach'
+  orgManaged?: { orgName: string; role: string } | null
 }) {
   const [billing, setBilling] = useState<'monthly' | 'annual'>(
     initialTab === 'coach' ? 'monthly' : 'monthly'
@@ -311,6 +326,7 @@ export default function PricingCards({
               billing={billing}
               userType="individual"
               current={currentUserType === 'individual' && currentTier === plan.id}
+              orgManaged={orgManaged}
             />
           ))}
         </div>
@@ -320,6 +336,7 @@ export default function PricingCards({
           <SoloSection
             billing={billing}
             currentTier={currentTier}
+            orgManaged={orgManaged}
           />
 
           {/* Pro + Business + WL */}
@@ -331,6 +348,7 @@ export default function PricingCards({
                 billing={billing}
                 userType="coach"
                 current={currentTier === plan.id}
+                orgManaged={orgManaged}
               />
             ))}
           </div>
@@ -346,6 +364,7 @@ export default function PricingCards({
                   billing={billing}
                   userType="coach"
                   current={currentTier === plan.id}
+                  orgManaged={orgManaged}
                 />
               ))}
             </div>

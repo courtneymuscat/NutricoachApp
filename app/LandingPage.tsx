@@ -202,7 +202,11 @@ const CKO = {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-export default function LandingPage() {
+export default function LandingPage({
+  orgManaged = null,
+}: {
+  orgManaged?: { orgName: string } | null
+} = {}) {
   const [scrolled, setScrolled]     = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [tab, setTab]               = useState<'solo'|'pro'|'wl'|'individual'>('solo')
@@ -728,6 +732,25 @@ export default function LandingPage() {
             </p>
           </div>
 
+          {orgManaged && (
+            <div
+              className="max-w-2xl mx-auto mb-10 rounded-2xl border bg-blue-50 px-6 py-5 flex items-start gap-4"
+              style={{ borderColor: 'rgba(29,158,117,0.18)' }}
+            >
+              <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center flex-shrink-0" style={{ border: '1px solid rgba(10,26,20,0.06)' }}>
+                <svg className="w-5 h-5" fill="none" stroke="#1D9E75" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+              </div>
+              <div className="space-y-1 flex-1">
+                <p className="text-sm font-semibold text-gray-900">Managed by {orgManaged.orgName}</p>
+                <p className="text-sm text-gray-600">
+                  Your plan is covered by your organisation&apos;s subscription. Contact your organisation administrator to change plans or features.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Tabs — coach-first */}
           <div className="flex flex-wrap justify-center gap-2 mb-12">
             {([
@@ -770,7 +793,11 @@ export default function LandingPage() {
                       {p.inc.map(f => <li key={f} className="flex items-start gap-2"><Check /><span style={{ fontSize: '0.8rem', color: T.textPrimary }}>{f}</span></li>)}
                       {p.blk.map(f => <li key={f} className="flex items-start gap-2"><Cross /><span style={{ fontSize: '0.8rem', color: T.textFaint }}>{f}</span></li>)}
                     </ul>
-                    <Link href={p.link} className="block text-center py-3 rounded-xl text-sm font-bold text-white hover:opacity-90" style={{ background: T.teal }}>{p.cta}</Link>
+                    {orgManaged ? (
+                      <button disabled className="block w-full text-center py-3 rounded-xl text-sm font-bold cursor-not-allowed" style={{ background: '#EEF2FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}>Managed by organisation</button>
+                    ) : (
+                      <Link href={p.link} className="block text-center py-3 rounded-xl text-sm font-bold text-white hover:opacity-90" style={{ background: T.teal }}>{p.cta}</Link>
+                    )}
                   </div>
                 ))}
               </div>
@@ -879,10 +906,14 @@ export default function LandingPage() {
                       {p.inc.map(f => <li key={f} className="flex items-start gap-2"><Check /><span style={{ fontSize: '0.8rem', color: T.textPrimary }}>{f}</span></li>)}
                       {p.blk.map(f => <li key={f} className="flex items-start gap-2"><Cross /><span style={{ fontSize: '0.8rem', color: T.textFaint }}>{f}</span></li>)}
                     </ul>
-                    <Link href={p.link} className="block text-center py-3 rounded-xl text-sm font-bold hover:opacity-90 transition-all"
-                      style={p.badge ? { background: T.teal, color: '#fff' } : { border: `1px solid ${T.tealBorder}`, color: T.teal }}>
-                      {p.cta}
-                    </Link>
+                    {orgManaged ? (
+                      <button disabled className="block w-full text-center py-3 rounded-xl text-sm font-bold cursor-not-allowed" style={{ background: '#EEF2FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}>Managed by organisation</button>
+                    ) : (
+                      <Link href={p.link} className="block text-center py-3 rounded-xl text-sm font-bold hover:opacity-90 transition-all"
+                        style={p.badge ? { background: T.teal, color: '#fff' } : { border: `1px solid ${T.tealBorder}`, color: T.teal }}>
+                        {p.cta}
+                      </Link>
+                    )}
                   </div>
                 ))}
               </div>
