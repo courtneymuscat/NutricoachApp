@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useState, Suspense } from 'react'
+import { useActionState, useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { signup } from '@/app/actions/auth'
@@ -32,6 +32,51 @@ function SignupForm() {
   const isCoach = type === 'coach'
   const planLabel = PLAN_LABELS[planKey]
 
+  // Fetch org details when this signup is a coach-invite acceptance, so the
+  // form can show the inviting organisation's name and frame it as a coach
+  // account rather than an individual tracker signup.
+  const [orgInfo, setOrgInfo] = useState<{ orgName: string | null; email: string } | null>(null)
+  useEffect(() => {
+    if (!orgInvite) return
+    let cancelled = false
+    fetch(`/api/org/invite/${orgInvite}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return
+        setOrgInfo({ orgName: data.org_name ?? null, email: data.email })
+      })
+      .catch(() => {/* silent — fall back to generic copy */})
+    return () => { cancelled = true }
+  }, [orgInvite])
+
+  const heading = orgInvite
+    ? orgInfo?.orgName
+      ? `Join ${orgInfo.orgName} as a coach`
+      : 'Accept your coach invite'
+    : invite
+    ? 'Accept your invite'
+    : isCoach
+    ? 'Start coaching'
+    : 'Create your account'
+
+  const subheading = orgInvite
+    ? orgInfo?.orgName
+      ? `Create your coach account to join ${orgInfo.orgName}. Your plan is covered by the organisation's subscription.`
+      : 'Create your coach account to accept this invite. Your plan is covered by the organisation’s subscription.'
+    : invite
+    ? 'Create an account to accept your coaching invite.'
+    : planLabel
+    ? `You selected: ${planLabel}`
+    : 'Start tracking your nutrition, workouts, and cycle for free.'
+
+  const submitLabel = pending
+    ? 'Creating account…'
+    : orgInvite
+    ? 'Create coach account'
+    : planLabel
+    ? 'Create account & continue to checkout'
+    : 'Create free account'
+
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
     <div className="flex-1 flex items-center justify-center p-6">
@@ -42,16 +87,13 @@ function SignupForm() {
           ) : (
             <Link href="/" className="text-xl font-bold text-gray-900">{branding.appName}</Link>
           )}
-          <h1 className="text-2xl font-bold mt-4 text-gray-900">
-            {invite ? 'Accept your invite' : isCoach ? 'Start coaching' : 'Create your account'}
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            {invite
-              ? 'Create an account to accept your coaching invite.'
-              : planLabel
-              ? `You selected: ${planLabel}`
-              : 'Start tracking your nutrition, workouts, and cycle for free.'}
-          </p>
+          <h1 className="text-2xl font-bold mt-4 text-gray-900">{heading}</h1>
+          <p className="text-sm text-gray-500 mt-1">{subheading}</p>
+          {orgInvite && orgInfo?.email && (
+            <p className="text-xs text-gray-400 mt-2">
+              Invite sent to <span className="font-medium text-gray-600">{orgInfo.email}</span>
+            </p>
+          )}
         </div>
 
         {planLabel && (
@@ -145,7 +187,7 @@ function SignupForm() {
             className="w-full py-3 rounded-xl text-sm font-semibold hover:opacity-90 disabled:opacity-50 transition-colors"
             style={{ backgroundColor: '#1D9E75', color: '#ffffff' }}
           >
-            {pending ? 'Creating account…' : planLabel ? 'Create account & continue to checkout' : 'Create free account'}
+            {submitLabel}
           </button>
         </form>
 
