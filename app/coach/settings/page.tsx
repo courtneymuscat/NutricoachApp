@@ -16,6 +16,7 @@ type Service = {
   payment_link: string
   tos_url: string | null
   created_at: string
+  is_org_template?: boolean
 }
 
 function ServicesSection({ tier }: { tier: string }) {
@@ -108,6 +109,24 @@ function ServicesSection({ tier }: { tier: string }) {
     setServices((prev) => prev.map((s) => s.id === serviceId ? { ...s, tos_url: null } : s))
   }
 
+  async function handleMakeCopy(id: string) {
+    const res = await fetch('/api/coach/templates/clone', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ table: 'coach_services', source_id: id }),
+    })
+    if (res.ok) {
+      const { id: newId } = await res.json()
+      // Reload list and start editing the copy
+      await loadServices()
+      const copy = (await (await fetch('/api/coach/services')).json() as Service[]).find((s) => s.id === newId)
+      if (copy) startEdit(copy)
+    }
+  }
+
+  const orgServices = services.filter((s) => s.is_org_template)
+  const ownServices = services.filter((s) => !s.is_org_template)
+
   const inputClass = 'w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 
   if (!hasAccess) {
@@ -136,8 +155,47 @@ function ServicesSection({ tier }: { tier: string }) {
       ) : services.length === 0 ? (
         <p className="text-sm text-gray-400 italic">No services yet. Add your first service below.</p>
       ) : (
-        <div className="space-y-3">
-          {services.map((s) =>
+        <div className="space-y-4">
+          {orgServices.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Organisation services</p>
+                <span className="text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">Read-only</span>
+              </div>
+              <p className="text-xs text-gray-500">Published by your organisation. Use as-is or make a copy to customise.</p>
+              {orgServices.map((s) => (
+                <div key={s.id} className="border border-blue-100 rounded-xl p-4 bg-blue-50/30">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1 min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-semibold text-gray-900">{s.name}</p>
+                        {s.price_label && (
+                          <span className="text-xs font-semibold text-green-700 bg-green-50 px-2 py-0.5 rounded-full">{s.price_label}</span>
+                        )}
+                      </div>
+                      {s.description && <p className="text-xs text-gray-500">{s.description}</p>}
+                      {s.payment_link && <p className="text-xs text-gray-400 truncate">{s.payment_link}</p>}
+                      {s.tos_url && (
+                        <a href={s.tos_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline">
+                          View Terms of Service
+                        </a>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => handleMakeCopy(s.id)}
+                      className="flex-shrink-0 text-xs font-medium text-blue-700 border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors"
+                    >
+                      Make a copy
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {ownServices.length > 0 && orgServices.length > 0 && (
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider pt-2">Your services</p>
+          )}
+          {ownServices.map((s) =>
             editingId === s.id ? (
               <div key={s.id} className="border border-blue-200 rounded-xl p-4 space-y-3 bg-blue-50/30">
                 <p className="text-xs font-semibold text-gray-700">Edit service</p>

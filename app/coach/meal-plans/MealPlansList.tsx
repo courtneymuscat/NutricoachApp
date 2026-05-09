@@ -30,6 +30,7 @@ type MealPlan = {
   content: MealSlot[]
   created_at: string
   updated_at: string
+  is_org_template?: boolean
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -171,7 +172,13 @@ function AssignMealPlanModal({
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function MealPlansList({ plans: initialPlans }: { plans: MealPlan[] }) {
+export default function MealPlansList({
+  plans: initialPlans,
+  orgName,
+}: {
+  plans: MealPlan[]
+  orgName?: string | null
+}) {
   const router = useRouter()
   const [plans, setPlans] = useState<MealPlan[]>(initialPlans)
   const [showModal, setShowModal] = useState(false)
@@ -183,6 +190,21 @@ export default function MealPlansList({ plans: initialPlans }: { plans: MealPlan
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null)
   const [assigningPlan, setAssigningPlan] = useState<MealPlan | null>(null)
+  const [copying, setCopying] = useState<string | null>(null)
+
+  async function handleMakeCopy(id: string) {
+    setCopying(id)
+    const res = await fetch('/api/coach/templates/clone', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ table: 'meal_plans', source_id: id }),
+    })
+    if (res.ok) {
+      const { id: newId } = await res.json()
+      router.push(`/coach/meal-plans/${newId}`)
+    }
+    setCopying(null)
+  }
 
   function openModal() {
     setName('')
@@ -273,74 +295,115 @@ export default function MealPlansList({ plans: initialPlans }: { plans: MealPlan
         )}
 
         {/* Grid */}
-        {plans.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {plans.map((plan) => {
-              const badge = DIET_BADGE[plan.goal] ?? DIET_BADGE.other
-              const mealCount = Array.isArray(plan.content) ? plan.content.length : 0
-              return (
-                <div
-                  key={plan.id}
-                  className="bg-white rounded-2xl border p-5 flex flex-col hover:shadow-sm transition-shadow"
-                >
-                  {/* Top row */}
-                  <div className="flex items-start justify-between gap-2 mb-3">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-gray-900 leading-snug truncate">{plan.name}</p>
-                      <div className="flex items-center gap-2 mt-1 flex-wrap">
-                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${badge.className}`}>
-                          {badge.label}
-                        </span>
-                        <span className="text-xs text-gray-500">
-                          {fmtCalories(plan.total_calories)} kcal
-                        </span>
-                        <span className="text-xs text-gray-400">
-                          {mealCount} {mealCount === 1 ? 'meal' : 'meals'}
-                        </span>
-                      </div>
-                    </div>
+        {plans.length > 0 && (() => {
+          const orgPlans = plans.filter((p) => p.is_org_template)
+          const ownPlans = plans.filter((p) => !p.is_org_template)
+          return (
+            <div className="space-y-6">
+              {orgPlans.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-sm font-semibold text-gray-900">Organisation meal plans</h2>
+                    <span className="text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+                      {orgName ? `From ${orgName}` : 'Org template'}
+                    </span>
                   </div>
-
-                  <p className="text-xs text-gray-400 mb-4">
-                    Created {fmtDate(plan.created_at)}
-                  </p>
-
-                  {/* Actions */}
-                  <div className="mt-auto flex flex-col gap-2 pt-3 border-t border-gray-100">
-                    <button
-                      onClick={() => setAssigningPlan(plan)}
-                      className="w-full text-center text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg py-1.5 transition-colors"
-                    >
-                      Assign to Client
-                    </button>
-                    <div className="flex items-center gap-2">
-                      <a
-                        href={`/coach/meal-plans/${plan.id}`}
-                        className="flex-1 text-center text-xs font-semibold text-blue-600 border border-blue-200 rounded-lg py-1.5 hover:bg-blue-50 transition-colors"
-                      >
-                        Edit
-                      </a>
-                      <button
-                        onClick={() => handleDuplicate(plan.id)}
-                        disabled={duplicatingId === plan.id}
-                        className="flex-1 text-center text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg py-1.5 hover:bg-gray-50 transition-colors disabled:opacity-50"
-                      >
-                        {duplicatingId === plan.id ? 'Copying…' : 'Duplicate'}
-                      </button>
-                      <button
-                        onClick={() => handleDelete(plan.id, plan.name)}
-                        disabled={deletingId === plan.id}
-                        className="text-xs font-semibold text-red-400 border border-red-100 rounded-lg px-3 py-1.5 hover:bg-red-50 transition-colors disabled:opacity-50"
-                      >
-                        {deletingId === plan.id ? '…' : 'Delete'}
-                      </button>
-                    </div>
+                  <p className="text-xs text-gray-500 -mt-1">Read-only. Make a copy to customise.</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {orgPlans.map((plan) => {
+                      const badge = DIET_BADGE[plan.goal] ?? DIET_BADGE.other
+                      const mealCount = Array.isArray(plan.content) ? plan.content.length : 0
+                      return (
+                        <div key={plan.id} className="bg-white rounded-2xl border border-blue-100 p-5 flex flex-col">
+                          <div className="flex-1">
+                            <p className="text-sm font-bold text-gray-900 leading-snug truncate">{plan.name}</p>
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+                              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${badge.className}`}>{badge.label}</span>
+                              <span className="text-xs text-gray-500">{fmtCalories(plan.total_calories)} kcal</span>
+                              <span className="text-xs text-gray-400">{mealCount} {mealCount === 1 ? 'meal' : 'meals'}</span>
+                            </div>
+                          </div>
+                          <div className="mt-4 flex flex-col gap-2 pt-3 border-t border-blue-50">
+                            <button
+                              onClick={() => setAssigningPlan(plan)}
+                              className="w-full text-center text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg py-1.5 transition-colors"
+                            >
+                              Assign to Client
+                            </button>
+                            <button
+                              onClick={() => handleMakeCopy(plan.id)}
+                              disabled={copying === plan.id}
+                              className="w-full text-center text-xs font-semibold text-blue-700 border border-blue-200 rounded-lg py-1.5 hover:bg-blue-50 transition-colors disabled:opacity-50"
+                            >
+                              {copying === plan.id ? 'Copying…' : 'Make a copy'}
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
-              )
-            })}
-          </div>
-        )}
+              )}
+
+              {ownPlans.length > 0 && (
+                <div className="space-y-3">
+                  {orgPlans.length > 0 && <h2 className="text-sm font-semibold text-gray-900">Your meal plans</h2>}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {ownPlans.map((plan) => {
+                      const badge = DIET_BADGE[plan.goal] ?? DIET_BADGE.other
+                      const mealCount = Array.isArray(plan.content) ? plan.content.length : 0
+                      return (
+                        <div key={plan.id} className="bg-white rounded-2xl border p-5 flex flex-col hover:shadow-sm transition-shadow">
+                          <div className="flex items-start justify-between gap-2 mb-3">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-bold text-gray-900 leading-snug truncate">{plan.name}</p>
+                              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${badge.className}`}>{badge.label}</span>
+                                <span className="text-xs text-gray-500">{fmtCalories(plan.total_calories)} kcal</span>
+                                <span className="text-xs text-gray-400">{mealCount} {mealCount === 1 ? 'meal' : 'meals'}</span>
+                              </div>
+                            </div>
+                          </div>
+                          <p className="text-xs text-gray-400 mb-4">Created {fmtDate(plan.created_at)}</p>
+                          <div className="mt-auto flex flex-col gap-2 pt-3 border-t border-gray-100">
+                            <button
+                              onClick={() => setAssigningPlan(plan)}
+                              className="w-full text-center text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg py-1.5 transition-colors"
+                            >
+                              Assign to Client
+                            </button>
+                            <div className="flex items-center gap-2">
+                              <a
+                                href={`/coach/meal-plans/${plan.id}`}
+                                className="flex-1 text-center text-xs font-semibold text-blue-600 border border-blue-200 rounded-lg py-1.5 hover:bg-blue-50 transition-colors"
+                              >
+                                Edit
+                              </a>
+                              <button
+                                onClick={() => handleDuplicate(plan.id)}
+                                disabled={duplicatingId === plan.id}
+                                className="flex-1 text-center text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg py-1.5 hover:bg-gray-50 transition-colors disabled:opacity-50"
+                              >
+                                {duplicatingId === plan.id ? 'Copying…' : 'Duplicate'}
+                              </button>
+                              <button
+                                onClick={() => handleDelete(plan.id, plan.name)}
+                                disabled={deletingId === plan.id}
+                                className="text-xs font-semibold text-red-400 border border-red-100 rounded-lg px-3 py-1.5 hover:bg-red-50 transition-colors disabled:opacity-50"
+                              >
+                                {deletingId === plan.id ? '…' : 'Delete'}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })()}
       </main>
 
       {/* Create modal */}

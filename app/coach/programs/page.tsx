@@ -9,6 +9,7 @@ type ProgramSummary = {
   week_count: number
   created_at: string
   updated_at: string
+  is_org_template?: boolean
 }
 
 type Client = { id: string; email: string; full_name: string | null }
@@ -169,6 +170,21 @@ export default function ProgramsPage() {
     setDeleteId(null)
   }
 
+  async function handleMakeCopy(id: string) {
+    const res = await fetch('/api/coach/templates/clone', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ table: 'programs', source_id: id }),
+    })
+    if (res.ok) {
+      const { id: newId } = await res.json()
+      window.location.href = `/coach/programs/${newId}`
+    }
+  }
+
+  const orgPrograms = programs.filter((p) => p.is_org_template)
+  const ownPrograms = programs.filter((p) => !p.is_org_template)
+
   return (
     <div className="flex-1 flex flex-col">
       {/* Header */}
@@ -206,8 +222,51 @@ export default function ProgramsPage() {
         )}
 
         {!loading && programs.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {programs.map((p) => (
+          <div className="space-y-6">
+            {orgPrograms.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-semibold text-gray-900">Organisation programs</h2>
+                  <span className="text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">Org template</span>
+                </div>
+                <p className="text-xs text-gray-500 -mt-1">Read-only. Make a copy to customise.</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {orgPrograms.map((p) => (
+                    <div key={p.id} className="bg-white rounded-2xl border border-blue-100 p-5 flex flex-col">
+                      <p className="text-sm font-semibold text-gray-900 leading-snug mb-2">{p.name}</p>
+                      {p.description && (
+                        <p className="text-xs text-gray-500 mb-3 line-clamp-2 leading-relaxed">{p.description}</p>
+                      )}
+                      <div className="mt-auto flex items-center justify-between pt-3 border-t border-blue-50">
+                        <span className="text-xs text-gray-400">
+                          {p.week_count === 0 ? 'No weeks' : `${p.week_count} week${p.week_count !== 1 ? 's' : ''}`}
+                        </span>
+                      </div>
+                      <div className="mt-3 flex flex-col gap-2">
+                        <button
+                          onClick={() => setAssigningProgram(p)}
+                          className="w-full text-center text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg py-1.5 transition-colors"
+                        >
+                          Assign to Client
+                        </button>
+                        <button
+                          onClick={() => handleMakeCopy(p.id)}
+                          className="w-full text-center text-xs font-semibold text-blue-700 border border-blue-200 rounded-lg py-1.5 hover:bg-blue-50 transition-colors"
+                        >
+                          Make a copy
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {ownPrograms.length > 0 && (
+              <div className="space-y-3">
+                {orgPrograms.length > 0 && <h2 className="text-sm font-semibold text-gray-900">Your programs</h2>}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {ownPrograms.map((p) => (
               <div
                 key={p.id}
                 className="bg-white rounded-2xl border p-5 flex flex-col hover:shadow-sm transition-shadow group"
@@ -257,7 +316,10 @@ export default function ProgramsPage() {
                   </a>
                 </div>
               </div>
-            ))}
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </main>

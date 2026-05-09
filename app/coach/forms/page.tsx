@@ -1,15 +1,25 @@
 import { redirect } from 'next/navigation'
 import { requireCoach } from '@/lib/coach'
 import { createClient } from '@/lib/supabase/server'
+import { fetchOrgTemplatesForCoach, getOrgForUser } from '@/lib/org'
 import FormTemplates from './FormTemplates'
 import JotFormImport from './JotFormImport'
 import PasteImport from './PasteImport'
 import DeleteFormButton from './DeleteFormButton'
+import OrgFormCopyButton from './OrgFormCopyButton'
 
 const TYPE_LABELS: Record<string, string> = {
   onboarding: 'Onboarding',
   weekly_checkin: 'Weekly check-in',
   custom: 'Custom',
+}
+
+type FormRow = {
+  id: string
+  title: string
+  type: string
+  is_active: boolean | null
+  created_at: string
 }
 
 export default async function CoachFormsPage() {
@@ -18,12 +28,16 @@ export default async function CoachFormsPage() {
 
   const supabase = await createClient()
 
-  const { data: forms } = await supabase
-    .from('forms')
-    .select('id, title, type, is_active, created_at')
-    .eq('coach_id', coachId)
-    .or('is_client_copy.is.null,is_client_copy.eq.false')
-    .order('created_at', { ascending: false })
+  const [{ data: forms }, orgForms, membership] = await Promise.all([
+    supabase
+      .from('forms')
+      .select('id, title, type, is_active, created_at')
+      .eq('coach_id', coachId)
+      .or('is_client_copy.is.null,is_client_copy.eq.false')
+      .order('created_at', { ascending: false }),
+    fetchOrgTemplatesForCoach<FormRow>(coachId, 'forms', 'id, title, type, is_active, created_at'),
+    getOrgForUser(coachId),
+  ])
 
   // Get unread submission counts per form
   const { data: unread } = await supabase
@@ -51,6 +65,33 @@ export default async function CoachFormsPage() {
 
       <main className="w-full p-6 space-y-6">
 
+        {orgForms.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-gray-900">Organisation forms</h2>
+              <span className="text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+                {membership?.org_name ? `From ${membership.org_name}` : 'Org template'}
+              </span>
+            </div>
+            <p className="text-xs text-gray-500 -mt-1">Read-only. Make a copy to customise.</p>
+            {orgForms.map((form) => (
+              <div key={form.id} className="bg-white rounded-2xl border border-blue-100 p-4 flex items-center gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-semibold text-gray-900">{form.title}</p>
+                    <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
+                      {TYPE_LABELS[form.type] ?? form.type}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex gap-2 flex-shrink-0">
+                  <OrgFormCopyButton formId={form.id} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Template picker */}
         <FormTemplates />
 
@@ -69,7 +110,7 @@ export default async function CoachFormsPage() {
           </div>
         )}
 
-        {(!forms || forms.length === 0) && (
+        {(!forms || forms.length === 0) && orgForms.length === 0 && (
           <p className="text-sm text-gray-400 text-center py-4">No forms yet — use a template above or create from scratch.</p>
         )}
 
