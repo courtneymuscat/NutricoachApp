@@ -65,7 +65,14 @@ export default function OrgInvitePage({
           }
           return
         }
-        // Fall through to manual flow if auto-accept failed (e.g. already a member)
+        // 409 "Already a member" — they're either the org owner or accepted
+        // before. Either way, send them straight to the coach dashboard rather
+        // than parking them on a confusing error UI.
+        if (res.status === 409) {
+          router.push('/coach/dashboard')
+          return
+        }
+        // Other failures fall through to manual flow so the user still has a path.
         setState({ status: 'valid', invite, userEmail })
         return
       }

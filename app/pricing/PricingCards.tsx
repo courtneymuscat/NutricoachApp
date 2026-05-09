@@ -224,12 +224,16 @@ function SoloSection({
 export default function PricingCards({
   currentTier,
   currentUserType,
+  initialTab = 'individual',
 }: {
   currentTier: string | null
   currentUserType: 'individual' | 'coach' | null
+  initialTab?: 'individual' | 'coach'
 }) {
-  const [billing, setBilling] = useState<'monthly' | 'annual'>('monthly')
-  const [tab, setTab] = useState<'individual' | 'coach'>('individual')
+  const [billing, setBilling] = useState<'monthly' | 'annual'>(
+    initialTab === 'coach' ? 'monthly' : 'monthly'
+  )
+  const [tab, setTab] = useState<'individual' | 'coach'>(initialTab)
 
   // Open the coach tab when the URL points there (e.g. /pricing#coach from
   // landing-page CTAs).

@@ -2,8 +2,20 @@ import { getSubscription } from '@/lib/subscription'
 import PricingCards from './PricingCards'
 import Link from 'next/link'
 
-export default async function PricingPage() {
+export default async function PricingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>
+}) {
   const sub = await getSubscription()
+  const { tab } = await searchParams
+  // Default to the coach tab when the visitor is a coach/business user, or
+  // when the URL explicitly asks for it via ?tab=coach. The #coach hash is
+  // handled client-side in PricingCards because hashes never reach the server.
+  const initialTab: 'individual' | 'coach' =
+    tab === 'coach' || sub.userType === 'coach' || sub.userType === 'business'
+      ? 'coach'
+      : 'individual'
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -21,6 +33,7 @@ export default async function PricingPage() {
         <PricingCards
           currentTier={sub.tier === 'coached' ? null : sub.tier}
           currentUserType={sub.userType === 'business' ? null : sub.userType}
+          initialTab={initialTab}
         />
 
         {sub.tier === 'coached' && (
