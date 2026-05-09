@@ -132,16 +132,46 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
       .upsert(rows, { onConflict: 'resource_id,client_id' })
   }
 
-  // Resolve resource details — scope to the owning coach for data isolation
+  // Resolve resource details. Resources are accessible if either:
+  //  (a) they belong to the assigning coach, OR
+  //  (b) they're an org template in the assigning coach's organisation
+  //      (covers autoflows published as org templates whose referenced
+  //       resources belong to the org owner, not the assigning coach).
   let resources: unknown[] = []
-  if (resourceIds.length > 0) {
-    const resourceQuery = admin
+  if (resourceIds.length > 0 && coachId) {
+    const { data: candidates } = await admin
       .from('coach_resources')
-      .select('id, name, description, type, url')
+      .select('id, name, description, type, url, coach_id, org_id, is_org_template')
       .in('id', resourceIds)
-    if (coachId) resourceQuery.eq('coach_id', coachId)
-    const { data: res } = await resourceQuery
-    resources = res ?? []
+
+    let assigningCoachOrgId: string | null = null
+    {
+      const { data: coachProfile } = await admin
+        .from('profiles')
+        .select('org_id')
+        .eq('id', coachId)
+        .single()
+      assigningCoachOrgId = (coachProfile?.org_id as string | null) ?? null
+    }
+
+    type ResourceRow = {
+      id: string
+      name: string
+      description: string | null
+      type: string
+      url: string | null
+      coach_id: string
+      org_id: string | null
+      is_org_template: boolean
+    }
+
+    resources = ((candidates as ResourceRow[] | null) ?? [])
+      .filter((r) => {
+        if (r.coach_id === coachId) return true
+        if (r.is_org_template && r.org_id && assigningCoachOrgId && r.org_id === assigningCoachOrgId) return true
+        return false
+      })
+      .map((r) => ({ id: r.id, name: r.name, description: r.description, type: r.type, url: r.url }))
   }
 
   // Resolve linked form title
