@@ -258,7 +258,24 @@ function ServicesSection({ tier }: { tier: string }) {
   )
 }
 
-function BrandingSection({ initialColour, initialLogoUrl, initialBrandName }: { initialColour: string | null; initialLogoUrl: string | null; initialBrandName: string | null }) {
+type OrgManagedBranding = {
+  org_name: string
+  brand_colour: string | null
+  logo_url: string | null
+  brand_name: string | null
+}
+
+function BrandingSection({
+  initialColour,
+  initialLogoUrl,
+  initialBrandName,
+  orgManaged,
+}: {
+  initialColour: string | null
+  initialLogoUrl: string | null
+  initialBrandName: string | null
+  orgManaged?: OrgManagedBranding | null
+}) {
   const [colour, setColour] = useState(initialColour ?? '#F5C842')
   const [logoUrl, setLogoUrl] = useState(initialLogoUrl ?? '')
   const [brandName, setBrandName] = useState(initialBrandName ?? '')
@@ -267,6 +284,50 @@ function BrandingSection({ initialColour, initialLogoUrl, initialBrandName }: { 
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  if (orgManaged) {
+    const orgColour = orgManaged.brand_colour ?? '#F5C842'
+    return (
+      <div className="bg-white rounded-2xl border p-6 space-y-5">
+        <div>
+          <h2 className="text-sm font-semibold text-gray-900">Branding</h2>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Set by <span className="font-medium text-gray-700">{orgManaged.org_name}</span>. Your clients see the organisation&apos;s branding.
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs text-blue-800">
+          Branding is managed by your organisation administrator. Contact them to request changes.
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="block text-xs font-medium text-gray-500">Brand name</label>
+          <div className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-gray-50 text-gray-500">
+            {orgManaged.brand_name ?? orgManaged.org_name}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className="block text-xs font-medium text-gray-500">Logo</label>
+          {orgManaged.logo_url ? (
+            <img src={orgManaged.logo_url} alt={`${orgManaged.org_name} logo`} className="h-12 w-12 object-contain rounded-xl border bg-white" />
+          ) : (
+            <div className="h-12 w-12 rounded-xl border border-dashed border-gray-200 flex items-center justify-center text-gray-300 text-xs">
+              No logo
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <label className="block text-xs font-medium text-gray-500">Brand colour</label>
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-xl border border-gray-200" style={{ backgroundColor: orgColour }} />
+            <span className="text-sm font-mono text-gray-500">{orgColour}</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   async function persistSettings(overrides: { logo_url?: string | null; brand_colour?: string; brand_name?: string } = {}) {
     setSaving(true)
@@ -437,6 +498,7 @@ export default function CoachSettingsPage() {
   const [brandColour, setBrandColour] = useState<string | null>(null)
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
   const [brandName, setBrandName] = useState<string | null>(null)
+  const [orgManaged, setOrgManaged] = useState<OrgManagedBranding | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -452,6 +514,7 @@ export default function CoachSettingsPage() {
         setBrandColour(d.brand_colour ?? null)
         setLogoUrl(d.logo_url ?? null)
         setBrandName(d.brand_name ?? null)
+        setOrgManaged(d.org_managed ?? null)
         setLoading(false)
       })
   }, [])
@@ -541,8 +604,15 @@ export default function CoachSettingsPage() {
               </button>
             </form>
 
-            {/* Branding — Pro and above */}
-            {hasBranding ? (
+            {/* Branding — Pro and above (or read-only org branding for org members) */}
+            {orgManaged ? (
+              <BrandingSection
+                initialColour={brandColour}
+                initialLogoUrl={logoUrl}
+                initialBrandName={brandName}
+                orgManaged={orgManaged}
+              />
+            ) : hasBranding ? (
               <BrandingSection initialColour={brandColour} initialLogoUrl={logoUrl} initialBrandName={brandName} />
             ) : (
               <div className="bg-gray-50 rounded-2xl border border-dashed border-gray-200 p-6 space-y-2">

@@ -7,6 +7,12 @@ type OverageItem = {
   amount: number
 }
 
+type OrgManagedBilling = {
+  org_name: string
+  role: string
+  owner_email: string | null
+}
+
 type BillingInfo = {
   subscription_tier: string
   next_billing_date: string | null
@@ -21,6 +27,7 @@ type BillingInfo = {
   client_overage_rate?: number
   coach_overage_rate?: number
   overage_items?: OverageItem[]
+  org_managed?: OrgManagedBilling | null
 }
 
 const PLAN_DISPLAY: Record<string, { name: string; price: string; isCoach?: boolean }> = {
@@ -145,6 +152,34 @@ export default function BillingSection({ returnPath = '/settings' }: { returnPat
         >
           Retry
         </button>
+      </div>
+    )
+  }
+
+  // Org-managed coaches don't have their own subscription — billing is the
+  // org's. Replace the card with a clear "Managed by [Org]" panel.
+  if (info?.org_managed) {
+    const om = info.org_managed
+    return (
+      <div className="bg-white rounded-2xl border p-5 space-y-3">
+        <p className="text-sm font-semibold text-gray-900">Billing & subscription</p>
+        <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-4 flex items-start gap-3">
+          <svg className="w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+          </svg>
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-gray-900">Managed by {om.org_name}</p>
+            <p className="text-xs text-gray-600">
+              Your plan and billing are covered by your organisation&apos;s subscription. You won&apos;t be charged for using Prokol.
+            </p>
+            {om.owner_email && (
+              <p className="text-xs text-gray-500 pt-1">
+                Need a change? Contact your administrator at{' '}
+                <a href={`mailto:${om.owner_email}`} className="font-medium text-blue-700 hover:underline">{om.owner_email}</a>.
+              </p>
+            )}
+          </div>
+        </div>
       </div>
     )
   }

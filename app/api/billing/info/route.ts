@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getStripe, buildPriceToTierMap, OVERAGE_PRICE_IDS, TIER_TO_USER_TYPE } from '@/lib/stripe'
 import { INCLUDED_SEATS, INCLUDED_COACHES, CLIENT_OVERAGE_PRICE, COACH_OVERAGE_PRICE } from '@/lib/billing'
+import { getOrgForUser } from '@/lib/org'
 
 export async function GET() {
   try {
@@ -116,6 +117,32 @@ export async function GET() {
       })
     }
 
+    // If this user is a non-owner org member, billing is covered by the org.
+    const membership = await getOrgForUser(user.id)
+    let org_managed: { org_name: string; role: string; owner_email: string | null } | null = null
+    if (membership && membership.role !== 'owner') {
+      const { data: ownerMember } = await admin
+        .from('org_members')
+        .select('user_id')
+        .eq('org_id', membership.org_id)
+        .eq('role', 'owner')
+        .maybeSingle()
+      let ownerEmail: string | null = null
+      if (ownerMember?.user_id) {
+        const { data: ownerProfile } = await admin
+          .from('profiles')
+          .select('email')
+          .eq('id', ownerMember.user_id)
+          .single()
+        ownerEmail = ownerProfile?.email ?? null
+      }
+      org_managed = {
+        org_name: membership.org_name,
+        role: membership.role,
+        owner_email: ownerEmail,
+      }
+    }
+
     return NextResponse.json({
       subscription_tier: tier,
       next_billing_date,
@@ -130,6 +157,7 @@ export async function GET() {
       client_overage_rate: clientOverageRate,
       coach_overage_rate: coachOverageRate,
       overage_items,
+      org_managed,
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)

@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { requireCoach } from '@/lib/coach'
+import { getOrgForUser } from '@/lib/org'
 import type { NextRequest } from 'next/server'
 
 export async function GET() {
@@ -15,6 +17,42 @@ export async function GET() {
     .eq('id', coachId)
     .single()
 
+  // If this coach is a non-owner member of an organisation, surface the org's
+  // branding so the settings page can show it read-only.
+  const membership = await getOrgForUser(coachId)
+  let org_managed: {
+    org_name: string
+    role: string
+    brand_colour: string | null
+    logo_url: string | null
+    brand_name: string | null
+  } | null = null
+  if (membership && membership.role !== 'owner') {
+    const admin = createAdminClient()
+    const { data: ownerMember } = await admin
+      .from('org_members')
+      .select('user_id')
+      .eq('org_id', membership.org_id)
+      .eq('role', 'owner')
+      .maybeSingle()
+    let ownerBranding: { brand_colour: string | null; logo_url: string | null; brand_name: string | null } | null = null
+    if (ownerMember?.user_id) {
+      const { data } = await admin
+        .from('profiles')
+        .select('brand_colour, logo_url, brand_name')
+        .eq('id', ownerMember.user_id)
+        .single()
+      ownerBranding = data ?? null
+    }
+    org_managed = {
+      org_name: membership.org_name,
+      role: membership.role,
+      brand_colour: ownerBranding?.brand_colour ?? null,
+      logo_url: ownerBranding?.logo_url ?? null,
+      brand_name: ownerBranding?.brand_name ?? membership.org_name,
+    }
+  }
+
   return Response.json({
     email: user?.email ?? '',
     first_name: profile?.first_name ?? '',
@@ -23,6 +61,7 @@ export async function GET() {
     brand_colour: profile?.brand_colour ?? null,
     logo_url: profile?.logo_url ?? null,
     brand_name: (profile as Record<string, unknown>)?.brand_name as string | null ?? null,
+    org_managed,
   })
 }
 
