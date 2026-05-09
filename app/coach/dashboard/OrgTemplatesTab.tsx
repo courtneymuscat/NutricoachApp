@@ -121,8 +121,30 @@ function PublishModal({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  type Coach = { id: string; full_name: string | null; email: string | null; role: string }
+  const [coaches, setCoaches] = useState<Coach[]>([])
+  const [includedCoachIds, setIncludedCoachIds] = useState<Set<string>>(new Set())
+  type Dep = { id: string; name: string; already_shared: boolean }
+  const [deps, setDeps] = useState<{ forms: Dep[]; resources: Dep[] }>({ forms: [], resources: [] })
+  const [loadingPreview, setLoadingPreview] = useState(false)
+
   const activeGroup = GROUPS.find((g) => g.table === table)!
 
+  // Load list of coaches in the org once
+  useEffect(() => {
+    fetch('/api/org/coaches')
+      .then((r) => r.json())
+      .then((data) => {
+        const all = (data?.coaches ?? []) as Array<{ id: string; full_name: string | null; email: string | null; role: string }>
+        setCoaches(all)
+        // Default: every non-owner/admin coach selected. Admins/owners are
+        // always included (they always have access regardless of exclusions).
+        setIncludedCoachIds(new Set(all.filter((c) => c.role === 'coach').map((c) => c.id)))
+      })
+      .catch(() => {/* silent */})
+  }, [])
+
+  // Reload available templates when the table changes
   useEffect(() => {
     setSelectedId('')
     setError(null)
@@ -144,14 +166,45 @@ function PublishModal({
       .finally(() => setLoadingList(false))
   }, [table]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Preview the cross-template dependencies for the selected template
+  useEffect(() => {
+    if (!selectedId) {
+      setDeps({ forms: [], resources: [] })
+      return
+    }
+    setLoadingPreview(true)
+    fetch(`/api/org/templates/preview?template_id=${selectedId}&table=${table}`)
+      .then((r) => r.json())
+      .then((d) => setDeps(d.dependencies ?? { forms: [], resources: [] }))
+      .catch(() => setDeps({ forms: [], resources: [] }))
+      .finally(() => setLoadingPreview(false))
+  }, [selectedId, table])
+
+  function toggleCoach(id: string) {
+    setIncludedCoachIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function toggleAll(allOn: boolean) {
+    const coachOnly = coaches.filter((c) => c.role === 'coach').map((c) => c.id)
+    setIncludedCoachIds(allOn ? new Set(coachOnly) : new Set())
+  }
+
   async function submit() {
     if (!selectedId) return
     setSaving(true)
     setError(null)
+    // Convert "included coaches" into the exclusion list the API expects
+    const memberCoachIds = coaches.filter((c) => c.role === 'coach').map((c) => c.id)
+    const excludedCoachIds = memberCoachIds.filter((id) => !includedCoachIds.has(id))
     const res = await fetch('/api/org/templates', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ template_id: selectedId, table }),
+      body: JSON.stringify({ template_id: selectedId, table, excluded_coach_ids: excludedCoachIds }),
     })
     const data = await res.json()
     if (!res.ok) {
@@ -161,6 +214,10 @@ function PublishModal({
     }
     onDone()
   }
+
+  const memberCoaches = coaches.filter((c) => c.role === 'coach')
+  const allSelected = memberCoaches.length > 0 && memberCoaches.every((c) => includedCoachIds.has(c.id))
+  const noneSelected = memberCoaches.every((c) => !includedCoachIds.has(c.id))
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -210,6 +267,90 @@ function PublishModal({
             </select>
           )}
         </div>
+
+        {/* Dependency preview (autoflows only) */}
+        {selectedId && table === 'autoflow_templates' && (
+          <div className="border border-amber-100 bg-amber-50 rounded-xl px-4 py-3 space-y-2">
+            <p className="text-xs font-semibold text-amber-800 uppercase tracking-wider">Will also be shared</p>
+            {loadingPreview ? (
+              <p className="text-xs text-amber-700">Checking dependencies…</p>
+            ) : (deps.forms.length === 0 && deps.resources.length === 0) ? (
+              <p className="text-xs text-amber-700">No forms or resources are referenced by this autoflow.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {deps.forms.map((f) => (
+                  <div key={f.id} className="flex items-center gap-2 text-xs">
+                    <span className="text-amber-600">📋</span>
+                    <span className="text-amber-900">{f.name}</span>
+                    {f.already_shared && <span className="text-[10px] text-amber-600 italic">already shared</span>}
+                  </div>
+                ))}
+                {deps.resources.map((r) => (
+                  <div key={r.id} className="flex items-center gap-2 text-xs">
+                    <span className="text-amber-600">📚</span>
+                    <span className="text-amber-900">{r.name}</span>
+                    {r.already_shared && <span className="text-[10px] text-amber-600 italic">already shared</span>}
+                  </div>
+                ))}
+                <p className="text-[11px] text-amber-700 pt-1">
+                  Forms and resources used inside this autoflow will be shared too so it works end-to-end for the chosen coaches.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Coach selection */}
+        {memberCoaches.length > 0 && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="block text-sm font-medium text-gray-700">Visible to</label>
+              <div className="flex items-center gap-2 text-[11px]">
+                <button
+                  type="button"
+                  onClick={() => toggleAll(true)}
+                  disabled={allSelected}
+                  className="text-blue-600 hover:underline disabled:opacity-40 disabled:no-underline"
+                >
+                  Select all
+                </button>
+                <span className="text-gray-300">·</span>
+                <button
+                  type="button"
+                  onClick={() => toggleAll(false)}
+                  disabled={noneSelected}
+                  className="text-gray-500 hover:underline disabled:opacity-40 disabled:no-underline"
+                >
+                  None
+                </button>
+              </div>
+            </div>
+            <div className="border border-gray-100 rounded-xl divide-y divide-gray-50 max-h-44 overflow-y-auto">
+              {memberCoaches.map((c) => {
+                const checked = includedCoachIds.has(c.id)
+                return (
+                  <label
+                    key={c.id}
+                    className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-gray-50"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleCoach(c.id)}
+                      className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-700 truncate flex-1">
+                      {c.full_name ?? c.email ?? 'Coach'}
+                    </span>
+                  </label>
+                )
+              })}
+            </div>
+            <p className="text-[11px] text-gray-400">
+              Admins and owners always see published templates regardless of this list.
+            </p>
+          </div>
+        )}
 
         {error && <p className="text-sm text-red-600">{error}</p>}
 

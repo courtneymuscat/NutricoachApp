@@ -191,7 +191,12 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: err instanceof Error ? err.message : 'Forbidden' }, { status: 403 })
   }
 
-  const { template_id, table } = await req.json() as { template_id: string; table: TemplateTable }
+  const body = await req.json() as {
+    template_id: string
+    table: TemplateTable
+    excluded_coach_ids?: string[]
+  }
+  const { template_id, table, excluded_coach_ids } = body
 
   if (!template_id) return Response.json({ error: 'template_id is required' }, { status: 400 })
   if (!VALID_TABLES.includes(table)) {
@@ -219,6 +224,27 @@ export async function POST(req: NextRequest) {
     await autoPublishAutoflowDependencies(admin, template_id, membership.org_id, session.user.id)
   }
 
+  // Apply per-coach exclusions if the admin chose to scope this to specific
+  // coaches at publish time. We replace the existing exclusions for this
+  // template entirely so re-publishing with a different selection gives the
+  // expected result.
+  await admin
+    .from('org_template_exclusions')
+    .delete()
+    .eq('org_id', membership.org_id)
+    .eq('template_id', template_id)
+    .eq('template_table', table)
+
+  if (Array.isArray(excluded_coach_ids) && excluded_coach_ids.length > 0) {
+    const rows = excluded_coach_ids.map((coachId) => ({
+      org_id: membership.org_id,
+      template_id,
+      template_table: table,
+      coach_id: coachId,
+    }))
+    await admin.from('org_template_exclusions').insert(rows)
+  }
+
   return Response.json({ ok: true })
 }
 
@@ -230,17 +256,14 @@ async function autoPublishAutoflowDependencies(
 ) {
   const { data: steps } = await admin
     .from('autoflow_template_steps')
-    .select('form_id, resource_ids')
+    .select('form_id, resource_ids, tasks')
     .eq('template_id', templateId)
 
   if (!steps?.length) return
 
-  const formIds = new Set<string>()
-  const resourceIds = new Set<string>()
-  for (const step of steps as Array<{ form_id: string | null; resource_ids: string[] | null }>) {
-    if (step.form_id) formIds.add(step.form_id)
-    for (const r of step.resource_ids ?? []) resourceIds.add(r)
-  }
+  const { formIds, resourceIds } = collectAutoflowDependencies(
+    steps as Array<{ form_id: string | null; resource_ids: string[] | null; tasks: unknown }>,
+  )
 
   if (formIds.size > 0) {
     // Only flip rows that aren't already org templates so we don't reassign
@@ -258,6 +281,40 @@ async function autoPublishAutoflowDependencies(
       .in('id', [...resourceIds])
       .eq('is_org_template', false)
   }
+}
+
+/**
+ * Walk every step + every task on every step to collect form and resource IDs
+ * referenced anywhere by an autoflow.
+ *
+ * Tasks store form references as `link_url: '/forms/<id>'` and resource
+ * references as `link_type: 'resource'` with the resource id. We treat the
+ * step-level `form_id` and `resource_ids` as authoritative and tasks as
+ * supplementary so we don't miss any reference.
+ */
+export function collectAutoflowDependencies(
+  steps: Array<{ form_id: string | null; resource_ids: string[] | null; tasks: unknown }>,
+): { formIds: Set<string>; resourceIds: Set<string> } {
+  const formIds = new Set<string>()
+  const resourceIds = new Set<string>()
+  for (const step of steps) {
+    if (step.form_id) formIds.add(step.form_id)
+    for (const r of step.resource_ids ?? []) resourceIds.add(r)
+    for (const task of (Array.isArray(step.tasks) ? step.tasks : []) as Array<Record<string, unknown>>) {
+      const linkType = task.link_type as string | undefined
+      const linkUrl = task.link_url as string | undefined
+      if (linkType === 'form') {
+        // Tasks store the form via link_url = "/forms/<uuid>"
+        const m = linkUrl?.match(/\/forms\/([0-9a-fA-F-]{36})/)
+        if (m) formIds.add(m[1])
+      } else if (linkType === 'resource') {
+        // Tasks store resources by id either in link_url or link_resource_id
+        const candidate = (task.link_resource_id as string | undefined) ?? linkUrl
+        if (candidate && /^[0-9a-fA-F-]{36}$/.test(candidate)) resourceIds.add(candidate)
+      }
+    }
+  }
+  return { formIds, resourceIds }
 }
 
 export async function DELETE(req: NextRequest) {

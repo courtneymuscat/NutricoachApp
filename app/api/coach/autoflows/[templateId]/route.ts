@@ -118,7 +118,9 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
     // If this autoflow is itself an org template, propagate the org_template
     // marker to any newly added forms / resources referenced by its steps so
     // invited coaches and their clients can use the autoflow end to end.
+    // Walk both the step-level form/resource refs AND any task-linked refs.
     const { createAdminClient } = await import('@/lib/supabase/admin')
+    const { collectAutoflowDependencies } = await import('@/app/api/org/templates/route')
     const admin = createAdminClient()
     const { data: tplMeta } = await admin
       .from('autoflow_templates')
@@ -126,12 +128,13 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
       .eq('id', templateId)
       .single()
     if (tplMeta?.is_org_template && tplMeta.org_id) {
-      const formIds = new Set<string>()
-      const resourceIds = new Set<string>()
-      for (const row of stepRows) {
-        if (row.form_id) formIds.add(row.form_id)
-        for (const r of (row.resource_ids as string[] | null) ?? []) resourceIds.add(r)
-      }
+      const { formIds, resourceIds } = collectAutoflowDependencies(
+        stepRows.map((r) => ({
+          form_id: r.form_id ?? null,
+          resource_ids: (r.resource_ids as string[] | null) ?? null,
+          tasks: r.tasks,
+        })),
+      )
       if (formIds.size > 0) {
         await admin
           .from('forms')
