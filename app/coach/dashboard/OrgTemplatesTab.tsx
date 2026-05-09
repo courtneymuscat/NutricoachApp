@@ -9,7 +9,15 @@ type Template = {
   created_by: string | null
 }
 
-type OrgTemplates = {
+type AccessSummary = {
+  id: string
+  name: string | null
+  email: string | null
+  role: string
+  initial: string
+}
+
+type OrgTemplatesData = {
   autoflows: Template[]
   programs: Template[]
   meal_plans: Template[]
@@ -19,7 +27,52 @@ type OrgTemplates = {
   resources: Template[]
 }
 
-type GroupKey = keyof OrgTemplates
+type OrgTemplates = OrgTemplatesData & {
+  access?: Record<string, AccessSummary[]>
+}
+
+// Stable color cycle so the same coach always gets the same bubble colour
+const AVATAR_COLORS = [
+  'bg-purple-100 text-purple-700',
+  'bg-blue-100 text-blue-700',
+  'bg-emerald-100 text-emerald-700',
+  'bg-amber-100 text-amber-700',
+  'bg-pink-100 text-pink-700',
+  'bg-indigo-100 text-indigo-700',
+  'bg-rose-100 text-rose-700',
+  'bg-teal-100 text-teal-700',
+]
+function colorFor(id: string) {
+  let h = 0
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0
+  return AVATAR_COLORS[h % AVATAR_COLORS.length]
+}
+
+function AccessAvatars({ access }: { access: AccessSummary[] | undefined }) {
+  if (!access || access.length === 0) return null
+  const visible = access.slice(0, 3)
+  const overflow = access.length - visible.length
+  return (
+    <div className="flex items-center -space-x-1.5">
+      {visible.map((a) => (
+        <div
+          key={a.id}
+          title={a.name ?? a.email ?? 'Coach'}
+          className={`w-6 h-6 rounded-full ${colorFor(a.id)} text-[10px] font-semibold flex items-center justify-center ring-2 ring-white`}
+        >
+          {a.initial}
+        </div>
+      ))}
+      {overflow > 0 && (
+        <div className="w-6 h-6 rounded-full bg-gray-100 text-gray-600 text-[10px] font-semibold flex items-center justify-center ring-2 ring-white">
+          +{overflow}
+        </div>
+      )}
+    </div>
+  )
+}
+
+type GroupKey = keyof OrgTemplatesData
 type TableName = 'autoflow_templates' | 'programs' | 'meal_plans' | 'forms' | 'note_templates' | 'coach_services' | 'coach_resources'
 
 type CoachAccess = {
@@ -323,7 +376,7 @@ export default function OrgTemplatesTab() {
   useEffect(() => { fetchTemplates() }, [])
 
   const totalCount = templates
-    ? Object.values(templates).reduce((sum, arr) => sum + arr.length, 0)
+    ? GROUPS.reduce((sum, g) => sum + (templates[g.key]?.length ?? 0), 0)
     : 0
 
   if (loading) {
@@ -382,7 +435,8 @@ export default function OrgTemplatesTab() {
                         Published {new Date(t.created_at).toLocaleDateString()}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-3 shrink-0">
+                      <AccessAvatars access={templates?.access?.[t.id]} />
                       <button
                         onClick={() => setAccessTarget({ template: t, table })}
                         className="text-xs border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-200 px-3 py-1.5 rounded-lg transition-colors"

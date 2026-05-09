@@ -70,6 +70,86 @@ export async function GET() {
     return (items ?? []).filter((t) => !excluded.has(t.id))
   }
 
+  // ── Build per-template "who has access" summary for admins ─────────────────
+  // Owner sees all org members + per-template exclusions to compute who has
+  // access to each template. Non-admin coaches don't need this — the admin
+  // UI is gated by membership.role !== 'coach' anyway, but we still want to
+  // return SOMETHING here so the request doesn't fail. For non-admins we
+  // skip the work and return [] for everything.
+  let accessByTemplate: Record<string, CoachInfo[]> = {}
+  if (membership.role !== 'coach') {
+    const [{ data: members }, { data: allExclusions }] = await Promise.all([
+      admin
+        .from('org_members')
+        .select('user_id, role')
+        .eq('org_id', membership.org_id)
+        .eq('is_active', true),
+      admin
+        .from('org_template_exclusions')
+        .select('template_id, template_table, coach_id')
+        .eq('org_id', membership.org_id),
+    ])
+
+    const memberIds = (members ?? []).map((m) => m.user_id as string)
+    const { data: profiles } = memberIds.length
+      ? await admin.from('profiles').select('id, email, full_name, first_name').in('id', memberIds)
+      : { data: [] as Array<{ id: string; email: string | null; full_name: string | null; first_name: string | null }> }
+
+    const profileMap = new Map<string, { email: string | null; full_name: string | null; first_name: string | null }>()
+    for (const p of profiles ?? []) profileMap.set(p.id, p)
+
+    const memberByRole = new Map<string, string>() // user_id → role
+    for (const m of members ?? []) memberByRole.set(m.user_id as string, (m.role as string) ?? 'coach')
+
+    // Build {template_table → {template_id → Set<excluded_coach_id>}}
+    const exclusionMap = new Map<string, Map<string, Set<string>>>()
+    for (const e of allExclusions ?? []) {
+      const tbl = e.template_table as string
+      if (!exclusionMap.has(tbl)) exclusionMap.set(tbl, new Map())
+      const inner = exclusionMap.get(tbl)!
+      const set = inner.get(e.template_id as string) ?? new Set<string>()
+      set.add(e.coach_id as string)
+      inner.set(e.template_id as string, set)
+    }
+
+    function buildAccess(items: { id: string }[] | null, table: string): Record<string, CoachInfo[]> {
+      const result: Record<string, CoachInfo[]> = {}
+      const tableExcl = exclusionMap.get(table) ?? new Map<string, Set<string>>()
+      for (const t of items ?? []) {
+        const excluded = tableExcl.get(t.id) ?? new Set<string>()
+        const list: CoachInfo[] = []
+        for (const m of members ?? []) {
+          const role = (m.role as string) ?? 'coach'
+          // Admins/owners always have access; coaches have access unless excluded
+          if (role === 'owner' || role === 'admin' || !excluded.has(m.user_id as string)) {
+            const p = profileMap.get(m.user_id as string)
+            const name = p?.full_name ?? p?.first_name ?? null
+            const email = p?.email ?? null
+            list.push({
+              id: m.user_id as string,
+              name,
+              email,
+              role,
+              initial: deriveInitial(name, email),
+            })
+          }
+        }
+        result[t.id] = list
+      }
+      return result
+    }
+
+    accessByTemplate = {
+      ...buildAccess(autoflows.data, 'autoflow_templates'),
+      ...buildAccess(programs.data, 'programs'),
+      ...buildAccess(mealPlans.data, 'meal_plans'),
+      ...buildAccess(forms.data, 'forms'),
+      ...buildAccess(noteTemplates.data, 'note_templates'),
+      ...buildAccess(services.data, 'coach_services'),
+      ...buildAccess(resources.data, 'coach_resources'),
+    }
+  }
+
   return Response.json({
     autoflows: filter(autoflows.data, 'autoflow_templates'),
     programs: filter(programs.data, 'programs'),
@@ -78,7 +158,25 @@ export async function GET() {
     note_templates: filter(noteTemplates.data, 'note_templates'),
     services: filter(services.data, 'coach_services'),
     resources: filter(resources.data, 'coach_resources'),
+    access: accessByTemplate,
   })
+}
+
+type CoachInfo = {
+  id: string
+  name: string | null
+  email: string | null
+  role: string
+  initial: string
+}
+
+function deriveInitial(name: string | null, email: string | null): string {
+  if (name) {
+    const parts = name.trim().split(/\s+/).filter(Boolean)
+    if (parts.length === 1) return parts[0][0]?.toUpperCase() ?? '?'
+    return ((parts[0][0] ?? '') + (parts[parts.length - 1][0] ?? '')).toUpperCase()
+  }
+  return (email?.[0] ?? '?').toUpperCase()
 }
 
 export async function POST(req: NextRequest) {
