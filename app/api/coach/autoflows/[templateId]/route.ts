@@ -114,6 +114,39 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
       .delete()
       .eq('template_id', templateId)
       .not('step_number', 'in', `(${keptStepNumbers.join(',')})`)
+
+    // If this autoflow is itself an org template, propagate the org_template
+    // marker to any newly added forms / resources referenced by its steps so
+    // invited coaches and their clients can use the autoflow end to end.
+    const { createAdminClient } = await import('@/lib/supabase/admin')
+    const admin = createAdminClient()
+    const { data: tplMeta } = await admin
+      .from('autoflow_templates')
+      .select('is_org_template, org_id')
+      .eq('id', templateId)
+      .single()
+    if (tplMeta?.is_org_template && tplMeta.org_id) {
+      const formIds = new Set<string>()
+      const resourceIds = new Set<string>()
+      for (const row of stepRows) {
+        if (row.form_id) formIds.add(row.form_id)
+        for (const r of (row.resource_ids as string[] | null) ?? []) resourceIds.add(r)
+      }
+      if (formIds.size > 0) {
+        await admin
+          .from('forms')
+          .update({ is_org_template: true, org_id: tplMeta.org_id, created_by: coachId })
+          .in('id', [...formIds])
+          .eq('is_org_template', false)
+      }
+      if (resourceIds.size > 0) {
+        await admin
+          .from('coach_resources')
+          .update({ is_org_template: true, org_id: tplMeta.org_id, created_by: coachId })
+          .in('id', [...resourceIds])
+          .eq('is_org_template', false)
+      }
+    }
   }
 
   // Push name + regenerate calendar events for active client flows

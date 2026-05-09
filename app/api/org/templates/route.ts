@@ -113,7 +113,53 @@ export async function POST(req: NextRequest) {
 
   if (error) return Response.json({ error: error.message }, { status: 500 })
 
+  // When publishing an autoflow, automatically share any forms or resources
+  // its steps reference so the autoflow stays self-contained for invited
+  // coaches and their clients. Without this, an org-published autoflow could
+  // reference a private form/resource that breaks at use-time.
+  if (table === 'autoflow_templates') {
+    await autoPublishAutoflowDependencies(admin, template_id, membership.org_id, session.user.id)
+  }
+
   return Response.json({ ok: true })
+}
+
+async function autoPublishAutoflowDependencies(
+  admin: ReturnType<typeof createAdminClient>,
+  templateId: string,
+  orgId: string,
+  publisherId: string,
+) {
+  const { data: steps } = await admin
+    .from('autoflow_template_steps')
+    .select('form_id, resource_ids')
+    .eq('template_id', templateId)
+
+  if (!steps?.length) return
+
+  const formIds = new Set<string>()
+  const resourceIds = new Set<string>()
+  for (const step of steps as Array<{ form_id: string | null; resource_ids: string[] | null }>) {
+    if (step.form_id) formIds.add(step.form_id)
+    for (const r of step.resource_ids ?? []) resourceIds.add(r)
+  }
+
+  if (formIds.size > 0) {
+    // Only flip rows that aren't already org templates so we don't reassign
+    // ownership of an existing org-shared row to this publisher.
+    await admin
+      .from('forms')
+      .update({ is_org_template: true, org_id: orgId, created_by: publisherId })
+      .in('id', [...formIds])
+      .eq('is_org_template', false)
+  }
+  if (resourceIds.size > 0) {
+    await admin
+      .from('coach_resources')
+      .update({ is_org_template: true, org_id: orgId, created_by: publisherId })
+      .in('id', [...resourceIds])
+      .eq('is_org_template', false)
+  }
 }
 
 export async function DELETE(req: NextRequest) {
