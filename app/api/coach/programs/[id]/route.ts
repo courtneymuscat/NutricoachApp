@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { requireCoach } from '@/lib/coach'
+import { getOrgForUser } from '@/lib/org'
 import type { NextRequest } from 'next/server'
 
 export async function GET(
@@ -11,15 +13,37 @@ export async function GET(
   if (!coachId) return Response.json({ error: 'Unauthorised' }, { status: 401 })
 
   const supabase = await createClient()
-  const { data, error } = await supabase
+  const { data: own } = await supabase
     .from('programs')
     .select('id, name, description, content, created_at, updated_at')
     .eq('id', id)
     .eq('coach_id', coachId)
-    .single()
+    .maybeSingle()
 
-  if (error || !data) return Response.json({ error: 'Not found' }, { status: 404 })
-  return Response.json(data)
+  if (own) return Response.json({ ...own, is_org_template: false, read_only: false })
+
+  // Allow viewing org templates that this coach has access to
+  const membership = await getOrgForUser(coachId)
+  if (membership && membership.role !== 'owner') {
+    const admin = createAdminClient()
+    const { data: orgRow } = await admin
+      .from('programs')
+      .select('id, name, description, content, created_at, updated_at')
+      .eq('id', id)
+      .eq('org_id', membership.org_id)
+      .eq('is_org_template', true)
+      .maybeSingle()
+    if (orgRow) {
+      return Response.json({
+        ...orgRow,
+        is_org_template: true,
+        read_only: true,
+        org_name: membership.org_name,
+      })
+    }
+  }
+
+  return Response.json({ error: 'Not found' }, { status: 404 })
 }
 
 export async function PATCH(

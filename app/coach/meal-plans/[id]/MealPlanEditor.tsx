@@ -523,7 +523,15 @@ function AssignModal({ plan, onClose }: { plan: MealPlan; onClose: () => void })
 
 // ── Main editor ───────────────────────────────────────────────────────────────
 
-export default function MealPlanEditor({ plan: initialPlan }: { plan: MealPlan }) {
+export default function MealPlanEditor({
+  plan: initialPlan,
+  readOnly = false,
+  orgName = null,
+}: {
+  plan: MealPlan
+  readOnly?: boolean
+  orgName?: string | null
+}) {
   const [plan, setPlan] = useState<MealPlan>({
     ...initialPlan,
     content: Array.isArray(initialPlan.content)
@@ -534,12 +542,14 @@ export default function MealPlanEditor({ plan: initialPlan }: { plan: MealPlan }
   const [editingName, setEditingName] = useState(false)
   const [pushToClients, setPushToClients] = useState(true)
   const [assignOpen, setAssignOpen] = useState(false)
+  const [copying, setCopying] = useState(false)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pushToClientsRef = useRef(true)
 
   const totals = computeMacros(plan.content)
 
   const scheduleSave = useCallback((updated: MealPlan) => {
+    if (readOnly) return
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
     setSaveStatus('saving')
     saveTimerRef.current = setTimeout(async () => {
@@ -556,9 +566,25 @@ export default function MealPlanEditor({ plan: initialPlan }: { plan: MealPlan }
       setSaveStatus(res.ok ? 'saved' : 'error')
       if (res.ok) setTimeout(() => setSaveStatus('idle'), 2500)
     }, 1000)
-  }, [totals.calories])
+  }, [totals.calories, readOnly])
+
+  async function handleMakeCopy() {
+    setCopying(true)
+    const res = await fetch('/api/coach/templates/clone', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ table: 'meal_plans', source_id: plan.id }),
+    })
+    if (res.ok) {
+      const { id } = await res.json()
+      window.location.href = `/coach/meal-plans/${id}`
+    } else {
+      setCopying(false)
+    }
+  }
 
   function updatePlan(updated: MealPlan) {
+    if (readOnly) return
     setPlan(updated)
     scheduleSave(updated)
   }
@@ -619,6 +645,25 @@ export default function MealPlanEditor({ plan: initialPlan }: { plan: MealPlan }
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
+      {readOnly && (
+        <div className="bg-blue-50 border-b border-blue-100 px-6 py-3 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <svg className="w-5 h-5 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+            </svg>
+            <p className="text-sm text-gray-700">
+              <span className="font-semibold">View only.</span> {orgName ? `Shared by ${orgName}.` : 'Shared by your organisation.'} Make a copy to customise.
+            </p>
+          </div>
+          <button
+            onClick={handleMakeCopy}
+            disabled={copying}
+            className="flex-shrink-0 bg-blue-600 text-white px-4 py-1.5 rounded-lg text-xs font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50"
+          >
+            {copying ? 'Copying…' : 'Make a copy'}
+          </button>
+        </div>
+      )}
       {/* Header */}
       <div className="bg-white border-b px-6 py-4 flex items-center gap-4">
         <a

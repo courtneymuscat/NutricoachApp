@@ -316,7 +316,12 @@ export default function MealPlansList({
                       return (
                         <div key={plan.id} className="bg-white rounded-2xl border border-blue-100 p-5 flex flex-col">
                           <div className="flex-1">
-                            <p className="text-sm font-bold text-gray-900 leading-snug truncate">{plan.name}</p>
+                            <a
+                              href={`/coach/meal-plans/${plan.id}`}
+                              className="text-sm font-bold text-gray-900 leading-snug truncate hover:text-blue-700"
+                            >
+                              {plan.name}
+                            </a>
                             <div className="flex items-center gap-2 mt-1 flex-wrap">
                               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${badge.className}`}>{badge.label}</span>
                               <span className="text-xs text-gray-500">{fmtCalories(plan.total_calories)} kcal</span>
@@ -330,13 +335,21 @@ export default function MealPlansList({
                             >
                               Assign to Client
                             </button>
-                            <button
-                              onClick={() => handleMakeCopy(plan.id)}
-                              disabled={copying === plan.id}
-                              className="w-full text-center text-xs font-semibold text-blue-700 border border-blue-200 rounded-lg py-1.5 hover:bg-blue-50 transition-colors disabled:opacity-50"
-                            >
-                              {copying === plan.id ? 'Copying…' : 'Make a copy'}
-                            </button>
+                            <div className="flex items-center gap-2">
+                              <a
+                                href={`/coach/meal-plans/${plan.id}`}
+                                className="flex-1 text-center text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg py-1.5 hover:bg-gray-50 transition-colors"
+                              >
+                                View
+                              </a>
+                              <button
+                                onClick={() => handleMakeCopy(plan.id)}
+                                disabled={copying === plan.id}
+                                className="flex-1 text-center text-xs font-semibold text-blue-700 border border-blue-200 rounded-lg py-1.5 hover:bg-blue-50 transition-colors disabled:opacity-50"
+                              >
+                                {copying === plan.id ? 'Copying…' : 'Make a copy'}
+                              </button>
+                            </div>
                           </div>
                         </div>
                       )

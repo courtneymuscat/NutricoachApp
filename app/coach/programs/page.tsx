@@ -233,7 +233,7 @@ export default function ProgramsPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {orgPrograms.map((p) => (
                     <div key={p.id} className="bg-white rounded-2xl border border-blue-100 p-5 flex flex-col">
-                      <p className="text-sm font-semibold text-gray-900 leading-snug mb-2">{p.name}</p>
+                      <a href={`/coach/programs/${p.id}`} className="text-sm font-semibold text-gray-900 leading-snug mb-2 hover:text-blue-700">{p.name}</a>
                       {p.description && (
                         <p className="text-xs text-gray-500 mb-3 line-clamp-2 leading-relaxed">{p.description}</p>
                       )}
@@ -249,12 +249,20 @@ export default function ProgramsPage() {
                         >
                           Assign to Client
                         </button>
-                        <button
-                          onClick={() => handleMakeCopy(p.id)}
-                          className="w-full text-center text-xs font-semibold text-blue-700 border border-blue-200 rounded-lg py-1.5 hover:bg-blue-50 transition-colors"
-                        >
-                          Make a copy
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <a
+                            href={`/coach/programs/${p.id}`}
+                            className="flex-1 text-center text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg py-1.5 hover:bg-gray-50 transition-colors"
+                          >
+                            View
+                          </a>
+                          <button
+                            onClick={() => handleMakeCopy(p.id)}
+                            className="flex-1 text-center text-xs font-semibold text-blue-700 border border-blue-200 rounded-lg py-1.5 hover:bg-blue-50 transition-colors"
+                          >
+                            Make a copy
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ))}
