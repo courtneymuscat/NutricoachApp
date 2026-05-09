@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { getOrgForUser } from '@/lib/org'
 import CoachSidebar from './CoachSidebar'
 import { Suspense } from 'react'
 
@@ -12,7 +13,7 @@ export default async function CoachLayout({ children }: { children: React.ReactN
     const supabase = await createClient()
     const { data: { session } } = await supabase.auth.getSession()
     if (session) {
-      const [convosResult, profileResult, clientsResult] = await Promise.all([
+      const [convosResult, profileResult, clientsResult, membership] = await Promise.all([
         supabase
           .from('conversations')
           .select('id')
@@ -27,9 +28,17 @@ export default async function CoachLayout({ children }: { children: React.ReactN
           .select('client_id')
           .eq('coach_id', session.user.id)
           .eq('status', 'active'),
+        getOrgForUser(session.user.id),
       ])
 
-      isBusinessTier = profileResult.data?.subscription_tier === 'coach_business'
+      // Show the Business sidebar only to org owners/admins. Invited coaches
+      // (org_members.role = 'coach') are on coach_business tier too because
+      // they're covered by the org owner's plan, but they shouldn't see org
+      // management tabs — they're managed by the org.
+      const isOrgManager = membership?.role === 'owner' || membership?.role === 'admin'
+      const isSoloBusiness =
+        profileResult.data?.subscription_tier === 'coach_business' && !membership
+      isBusinessTier = isOrgManager || isSoloBusiness
 
       const clientIds = (clientsResult.data ?? []).map((r) => r.client_id)
       const convoIds = (convosResult.data ?? []).map((c) => c.id)

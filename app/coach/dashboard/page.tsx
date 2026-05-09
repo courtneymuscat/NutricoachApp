@@ -1,5 +1,6 @@
 import { requireCoach } from '@/lib/coach'
 import { createClient } from '@/lib/supabase/server'
+import { getOrgForUser } from '@/lib/org'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import InviteForm from './InviteForm'
@@ -30,7 +31,13 @@ export default async function CoachDashboard({
     .eq('id', coachId)
     .single()
 
-  const isBusinessTier = profile?.subscription_tier === 'coach_business'
+  // Only org owners/admins (and solo coach_business holders without an org)
+  // get the Biz dashboard tabs. Invited coaches are also on coach_business
+  // tier but shouldn't see org-management UI.
+  const membership = await getOrgForUser(coachId)
+  const isOrgManager = membership?.role === 'owner' || membership?.role === 'admin'
+  const isSoloBusiness = profile?.subscription_tier === 'coach_business' && !membership
+  const isBusinessTier = isOrgManager || isSoloBusiness
   const hasOrg = !!profile?.org_id
 
   const BIZ_TABS = ['org', 'org-templates', 'leads', 'archived', 'analytics']
