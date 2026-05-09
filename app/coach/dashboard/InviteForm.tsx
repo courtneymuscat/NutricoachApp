@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react'
 
-type Service  = { id: string; name: string; price_label: string | null }
-type Form     = { id: string; title: string }
-type Autoflow = { id: string; name: string; type: string }
+type Service  = { id: string; name: string; price_label: string | null; is_org_template?: boolean }
+type Form     = { id: string; title: string; is_org_template?: boolean }
+type Autoflow = { id: string; name: string; type: string; is_org_template?: boolean }
 
 export default function InviteForm() {
   const [email, setEmail]                   = useState('')
@@ -91,11 +91,32 @@ export default function InviteForm() {
         {services.length > 0 && (
           <select value={serviceId} onChange={e => setServiceId(e.target.value)} className={select}>
             <option value="">Service (optional)</option>
-            {services.map(s => (
-              <option key={s.id} value={s.id}>
-                {s.name}{s.price_label ? ` — ${s.price_label}` : ''}
-              </option>
-            ))}
+            {(() => {
+              const own = services.filter(s => !s.is_org_template)
+              const org = services.filter(s => s.is_org_template)
+              return (
+                <>
+                  {org.length > 0 && (
+                    <optgroup label="Organisation templates">
+                      {org.map(s => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}{s.price_label ? ` — ${s.price_label}` : ''}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {own.length > 0 && (
+                    <optgroup label={org.length > 0 ? 'Your services' : ''}>
+                      {own.map(s => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}{s.price_label ? ` — ${s.price_label}` : ''}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                </>
+              )
+            })()}
           </select>
         )}
 
@@ -103,7 +124,24 @@ export default function InviteForm() {
           <>
             <select value={formId} onChange={e => { setFormId(e.target.value); if (!e.target.value) setFormSaveToFile(false) }} className={select}>
               <option value="">Onboarding form (optional)</option>
-              {forms.map(f => <option key={f.id} value={f.id}>{f.title}</option>)}
+              {(() => {
+                const own = forms.filter(f => !f.is_org_template)
+                const org = forms.filter(f => f.is_org_template)
+                return (
+                  <>
+                    {org.length > 0 && (
+                      <optgroup label="Organisation templates">
+                        {org.map(f => <option key={f.id} value={f.id}>{f.title}</option>)}
+                      </optgroup>
+                    )}
+                    {own.length > 0 && (
+                      <optgroup label={org.length > 0 ? 'Your forms' : ''}>
+                        {own.map(f => <option key={f.id} value={f.id}>{f.title}</option>)}
+                      </optgroup>
+                    )}
+                  </>
+                )
+              })()}
             </select>
             {formId && (
               <label className="flex items-center gap-2.5 cursor-pointer px-1">
@@ -123,7 +161,24 @@ export default function InviteForm() {
         {autoflows.length > 0 && (
           <select value={autoflowId} onChange={e => setAutoflowId(e.target.value)} className={select}>
             <option value="">Autoflow (optional)</option>
-            {autoflows.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+            {(() => {
+              const own = autoflows.filter(a => !a.is_org_template)
+              const org = autoflows.filter(a => a.is_org_template)
+              return (
+                <>
+                  {org.length > 0 && (
+                    <optgroup label="Organisation templates">
+                      {org.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                    </optgroup>
+                  )}
+                  {own.length > 0 && (
+                    <optgroup label={org.length > 0 ? 'Your autoflows' : ''}>
+                      {own.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                    </optgroup>
+                  )}
+                </>
+              )
+            })()}
           </select>
         )}
 

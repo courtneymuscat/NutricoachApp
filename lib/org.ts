@@ -138,3 +138,47 @@ export async function isOrgTemplate(
 
   return !!(data?.is_org_template && data?.org_id === orgId)
 }
+
+/**
+ * Fetches org-published templates from `table` that the given coach can see,
+ * applying coach-level exclusions. Returns [] if the user is not in an org or
+ * (for non-admin members) doesn't have `can_use_org_templates` enabled.
+ *
+ * Each row is selected via the supplied `selectFields` so callers can reuse
+ * the helper across content tables (autoflows, forms, programs, etc.) and
+ * project the columns they need.
+ */
+export async function fetchOrgTemplatesForCoach<T extends { id: string }>(
+  coachId: string,
+  table: 'autoflow_templates' | 'programs' | 'meal_plans' | 'forms' | 'note_templates',
+  selectFields: string,
+): Promise<T[]> {
+  const membership = await getOrgForUser(coachId)
+  if (!membership) return []
+
+  if (membership.role === 'coach') {
+    const perms = await getCoachPermissions(coachId, membership.org_id)
+    if (!perms.can_use_org_templates) return []
+  }
+
+  const admin = createAdminClient()
+  const [{ data: items }, exclusionsRes] = await Promise.all([
+    admin
+      .from(table)
+      .select(selectFields)
+      .eq('org_id', membership.org_id)
+      .eq('is_org_template', true)
+      .order('created_at', { ascending: false }),
+    membership.role === 'coach'
+      ? admin
+          .from('org_template_exclusions')
+          .select('template_id')
+          .eq('org_id', membership.org_id)
+          .eq('coach_id', coachId)
+          .eq('template_table', table)
+      : Promise.resolve({ data: [] as { template_id: string }[] }),
+  ])
+
+  const excluded = new Set(((exclusionsRes.data as { template_id: string }[] | null) ?? []).map((e) => e.template_id))
+  return ((items as unknown) as T[] ?? []).filter((t) => !excluded.has(t.id))
+}

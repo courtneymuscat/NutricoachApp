@@ -1,19 +1,40 @@
 import { createClient } from '@/lib/supabase/server'
 import { requireCoach } from '@/lib/coach'
+import { fetchOrgTemplatesForCoach } from '@/lib/org'
 import type { NextRequest } from 'next/server'
+
+type AutoflowRow = {
+  id: string
+  name: string
+  description: string | null
+  type: string | null
+  total_steps: number | null
+  created_at: string
+}
 
 export async function GET() {
   const coachId = await requireCoach()
   if (!coachId) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
   const supabase = await createClient()
-  const { data } = await supabase
-    .from('autoflow_templates')
-    .select('id, name, description, type, total_steps, created_at')
-    .eq('coach_id', coachId)
-    .order('created_at', { ascending: false })
+  const [{ data: own }, orgItems] = await Promise.all([
+    supabase
+      .from('autoflow_templates')
+      .select('id, name, description, type, total_steps, created_at')
+      .eq('coach_id', coachId)
+      .order('created_at', { ascending: false }),
+    fetchOrgTemplatesForCoach<AutoflowRow>(
+      coachId,
+      'autoflow_templates',
+      'id, name, description, type, total_steps, created_at',
+    ),
+  ])
 
-  return Response.json(data ?? [])
+  const merged = [
+    ...orgItems.map((t) => ({ ...t, is_org_template: true })),
+    ...((own as AutoflowRow[] | null) ?? []).map((t) => ({ ...t, is_org_template: false })),
+  ]
+  return Response.json(merged)
 }
 
 export async function POST(req: NextRequest) {
