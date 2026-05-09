@@ -6,6 +6,7 @@ import { redirect } from 'next/navigation'
 import { acceptInvite } from '@/lib/coach'
 import { STARTER_NOTE_TEMPLATES } from '@/lib/noteTemplates'
 import { sendEmail, sendConfirmationEmail } from '@/lib/email'
+import { syncProfileFromStripe } from '@/lib/billing'
 
 type AuthState = { error?: string; success?: boolean } | null
 
@@ -123,12 +124,14 @@ export async function signup(prevState: AuthState, formData: FormData): Promise<
 
   const user = linkData?.user ?? null
   if (user) {
-    // Derive intended user_type and tier from planKey.
-    const profileAttrs = PLAN_TO_PROFILE[planKey] ?? (
-      typeParam === 'coach'
-        ? { user_type: 'coach', subscription_tier: 'coach_solo' }
-        : { user_type: 'individual', subscription_tier: 'individual_free' }
-    )
+    // Derive intended user_type and tier from planKey. Without a planKey we
+    // always create a free individual profile — coach access requires a paid
+    // plan via /pricing (otherwise the typeParam=coach hint would be a free
+    // pass to coach features).
+    const profileAttrs = PLAN_TO_PROFILE[planKey] ?? {
+      user_type: 'individual',
+      subscription_tier: 'individual_free',
+    }
     const intendedUserType = profileAttrs.user_type
 
     // For paid plans, always create the profile as individual_free.
@@ -199,6 +202,16 @@ export async function login(prevState: AuthState, formData: FormData): Promise<A
     return { error: msg }
   }
 
+  // Reconcile the profile against Stripe before any redirect — protects against
+  // webhook failures where a paid coach was left stranded on individual_free.
+  if (data.session?.user) {
+    try {
+      await syncProfileFromStripe(data.session.user.id)
+    } catch (err) {
+      console.error('login: syncProfileFromStripe failed', err)
+    }
+  }
+
   if (invite && data.session?.user) {
     await acceptInvite(invite, data.session.user.id)
     redirect('/dashboard')
@@ -230,6 +243,11 @@ export async function login(prevState: AuthState, formData: FormData): Promise<A
       redirect('/onboarding')
     }
 
+    // Route coaches and white-label business users to their own dashboard so
+    // they don't land on the client tracker UI by mistake.
+    if (profile?.user_type === 'coach' || profile?.user_type === 'business') {
+      redirect('/coach/dashboard')
+    }
   }
 
   redirect('/dashboard')

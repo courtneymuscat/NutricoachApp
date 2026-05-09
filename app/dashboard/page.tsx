@@ -6,6 +6,7 @@ import { FEATURES } from '@/lib/features'
 import { logout } from '@/app/actions/auth'
 import { headers } from 'next/headers'
 import { getBrandingFromHeaders, DEFAULT_BRANDING } from '@/lib/branding'
+import { syncProfileFromStripe } from '@/lib/billing'
 
 import DailyLog from './DailyLog'
 import DailyCheckIn from './DailyCheckIn'
@@ -37,12 +38,45 @@ export default async function DashboardPage() {
   const user = session?.user
   if (!user) redirect('/login')
 
+  // Reconcile against Stripe when the profile looks suspicious — paid Stripe
+  // record but free-tier DB row, or no stored customer id at all. This protects
+  // against webhook failures that strand a paid coach on individual_free.
+  {
+    const { data: rawProfile } = await supabase
+      .from('profiles')
+      .select('subscription_tier, user_type, stripe_customer_id')
+      .eq('id', user.id)
+      .single()
+    const looksFree =
+      rawProfile?.subscription_tier === 'individual_free' ||
+      rawProfile?.subscription_tier == null
+    if (rawProfile?.stripe_customer_id || looksFree) {
+      try {
+        const result = await syncProfileFromStripe(user.id)
+        if (result.changed) {
+          // Re-route now that user_type may have flipped to coach
+          const tier = result.tier ?? ''
+          if (tier.startsWith('coach_') || tier.startsWith('wl_')) {
+            redirect('/coach/dashboard')
+          }
+        }
+      } catch (err) {
+        console.error('dashboard: syncProfileFromStripe failed', err)
+      }
+    }
+  }
+
   // Check onboarding status + fetch targets
   const { data: profile } = await supabase
     .from('profiles')
-    .select('onboarding_completed, goal, target_calories, target_protein, target_carbs, target_fat, tdee, sex, full_name, subscription_tier, phone, date_of_birth, payment_failed_at')
+    .select('onboarding_completed, goal, target_calories, target_protein, target_carbs, target_fat, tdee, sex, full_name, subscription_tier, user_type, phone, date_of_birth, payment_failed_at')
     .eq('id', user.id)
     .single()
+
+  // Coaches belong on /coach/dashboard, not the tracker page.
+  if (profile?.user_type === 'coach' || profile?.user_type === 'business') {
+    redirect('/coach/dashboard')
+  }
   // Everyone reaches the dashboard — profile setup for individuals is prompted inline.
 
   // Subscription feature access

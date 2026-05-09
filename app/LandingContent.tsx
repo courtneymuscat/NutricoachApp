@@ -168,7 +168,7 @@ export default function LandingContent() {
 
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                 <Link
-                  href="/signup?type=coach"
+                  href="/pricing#coach"
                   className="text-base font-semibold px-8 py-4 rounded-2xl text-gray-900 transition-colors hover:opacity-90 shadow-sm"
                   style={{ backgroundColor: '#1D9E75' }}
                 >
@@ -422,7 +422,7 @@ export default function LandingContent() {
           {isCoach && (
             <div className="text-center pt-4">
               <Link
-                href="/signup?type=coach"
+                href="/pricing#coach"
                 className="inline-block text-base font-semibold px-10 py-4 rounded-2xl text-gray-900 hover:opacity-90 transition-colors"
                 style={{ backgroundColor: '#1D9E75' }}
               >
@@ -439,9 +439,9 @@ export default function LandingContent() {
           {isCoach ? (
             <>
               <h2 className="text-4xl font-bold">Ready to elevate your coaching?</h2>
-              <p className="text-gray-400 text-lg">Start free. Invite your first client today — no credit card needed.</p>
+              <p className="text-gray-400 text-lg">Pick a plan and start your 14-day free trial — cancel any time.</p>
               <Link
-                href="/signup?type=coach"
+                href="/pricing#coach"
                 className="inline-block text-base font-semibold px-10 py-4 rounded-2xl text-gray-900 hover:opacity-90 transition-colors"
                 style={{ backgroundColor: '#1D9E75' }}
               >

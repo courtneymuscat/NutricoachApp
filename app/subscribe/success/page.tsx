@@ -50,6 +50,7 @@ export default async function SubscribeSuccessPage({
   const stripe = getStripe()
   let trialEnd: number | null = null
   let planName = 'your plan'
+  let isCoach = false
 
   try {
     const session = await stripe.checkout.sessions.retrieve(session_id, {
@@ -77,6 +78,7 @@ export default async function SubscribeSuccessPage({
           ? (typeof session.subscription === 'string' ? session.subscription : (session.subscription as Stripe.Subscription).id)
           : null,
       }, { onConflict: 'id' })
+      isCoach = resolvedUserType === 'coach' || resolvedUserType === 'business'
     }
 
     // Extract trial end from the expanded subscription
@@ -143,7 +145,7 @@ export default async function SubscribeSuccessPage({
 
         <div className="space-y-3">
           <Link
-            href="/dashboard"
+            href={isCoach ? '/coach/dashboard' : '/dashboard'}
             className="block w-full py-3 rounded-xl text-sm font-semibold text-center text-white transition-opacity hover:opacity-90"
             style={{ backgroundColor: '#1D9E75' }}
           >

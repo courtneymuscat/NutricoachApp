@@ -1,7 +1,88 @@
 import { createAdminClient } from '@/lib/supabase/admin'
-import { getStripe } from '@/lib/stripe'
+import { getStripe, buildPriceToTierMap, OVERAGE_PRICE_IDS, TIER_TO_USER_TYPE } from '@/lib/stripe'
 
 export const COACH_SEAT_OVERAGE_PRICE = process.env.STRIPE_PRICE_COACH_BUSINESS_COACH_OVERAGE
+
+/**
+ * Reconcile a user's profile (subscription_tier, user_type, stripe_*) from
+ * Stripe — used as a backstop in case the webhook never fired or failed.
+ *
+ * Looks up the customer by stripe_customer_id (or by email as a fallback),
+ * finds the most recent active/trialing subscription, maps its flat price to
+ * a tier, and updates the profile if it diverges. No-op if Stripe has no
+ * active subscription for this user.
+ *
+ * Safe to call on every login / dashboard load — bails out fast when the
+ * profile already matches what Stripe says.
+ */
+export async function syncProfileFromStripe(userId: string): Promise<{
+  changed: boolean
+  tier: string | null
+  reason?: string
+}> {
+  const admin = createAdminClient()
+
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('id, email, subscription_tier, user_type, stripe_customer_id, stripe_subscription_id')
+    .eq('id', userId)
+    .single()
+
+  if (!profile) return { changed: false, tier: null, reason: 'no profile' }
+
+  const stripe = getStripe()
+
+  // Resolve customer id — prefer the stored one, fall back to email lookup
+  let customerId = profile.stripe_customer_id as string | null
+  if (!customerId && profile.email) {
+    try {
+      const found = await stripe.customers.list({ email: profile.email as string, limit: 1 })
+      customerId = found.data[0]?.id ?? null
+    } catch {
+      return { changed: false, tier: null, reason: 'stripe customer lookup failed' }
+    }
+  }
+
+  if (!customerId) return { changed: false, tier: null, reason: 'no stripe customer' }
+
+  // Find an active or trialing subscription for this customer
+  let subscription
+  try {
+    const subs = await stripe.subscriptions.list({
+      customer: customerId,
+      status: 'all',
+      limit: 10,
+    })
+    subscription =
+      subs.data.find((s) => s.status === 'active' || s.status === 'trialing') ??
+      subs.data.find((s) => s.status === 'past_due')
+  } catch {
+    return { changed: false, tier: null, reason: 'stripe subscription list failed' }
+  }
+
+  if (!subscription) return { changed: false, tier: null, reason: 'no active subscription' }
+
+  const priceToTier = buildPriceToTierMap()
+  const flatItem = subscription.items.data.find((item) => !OVERAGE_PRICE_IDS.has(item.price.id))
+  const tier = flatItem ? priceToTier[flatItem.price.id] : undefined
+
+  if (!tier) return { changed: false, tier: null, reason: 'price not in tier map' }
+
+  const resolvedUserType = TIER_TO_USER_TYPE[tier]
+
+  const updates: Record<string, unknown> = {}
+  if (profile.subscription_tier !== tier) updates.subscription_tier = tier
+  if (resolvedUserType && profile.user_type !== resolvedUserType) updates.user_type = resolvedUserType
+  if (!profile.stripe_customer_id) updates.stripe_customer_id = customerId
+  if (profile.stripe_subscription_id !== subscription.id) updates.stripe_subscription_id = subscription.id
+
+  if (Object.keys(updates).length === 0) {
+    return { changed: false, tier, reason: 'already in sync' }
+  }
+
+  await admin.from('profiles').update(updates).eq('id', userId)
+  return { changed: true, tier }
+}
 
 // ─── Individual coach client-seat limits ─────────────────────────────────────
 

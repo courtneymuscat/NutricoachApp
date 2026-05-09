@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { INDIVIDUAL_PLANS, COACH_SOLO_PLANS, COACH_PLANS, type PricingPlan } from '@/lib/features'
 
@@ -230,6 +230,16 @@ export default function PricingCards({
 }) {
   const [billing, setBilling] = useState<'monthly' | 'annual'>('monthly')
   const [tab, setTab] = useState<'individual' | 'coach'>('individual')
+
+  // Open the coach tab when the URL points there (e.g. /pricing#coach from
+  // landing-page CTAs).
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (window.location.hash === '#coach') {
+      setTab('coach')
+      setBilling('monthly')
+    }
+  }, [])
 
   // Switch to monthly when moving to coach tab (coach plans are monthly only)
   function handleTabChange(t: 'individual' | 'coach') {
