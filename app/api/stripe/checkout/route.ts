@@ -17,7 +17,12 @@ export async function POST(req: NextRequest) {
 
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!user || !user.id) {
+      // Refuse rather than create a session with empty metadata.userId — the
+      // webhook can't link an empty userId back to a profile, leaving the
+      // user paid in Stripe but stuck on individual_free in the app.
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
     const priceId = getStripePriceId(planKey, billing)
     if (!priceId) {
@@ -69,7 +74,7 @@ export async function POST(req: NextRequest) {
         ...cp,
         line_items: lineItems,
         metadata: {
-          userId: user?.id ?? '',
+          userId: user.id,
           planKey,
           billing,
           userType,
@@ -84,7 +89,7 @@ export async function POST(req: NextRequest) {
             },
           }),
           metadata: {
-            userId: user?.id ?? '',
+            userId: user.id,
             planKey,
             userType,
           },
@@ -95,7 +100,7 @@ export async function POST(req: NextRequest) {
       })
 
     const hasCustomer = !!profile?.stripe_customer_id
-    const emailFallback = user?.email ? { customer_email: user.email } : {}
+    const emailFallback = user.email ? { customer_email: user.email } : {}
     let checkoutSession: Stripe.Checkout.Session
     try {
       checkoutSession = await mkSession(

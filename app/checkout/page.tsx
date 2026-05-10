@@ -26,8 +26,13 @@ export default async function CheckoutPage({
   if (!plan) redirect('/pricing')
 
   const supabase = await createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) {
+  // Use getUser() rather than getSession(): getSession() can return a stale
+  // cookie-derived session whose user.id ends up empty in metadata if the
+  // JWT is invalid. getUser() round-trips to Supabase Auth so we know we
+  // have a real, verified user before creating a Stripe session — otherwise
+  // the webhook can't link the resulting customer back to a profile.
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user || !user.id) {
     redirect(`/login?next=${encodeURIComponent(`/checkout?plan=${plan}&billing=${billing}&type=${type}`)}`)
   }
 
@@ -82,10 +87,10 @@ export default async function CheckoutPage({
     mode: 'subscription',
     payment_method_types: ['card'],
     payment_method_collection: 'always',
-    customer_email: session.user.email!,
+    customer_email: user.email!,
     line_items: lineItems,
     metadata: {
-      userId: session.user.id,
+      userId: user.id,
       planKey: plan,
       billing,
       userType: type,
@@ -99,7 +104,7 @@ export default async function CheckoutPage({
           },
         },
       }),
-      metadata: { userId: session.user.id, planKey: plan, userType: type },
+      metadata: { userId: user.id, planKey: plan, userType: type },
     },
     custom_text: hasOverage ? {
       submit: {
