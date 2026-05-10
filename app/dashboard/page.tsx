@@ -38,6 +38,39 @@ export default async function DashboardPage() {
   const user = session?.user
   if (!user) redirect('/login')
 
+  // If this user has a pending org invite addressed to their email and isn't
+  // yet a member of that org, send them to /org/invite/[token] so the
+  // auto-accept can complete. Catches the case where an invited coach
+  // confirmed their email but didn't end up landing on the invite page
+  // (e.g. they manually navigated, link mangled, etc.) and ended up on the
+  // free Tracker dashboard instead of /coach/dashboard.
+  if (user.email) {
+    const adminClient = createAdminClient()
+    const { data: pendingInvite } = await adminClient
+      .from('org_invites')
+      .select('token, org_id, role')
+      .eq('email', user.email.toLowerCase())
+      .eq('is_active', true)
+      .gt('expires_at', new Date().toISOString())
+      .is('accepted_at', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (pendingInvite) {
+      const { data: existingMember } = await adminClient
+        .from('org_members')
+        .select('id')
+        .eq('org_id', pendingInvite.org_id)
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .maybeSingle()
+      if (!existingMember) {
+        redirect(`/org/invite/${pendingInvite.token}`)
+      }
+    }
+  }
+
   // Reconcile against Stripe when the profile looks suspicious — paid Stripe
   // record but free-tier DB row, or no stored customer id at all. This protects
   // against webhook failures that strand a paid coach on individual_free.
