@@ -47,10 +47,12 @@ export default async function CoachDashboard({
 
   // Only org owners/admins (and solo coach_business holders without an org)
   // get the Biz dashboard tabs. Invited coaches are also on coach_business
-  // tier but shouldn't see org-management UI.
+  // tier but shouldn't see org-management UI. Coaches inside the post-removal
+  // grace window also drop the Business tabs — they're effectively at
+  // Coach Pro level until they subscribe (or get downgraded after grace).
   const membership = await getOrgForUser(coachId)
   const isOrgManager = membership?.role === 'owner' || membership?.role === 'admin'
-  const isSoloBusiness = profile?.subscription_tier === 'coach_business' && !membership
+  const isSoloBusiness = profile?.subscription_tier === 'coach_business' && !membership && !inGrace
   const isBusinessTier = isOrgManager || isSoloBusiness
   const hasOrg = !!profile?.org_id
 

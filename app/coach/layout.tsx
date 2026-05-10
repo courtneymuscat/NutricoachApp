@@ -20,7 +20,7 @@ export default async function CoachLayout({ children }: { children: React.ReactN
           .eq('coach_id', session.user.id),
         supabase
           .from('profiles')
-          .select('subscription_tier')
+          .select('subscription_tier, coach_grace_until')
           .eq('id', session.user.id)
           .single(),
         supabase
@@ -35,9 +35,15 @@ export default async function CoachLayout({ children }: { children: React.ReactN
       // (org_members.role = 'coach') are on coach_business tier too because
       // they're covered by the org owner's plan, but they shouldn't see org
       // management tabs — they're managed by the org.
+      // During the grace period (coach was just removed from an org), the
+      // profile keeps coach_business but the org link is gone — treat them
+      // as Coach Pro for sidebar purposes so they don't see Business tabs
+      // they no longer have access to.
+      const graceUntil = (profileResult.data as { coach_grace_until?: string | null } | null)?.coach_grace_until ?? null
+      const inGrace = !!graceUntil && new Date(graceUntil) > new Date()
       const isOrgManager = membership?.role === 'owner' || membership?.role === 'admin'
       const isSoloBusiness =
-        profileResult.data?.subscription_tier === 'coach_business' && !membership
+        profileResult.data?.subscription_tier === 'coach_business' && !membership && !inGrace
       isBusinessTier = isOrgManager || isSoloBusiness
 
       const clientIds = (clientsResult.data ?? []).map((r) => r.client_id)
