@@ -1,8 +1,9 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { getStripe } from '@/lib/stripe'
+import { getStripe, OVERAGE_PRICE_IDS } from '@/lib/stripe'
 import { createServiceClient } from '@/lib/supabase/service'
 import { createClient } from '@/lib/supabase/server'
+import { resolveTierFromPrice } from '@/lib/billing'
 import type Stripe from 'stripe'
 
 const PLAN_KEY_TO_TIER: Record<string, string> = {
@@ -73,20 +74,37 @@ export default async function SubscribeSuccessPage({
       resolvedUserId = user?.id ?? ''
     }
 
-    if (resolvedUserId && planKey) {
-      const tier = PLAN_KEY_TO_TIER[planKey] ?? 'individual_optimiser'
-      const resolvedUserType = userType ?? PLAN_KEY_TO_USER_TYPE[planKey] ?? 'individual'
-      const service = createServiceClient()
-      await service.from('profiles').upsert({
-        id: resolvedUserId,
-        subscription_tier: tier,
-        user_type: resolvedUserType,
-        stripe_customer_id: session.customer as string,
-        stripe_subscription_id: session.subscription
-          ? (typeof session.subscription === 'string' ? session.subscription : (session.subscription as Stripe.Subscription).id)
-          : null,
-      }, { onConflict: 'id' })
-      isCoach = resolvedUserType === 'coach' || resolvedUserType === 'business'
+    if (resolvedUserId) {
+      // Resolve tier in priority order:
+      //   1. planKey from session metadata via PLAN_KEY_TO_TIER
+      //   2. The actual Stripe price/product (via resolveTierFromPrice) —
+      //      covers cases where metadata is missing OR a new plan key
+      //      isn't in the static map yet.
+      let tier: string | null = planKey ? PLAN_KEY_TO_TIER[planKey] ?? null : null
+      if (!tier && session.subscription) {
+        const sub = session.subscription as Stripe.Subscription
+        const flatItem = sub.items?.data?.find((item) => !OVERAGE_PRICE_IDS.has(item.price.id))
+        const resolved = await resolveTierFromPrice(flatItem?.price)
+        if (resolved) tier = resolved
+      }
+
+      if (tier) {
+        const resolvedUserType =
+          userType ??
+          (planKey ? PLAN_KEY_TO_USER_TYPE[planKey] : null) ??
+          (tier.startsWith('coach_') ? 'coach' : tier.startsWith('wl_') ? 'business' : 'individual')
+        const service = createServiceClient()
+        await service.from('profiles').upsert({
+          id: resolvedUserId,
+          subscription_tier: tier,
+          user_type: resolvedUserType,
+          stripe_customer_id: session.customer as string,
+          stripe_subscription_id: session.subscription
+            ? (typeof session.subscription === 'string' ? session.subscription : (session.subscription as Stripe.Subscription).id)
+            : null,
+        }, { onConflict: 'id' })
+        isCoach = resolvedUserType === 'coach' || resolvedUserType === 'business'
+      }
     }
 
     // Extract trial end from the expanded subscription

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getStripe, buildPriceToTierMap, OVERAGE_PRICE_IDS, TIER_TO_USER_TYPE } from '@/lib/stripe'
 import { createServiceClient } from '@/lib/supabase/service'
-import { TIER_TO_METER_EVENT } from '@/lib/billing'
+import { TIER_TO_METER_EVENT, resolveTierFromPrice } from '@/lib/billing'
 import { sendEmail } from '@/lib/email'
 import type Stripe from 'stripe'
 
@@ -87,16 +87,63 @@ export async function POST(req: NextRequest) {
 
       console.log('Webhook checkout.session.completed', { userId, planKey, userType })
 
-      if (userId && planKey) {
-        const tier = PLAN_KEY_TO_TIER[planKey] ?? 'individual_free'
+      // Try to resolve the tier from the metadata's planKey first; if that's
+      // missing (older sessions, manual creations), fall back to inspecting
+      // the subscription's price + product so we still update the profile.
+      let tier: string | null = null
+      if (planKey) tier = PLAN_KEY_TO_TIER[planKey] ?? null
+
+      if (!tier && session.subscription) {
+        try {
+          const stripe = getStripe()
+          const sub = await stripe.subscriptions.retrieve(session.subscription as string, { expand: ['items.data.price'] })
+          const flatItem = sub.items.data.find((item) => !OVERAGE_PRICE_IDS.has(item.price.id))
+          const resolved = await resolveTierFromPrice(flatItem?.price)
+          if (resolved) tier = resolved
+        } catch {
+          // fall through to user-not-updated path
+        }
+      }
+
+      // Resolve which profile to write to: prefer metadata.userId; else look
+      // up via the Stripe customer (id then email).
+      let resolvedUserId: string | null = userId || null
+      if (!resolvedUserId && session.customer) {
+        try {
+          const customerId = session.customer as string
+          const { data: byCust } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('stripe_customer_id', customerId)
+            .maybeSingle()
+          if (byCust) resolvedUserId = byCust.id as string
+          if (!resolvedUserId) {
+            const stripe = getStripe()
+            const cust = await stripe.customers.retrieve(customerId)
+            const email = (cust as Stripe.Customer).email
+            if (email) {
+              const { data: byEmail } = await supabase
+                .from('profiles')
+                .select('id')
+                .eq('email', email)
+                .maybeSingle()
+              if (byEmail) resolvedUserId = byEmail.id as string
+            }
+          }
+        } catch {
+          // ignore — handled below
+        }
+      }
+
+      if (resolvedUserId && tier) {
         const resolvedUserType =
           TIER_TO_USER_TYPE[tier] ??
           userType ??
-          PLAN_KEY_TO_USER_TYPE[planKey] ??
+          (planKey ? PLAN_KEY_TO_USER_TYPE[planKey] : null) ??
           'individual'
 
         const { error } = await supabase.from('profiles').upsert({
-          id: userId,
+          id: resolvedUserId,
           subscription_tier: tier,
           user_type: resolvedUserType,
           stripe_customer_id: session.customer as string,
@@ -106,7 +153,9 @@ export async function POST(req: NextRequest) {
         if (error) console.error('Webhook profile upsert error:', error.message)
         else console.log('Webhook: upserted profile to tier', tier)
       } else {
-        console.warn('Webhook: missing userId or planKey in metadata', session.metadata)
+        console.warn('Webhook: missing data to upsert', {
+          resolvedUserId, planKey, hasSubscription: !!session.subscription, tier,
+        })
       }
     }
 
@@ -114,26 +163,44 @@ export async function POST(req: NextRequest) {
     if (event.type === 'customer.subscription.created') {
       const subscription = event.data.object as Stripe.Subscription
       const customerId = subscription.customer as string
-      const priceToTier = buildPriceToTierMap()
 
       // Find the flat (non-metered) price to determine tier
       const flatItem = subscription.items.data.find(
         (item) => !OVERAGE_PRICE_IDS.has(item.price.id)
       )
-      const tier = flatItem ? priceToTier[flatItem.price.id] : undefined
+      const tier = await resolveTierFromPrice(flatItem?.price)
 
       if (tier) {
-        const { data: profile } = await supabase
+        // Look up profile by customer id, falling back to email so the
+        // webhook self-heals even if the success page hasn't yet linked the
+        // customer id to the profile (race / failed success page).
+        let { data: profile } = await supabase
           .from('profiles')
-          .select('id, subscription_tier')
+          .select('id, subscription_tier, email')
           .eq('stripe_customer_id', customerId)
-          .single()
+          .maybeSingle()
+        if (!profile) {
+          const stripeForLookup = getStripe()
+          try {
+            const cust = await stripeForLookup.customers.retrieve(customerId)
+            const email = (cust as Stripe.Customer).email
+            if (email) {
+              const { data: byEmail } = await supabase
+                .from('profiles')
+                .select('id, subscription_tier, email')
+                .eq('email', email)
+                .maybeSingle()
+              profile = byEmail
+            }
+          } catch { /* ignore */ }
+        }
 
         if (profile) {
           const resolvedUserType = TIER_TO_USER_TYPE[tier]
           const updates: Record<string, unknown> = {
             subscription_tier: tier,
             stripe_subscription_id: subscription.id,
+            stripe_customer_id: customerId,
           }
           if (resolvedUserType) updates.user_type = resolvedUserType
 
@@ -147,12 +214,11 @@ export async function POST(req: NextRequest) {
     if (event.type === 'customer.subscription.updated') {
       const subscription = event.data.object as Stripe.Subscription
       const customerId = subscription.customer as string
-      const priceToTier = buildPriceToTierMap()
 
       const flatItem = subscription.items.data.find(
         (item) => !OVERAGE_PRICE_IDS.has(item.price.id)
       )
-      const tier = flatItem ? priceToTier[flatItem.price.id] : undefined
+      const tier = await resolveTierFromPrice(flatItem?.price)
 
       if (tier) {
         const { data: profile } = await supabase

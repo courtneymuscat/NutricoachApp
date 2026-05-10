@@ -1,7 +1,51 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getStripe, buildPriceToTierMap, OVERAGE_PRICE_IDS, TIER_TO_USER_TYPE } from '@/lib/stripe'
+import type Stripe from 'stripe'
 
 export const COACH_SEAT_OVERAGE_PRICE = process.env.STRIPE_PRICE_COACH_BUSINESS_COACH_OVERAGE
+
+/**
+ * Resolve a subscription_tier from a Stripe price (and its parent product).
+ *
+ * Resolution order:
+ *  1. Env-var price-id map (buildPriceToTierMap) — preferred when configured
+ *  2. Stripe product metadata.tier — set this on each product in Stripe to
+ *     decouple from env vars (e.g. metadata: { tier: "coach_pt_solo" })
+ *  3. Stripe product name heuristic — last resort so untagged products still
+ *     work (e.g. a product named "Coach Pro" maps to coach_pro)
+ *
+ * Returns undefined only if all three fail.
+ */
+export async function resolveTierFromPrice(price: Stripe.Price | null | undefined): Promise<string | undefined> {
+  if (!price) return undefined
+
+  const stripe = getStripe()
+  const priceToTier = buildPriceToTierMap()
+
+  let tier = priceToTier[price.id]
+  if (tier) return tier
+
+  if (!price.product) return undefined
+  const productId = typeof price.product === 'string' ? price.product : price.product.id
+
+  try {
+    const product = await stripe.products.retrieve(productId)
+    const metaTier = product.metadata?.tier as string | undefined
+    if (metaTier) return metaTier
+
+    const name = (product.name ?? '').toLowerCase()
+    if (name.includes('business')) tier = 'coach_business'
+    else if (name.includes('pro')) tier = 'coach_pro'
+    else if (name.includes('nutritionist')) tier = 'coach_nutritionist_solo'
+    else if (name.includes('personal trainer') || name.includes(' pt')) tier = 'coach_pt_solo'
+    else if (name.includes('solo')) tier = 'coach_solo'
+    else if (name.includes('elite')) tier = 'individual_elite'
+    else if (name.includes('optimiser') || name.includes('optimizer')) tier = 'individual_optimiser'
+  } catch {
+    // ignore — return undefined
+  }
+  return tier
+}
 
 /**
  * Reconcile a user's profile (subscription_tier, user_type, stripe_*) from
@@ -62,11 +106,10 @@ export async function syncProfileFromStripe(userId: string): Promise<{
 
   if (!subscription) return { changed: false, tier: null, reason: 'no active subscription' }
 
-  const priceToTier = buildPriceToTierMap()
   const flatItem = subscription.items.data.find((item) => !OVERAGE_PRICE_IDS.has(item.price.id))
-  const tier = flatItem ? priceToTier[flatItem.price.id] : undefined
+  const tier = await resolveTierFromPrice(flatItem?.price)
 
-  if (!tier) return { changed: false, tier: null, reason: 'price not in tier map' }
+  if (!tier) return { changed: false, tier: null, reason: 'could not resolve tier from price/product' }
 
   const resolvedUserType = TIER_TO_USER_TYPE[tier]
 
