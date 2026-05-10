@@ -56,12 +56,17 @@ export default function OrgInvitePage({
         const res = await fetch(`/api/org/invite/${token}`, { method: 'POST' })
         const data = await res.json()
         if (res.ok) {
+          // Use a full page navigation rather than router.push so the
+          // /coach/dashboard layout re-runs with the freshly-updated profile
+          // (user_type=coach, tier=coach_business). A client-side push reuses
+          // the previous layout snapshot which still thinks they're individual.
+          const dest = data.redirect ?? '/coach/dashboard'
           if (data.had_own_subscription) {
             setState({ status: 'error', message: '__subscription_warning__' })
-            setTimeout(() => router.push(data.redirect ?? '/coach/dashboard'), 5000)
+            setTimeout(() => { window.location.href = dest }, 5000)
           } else {
             setState({ status: 'accepted' })
-            router.push(data.redirect ?? '/coach/dashboard')
+            window.location.href = dest
           }
           return
         }
@@ -69,7 +74,7 @@ export default function OrgInvitePage({
         // before. Either way, send them straight to the coach dashboard rather
         // than parking them on a confusing error UI.
         if (res.status === 409) {
-          router.push('/coach/dashboard')
+          window.location.href = '/coach/dashboard'
           return
         }
         // Other failures fall through to manual flow so the user still has a path.
@@ -93,12 +98,15 @@ export default function OrgInvitePage({
     const res = await fetch(`/api/org/invite/${token}`, { method: 'POST' })
     const data = await res.json()
     if (res.ok) {
+      // Full reload so /coach/dashboard's layout re-runs with the upgraded
+      // profile rather than reusing the previous individual-user snapshot.
+      const dest = data.redirect ?? '/coach/dashboard'
       if (data.had_own_subscription) {
         setState({ status: 'error', message: '__subscription_warning__' })
-        setTimeout(() => router.push(data.redirect ?? '/coach/dashboard'), 5000)
+        setTimeout(() => { window.location.href = dest }, 5000)
       } else {
         setState({ status: 'accepted' })
-        router.push(data.redirect ?? '/coach/dashboard')
+        window.location.href = dest
       }
     } else {
       setState({ status: 'error', message: data.error ?? 'Something went wrong' })
