@@ -30,6 +30,10 @@ export async function proxy(req: NextRequest) {
   }
 
   // ── Auth session refresh + route guards ───────────────────────────────────
+  // Surface the request path so server components can read it via headers().
+  // Next 16's runtime doesn't always set x-invoke-path on its own.
+  requestHeaders.set('x-pathname', req.nextUrl.pathname)
+
   let res = NextResponse.next({ request: { headers: requestHeaders } })
 
   const supabase = createServerClient(
