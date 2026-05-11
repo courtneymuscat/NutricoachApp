@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { getStripe, getStripePriceId, getStripeOveragePriceId } from '@/lib/stripe'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { getStripe, getStripePriceId, getStripeOveragePriceId, TIER_TO_USER_TYPE } from '@/lib/stripe'
 
 /**
  * POST /api/stripe/change-plan { planKey: 'coach_pro' | ... }
@@ -130,10 +131,26 @@ export async function POST(req: NextRequest) {
       payment_behavior: 'allow_incomplete',
     })
 
+    // Defensive: update the profile right here too, so by the time the
+    // browser reloads /settings the new tier is already visible. The
+    // customer.subscription.updated webhook will also fire, but Stripe
+    // delivers it asynchronously and we don't want a 1–2s window where the
+    // UI still shows the old plan.
+    const admin = createAdminClient()
+    const resolvedUserType = TIER_TO_USER_TYPE[targetTier]
+    const dbUpdates: Record<string, unknown> = { subscription_tier: targetTier }
+    if (resolvedUserType) dbUpdates.user_type = resolvedUserType
+    const { error: dbErr } = await admin
+      .from('profiles')
+      .update(dbUpdates)
+      .eq('id', user.id)
+    if (dbErr) console.error('change-plan defensive profile update error:', dbErr.message)
+
     return NextResponse.json({
       ok: true,
       message: `Switched to ${targetTier}. Any prorated charge or credit is on your next invoice.`,
       subscription_id: updated.id,
+      new_tier: targetTier,
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)

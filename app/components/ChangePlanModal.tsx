@@ -86,6 +86,7 @@ export default function ChangePlanModal({
   const [submitting, setSubmitting] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [confirmingPlanKey, setConfirmingPlanKey] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
 
   if (!open) return null
 
@@ -114,7 +115,11 @@ export default function ChangePlanModal({
         setSubmitting(null)
         return
       }
-      onSwitched()
+      // Brief success state so the user sees confirmation before the page
+      // reloads — otherwise the modal vanishes instantly and it's not
+      // obvious anything happened.
+      setSuccess(planKey)
+      setTimeout(() => onSwitched(), 1500)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Network error')
       setSubmitting(null)
@@ -144,6 +149,21 @@ export default function ChangePlanModal({
           {error && (
             <div className="text-xs text-red-600 bg-red-50 rounded-xl px-3 py-2">{error}</div>
           )}
+
+          {success && (
+            <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2.5 flex items-start gap-2">
+              <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              <span>
+                Plan switched. Stripe is processing the prorated charge and an email confirmation is on its way. <strong>Refreshing the page now…</strong>
+              </span>
+            </div>
+          )}
+
+          <div className="text-[11px] text-gray-400 bg-gray-50 rounded-xl px-3 py-2.5 leading-relaxed">
+            On switch, your card is charged the prorated difference automatically (Stripe uses the card you signed up with) and the page will refresh once the change is confirmed.
+          </div>
 
           <div className="space-y-3">
             {options.map((opt) => {
