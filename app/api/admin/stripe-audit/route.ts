@@ -52,7 +52,8 @@ export async function GET() {
     .eq('id', session.user.id)
     .single()
   const adminEmails = (process.env.ADMIN_EMAILS ?? '').split(',').map((s) => s.trim()).filter(Boolean)
-  const isAdmin = profile?.role === 'admin' || adminEmails.includes(profile?.email as string)
+  const adminRoles = new Set(['admin', 'platform_admin'])
+  const isAdmin = adminRoles.has(profile?.role ?? '') || adminEmails.includes(profile?.email as string)
   if (!isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const stripe = getStripe()
