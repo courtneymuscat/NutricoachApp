@@ -63,6 +63,40 @@ function isCoachUpgrade(from: string, to: string): boolean {
 
 const COACH_TIERS = new Set(['coach_solo', 'coach_pt_solo', 'coach_nutritionist_solo', 'coach_pro', 'coach_business', 'wl_starter', 'wl_pro'])
 
+/**
+ * When a coach's subscription becomes active (new signup OR resubscription
+ * after cancel), restore any of their previously-coached clients who were
+ * downgraded to individual_free by the cancel webhook back to the
+ * 'coached' tier. We only touch clients still on individual_free — if a
+ * client moved themselves to a paid plan in the meantime, we leave them
+ * alone.
+ */
+async function restoreCoachedClientsForCoach(
+  supabase: ReturnType<typeof createServiceClient>,
+  coachId: string,
+): Promise<void> {
+  const { data: rels } = await supabase
+    .from('coach_clients')
+    .select('client_id')
+    .eq('coach_id', coachId)
+    .eq('status', 'active')
+  if (!rels || rels.length === 0) return
+  const clientIds = rels.map((r: { client_id: string }) => r.client_id)
+  const { data: restored, error } = await supabase
+    .from('profiles')
+    .update({ subscription_tier: 'coached' })
+    .in('id', clientIds)
+    .eq('subscription_tier', 'individual_free')
+    .select('id')
+  if (error) {
+    console.error('restoreCoachedClientsForCoach error:', error.message)
+    return
+  }
+  if (restored && restored.length > 0) {
+    console.log('Webhook: restored', restored.length, 'clients to coached for coach', coachId)
+  }
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.text()
   const sig = req.headers.get('stripe-signature')
@@ -142,16 +176,24 @@ export async function POST(req: NextRequest) {
           (planKey ? PLAN_KEY_TO_USER_TYPE[planKey] : null) ??
           'individual'
 
-        const { error } = await supabase.from('profiles').upsert({
+        const { error, data: upsertedRows } = await supabase.from('profiles').upsert({
           id: resolvedUserId,
           subscription_tier: tier,
           user_type: resolvedUserType,
           stripe_customer_id: session.customer as string,
           stripe_subscription_id: session.subscription as string,
-        }, { onConflict: 'id' })
+        }, { onConflict: 'id' }).select('id')
 
         if (error) console.error('Webhook profile upsert error:', error.message)
-        else console.log('Webhook: upserted profile to tier', tier)
+        else if (!upsertedRows || upsertedRows.length === 0) console.error('Webhook profile upsert returned 0 rows', { resolvedUserId, tier })
+        else {
+          console.log('Webhook: upserted profile to tier', tier)
+          // Resubscription: restore previously-coached clients who were
+          // downgraded to individual_free during the cancel period.
+          if (COACH_TIERS.has(tier)) {
+            await restoreCoachedClientsForCoach(supabase, resolvedUserId)
+          }
+        }
       } else {
         console.warn('Webhook: missing data to upsert', {
           resolvedUserId, planKey, hasSubscription: !!session.subscription, tier,
@@ -204,8 +246,19 @@ export async function POST(req: NextRequest) {
           }
           if (resolvedUserType) updates.user_type = resolvedUserType
 
-          await supabase.from('profiles').update(updates).eq('id', profile.id)
-          console.log('Webhook: subscription.created — set tier', tier, 'for', profile.id)
+          const { error: updErr, data: updRows } = await supabase
+            .from('profiles')
+            .update(updates)
+            .eq('id', profile.id)
+            .select('id')
+          if (updErr) console.error('Webhook subscription.created update error:', updErr.message)
+          else if (!updRows || updRows.length === 0) console.error('Webhook subscription.created update affected 0 rows', { id: profile.id, updates })
+          else {
+            console.log('Webhook: subscription.created — set tier', tier, 'for', profile.id)
+            if (COACH_TIERS.has(tier)) {
+              await restoreCoachedClientsForCoach(supabase, profile.id as string)
+            }
+          }
         }
       }
     }
@@ -228,16 +281,31 @@ export async function POST(req: NextRequest) {
           .single()
 
         if (profile && profile.subscription_tier !== tier) {
+          const prevTier = profile.subscription_tier as string
           const updates: Record<string, unknown> = { subscription_tier: tier }
-          if (isCoachUpgrade(profile.subscription_tier as string, tier)) {
+          if (isCoachUpgrade(prevTier, tier)) {
             updates.subscription_seat_count = 0
           }
           // Ensure user_type stays consistent with tier
           const resolvedUserType = TIER_TO_USER_TYPE[tier]
           if (resolvedUserType) updates.user_type = resolvedUserType
 
-          await supabase.from('profiles').update(updates).eq('id', profile.id)
-          console.log('Webhook: tier updated', profile.subscription_tier, '→', tier)
+          const { error: updErr, data: updRows } = await supabase
+            .from('profiles')
+            .update(updates)
+            .eq('id', profile.id)
+            .select('id')
+          if (updErr) console.error('Webhook subscription.updated update error:', updErr.message)
+          else if (!updRows || updRows.length === 0) console.error('Webhook subscription.updated update affected 0 rows', { id: profile.id, updates })
+          else {
+            console.log('Webhook: tier updated', prevTier, '→', tier)
+            // If the user just went from non-coach back to coach (e.g. they
+            // had been downgraded and now upgraded via the portal), restore
+            // any clients that were dropped to individual_free.
+            if (!COACH_TIERS.has(prevTier) && COACH_TIERS.has(tier)) {
+              await restoreCoachedClientsForCoach(supabase, profile.id as string)
+            }
+          }
         }
       }
     }
