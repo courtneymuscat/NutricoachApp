@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import ChangePlanModal from './ChangePlanModal'
 
 type OverageItem = {
   label: string
@@ -75,6 +76,7 @@ export default function BillingSection({ returnPath = '/settings' }: { returnPat
   const [redirecting, setRedirecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showCancelWarning, setShowCancelWarning] = useState(false)
+  const [showChangePlan, setShowChangePlan] = useState(false)
 
   useEffect(() => {
     fetch('/api/billing/info')
@@ -353,14 +355,16 @@ export default function BillingSection({ returnPath = '/settings' }: { returnPat
               >
                 {redirecting ? 'Redirecting…' : 'Manage subscription'}
               </button>
-              {/* Change plan: redirect to portal so Stripe handles proration on the EXISTING
-                  subscription — going to /pricing and creating a new checkout would duplicate it */}
+              {/* Change plan: in-app modal that calls /api/stripe/change-plan
+                  to update the EXISTING subscription with proration. Stays on
+                  the Prokol-branded UI rather than redirecting to Stripe. */}
               <button
-                onClick={handleManageClick}
+                onClick={() => setShowChangePlan(true)}
                 disabled={redirecting}
-                className="text-xs font-semibold px-4 py-2 rounded-xl border border-gray-200 text-gray-700 hover:border-gray-400 transition-colors disabled:opacity-50"
+                className="text-xs font-semibold px-4 py-2 rounded-xl text-white hover:opacity-90 transition-opacity disabled:opacity-50"
+                style={{ backgroundColor: '#1D9E75' }}
               >
-                {redirecting ? 'Redirecting…' : 'Change plan'}
+                Change plan
               </button>
             </div>
           </div>
@@ -424,6 +428,18 @@ export default function BillingSection({ returnPath = '/settings' }: { returnPat
           </div>
         </div>
       )}
+
+      <ChangePlanModal
+        open={showChangePlan}
+        currentTier={tier}
+        onClose={() => setShowChangePlan(false)}
+        onSwitched={() => {
+          // Refresh the page so billing info, seat bars and the plan label
+          // all reflect the new tier. The webhook will have flipped the
+          // profile row before we return from the API call.
+          window.location.reload()
+        }}
+      />
     </>
   )
 }
