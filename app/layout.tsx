@@ -10,6 +10,39 @@ import AppRefresh from "@/app/components/AppRefresh";
 import { BrandingProvider } from "@/app/components/BrandingProvider";
 import { getBrandingFromHeaders, DEFAULT_BRANDING } from "@/lib/branding";
 import { headers } from "next/headers";
+import { createClient } from "@/lib/supabase/server";
+
+// Resolves the minimum profile fields the bottom nav needs to render the
+// correct tab set on the very first paint. Returns nulls for logged-out
+// requests so the layout still works on public routes.
+async function loadNavContext(): Promise<{ sex: string | null; tier: string | null }> {
+  try {
+    const supabase = await createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return { sex: null, tier: null }
+
+    const [profileResult, coachRelResult] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('sex, subscription_tier')
+        .eq('id', session.user.id)
+        .single(),
+      supabase
+        .from('coach_clients')
+        .select('id')
+        .eq('client_id', session.user.id)
+        .eq('status', 'active')
+        .maybeSingle(),
+    ])
+    const profile = profileResult.data as { sex: string | null; subscription_tier: string | null } | null
+    // An active coach relationship beats the stored tier — profiles can lag
+    // behind seat assignment briefly.
+    const tier = coachRelResult.data ? 'coached' : (profile?.subscription_tier ?? null)
+    return { sex: profile?.sex ?? null, tier }
+  } catch {
+    return { sex: null, tier: null }
+  }
+}
 
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
@@ -79,6 +112,8 @@ export default async function RootLayout({
     // headers() not available during static rendering — use defaults
   }
 
+  const navContext = await loadNavContext()
+
   const cssVars = `
     :root {
       --brand-primary: ${branding.brandColour};
@@ -104,7 +139,7 @@ export default async function RootLayout({
       <body className="min-h-full flex flex-col">
         <BrandingProvider branding={branding}>
           {children}
-          <ClientBottomNav />
+          <ClientBottomNav initialSex={navContext.sex} initialTier={navContext.tier} />
           <PushSetup />
           <InstallPrompt />
           <ServiceWorkerRegistration />

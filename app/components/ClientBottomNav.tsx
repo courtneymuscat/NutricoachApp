@@ -82,27 +82,29 @@ const HIDE_PREFIXES = ['/coach', '/onboarding', '/login', '/signup', '/forms', '
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function ClientBottomNav() {
+export default function ClientBottomNav({
+  initialSex = null,
+  initialTier = null,
+}: {
+  initialSex?: string | null
+  initialTier?: string | null
+}) {
   const path = usePathname()
-  const [tabs, setTabs] = useState<Tab[] | null>(null)
+  // Seed from server-resolved profile so the first paint already shows the
+  // correct tab set for coached clients. The useEffect below still runs so
+  // mid-session tier changes (upgrade, coach assignment) get picked up.
+  const [tabs, setTabs] = useState<Tab[]>(() => buildTabs(initialSex, initialTier))
 
   useEffect(() => {
     fetch('/api/settings')
       .then((r) => r.json())
       .then((d) => setTabs(buildTabs(d.sex ?? null, d.subscription_tier ?? null)))
-      .catch(() => setTabs(buildTabs(null, null)))
+      .catch(() => {/* keep server-seeded tabs on error */})
   }, [])
 
   // Hide on excluded paths
   if (HIDE_PREFIXES.some((p) => path.startsWith(p))) return null
   if (!SHOW_ON.some((p) => path === p || path.startsWith(p + '/'))) return null
-
-  // Show placeholder bar while loading to prevent layout shift
-  if (!tabs) {
-    return (
-      <div className="md:hidden" style={{ height: 'calc(64px + env(safe-area-inset-bottom, 0px))' }} />
-    )
-  }
 
   return (
     <>
