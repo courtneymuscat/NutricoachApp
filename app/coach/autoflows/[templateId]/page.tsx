@@ -624,6 +624,35 @@ export default function AutoflowTemplatePage({ params }: { params: Promise<{ tem
     })
   }
 
+  // Swap the step at sorted index `idx` with the neighbour at `idx + dir`.
+  // We swap their step_number values (instead of resequencing) so per-client
+  // overrides keyed on step_number stay attached to the same step. Any
+  // trigger_step_number references in OTHER steps are remapped so they still
+  // point at the same conceptual step after the swap.
+  function moveStep(idx: number, dir: -1 | 1) {
+    if (!template) return
+    const sorted = [...template.steps].sort((a, b) => a.step_number - b.step_number)
+    const target = idx + dir
+    if (target < 0 || target >= sorted.length) return
+    const a = sorted[idx]
+    const b = sorted[target]
+    const aNum = a.step_number
+    const bNum = b.step_number
+    const swapped = template.steps.map(s => {
+      let newStepNum = s.step_number
+      if (s.step_number === aNum) newStepNum = bNum
+      else if (s.step_number === bNum) newStepNum = aNum
+      let newTrigger = s.trigger_step_number
+      if (newTrigger === aNum) newTrigger = bNum
+      else if (newTrigger === bNum) newTrigger = aNum
+      return { ...s, step_number: newStepNum, trigger_step_number: newTrigger }
+    })
+    setTemplate({ ...template, steps: swapped })
+    // Follow the active step if the user moved it
+    if (activeStep === aNum) setActiveStep(bNum)
+    else if (activeStep === bNum) setActiveStep(aNum)
+  }
+
   // ── New template creation form ────────────────────────────────────────────────
   if (isNew) {
     return (
@@ -744,22 +773,32 @@ export default function AutoflowTemplatePage({ params }: { params: Promise<{ tem
         />
       )}
       {/* Header */}
-      <div className="bg-white border-b px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <a href="/coach/autoflows" className="text-gray-400 hover:text-gray-700 transition-colors">
+      <div className="bg-white border-b px-6 py-4 flex items-center justify-between gap-4">
+        <div className="flex items-start gap-3 flex-1 min-w-0">
+          <a href="/coach/autoflows" className="text-gray-400 hover:text-gray-700 transition-colors mt-1">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
           </a>
-          <div className="flex flex-col min-w-0">
+          <div className="flex flex-col min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <input
+                value={template.name}
+                onChange={e => setTemplate({ ...template, name: e.target.value })}
+                placeholder="Flow name"
+                className="text-lg font-bold text-gray-900 bg-transparent border-none focus:outline-none focus:ring-0 min-w-0 placeholder:text-gray-300"
+              />
+              <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full capitalize flex-shrink-0">
+                {template.type === 'weekly_checkin' ? 'Weekly check-in' : 'Onboarding'} · {template.steps.length} steps
+              </span>
+            </div>
             <input
-              value={template.name}
-              onChange={e => setTemplate({ ...template, name: e.target.value })}
-              className="text-lg font-bold text-gray-900 bg-transparent border-none focus:outline-none focus:ring-0 min-w-0"
+              value={template.description ?? ''}
+              onChange={e => setTemplate({ ...template, description: e.target.value })}
+              placeholder="Add a short description shown on the flows list…"
+              className="text-xs text-gray-500 bg-transparent border-none focus:outline-none focus:ring-0 mt-0.5 -ml-0 placeholder:text-gray-300"
+              disabled={readOnly}
             />
             {template.org_context && <CopiedFromOrgSubtitle ctx={template.org_context} />}
           </div>
-          <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full capitalize flex-shrink-0">
-            {template.type === 'weekly_checkin' ? 'Weekly check-in' : 'Onboarding'} · {template.steps.length} steps
-          </span>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -809,19 +848,45 @@ export default function AutoflowTemplatePage({ params }: { params: Promise<{ tem
           <div className="pt-2 pb-1">
             <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide px-3">Steps</p>
           </div>
-          {template.steps.map(s => (
-            <button
+          {[...template.steps].sort((a, b) => a.step_number - b.step_number).map((s, i, arr) => (
+            <div
               key={s.step_number}
-              onClick={() => { setActiveStep(s.step_number); setTab('steps') }}
-              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${tab === 'steps' && activeStep === s.step_number ? 'bg-gray-100 text-gray-900 font-medium' : 'text-gray-500 hover:bg-gray-50'}`}
+              className={`group relative w-full rounded-lg transition-colors ${tab === 'steps' && activeStep === s.step_number ? 'bg-gray-100' : 'hover:bg-gray-50'}`}
             >
-              {s.title || `Step ${s.step_number}`}
-              <span className="text-[11px] text-gray-400 ml-1">
-                {s.trigger_type === 'on_step_complete'
-                  ? `· after step ${s.trigger_step_number ?? '?'}`
-                  : `· day ${s.day_offset}`}
-              </span>
-            </button>
+              <button
+                onClick={() => { setActiveStep(s.step_number); setTab('steps') }}
+                className={`w-full text-left pl-3 pr-12 py-2 text-sm ${tab === 'steps' && activeStep === s.step_number ? 'text-gray-900 font-medium' : 'text-gray-500'}`}
+              >
+                {s.title || `Step ${s.step_number}`}
+                <span className="text-[11px] text-gray-400 ml-1">
+                  {s.trigger_type === 'on_step_complete'
+                    ? `· after step ${s.trigger_step_number ?? '?'}`
+                    : `· day ${s.day_offset}`}
+                </span>
+              </button>
+              {!readOnly && (
+                <div className="absolute right-1 top-1/2 -translate-y-1/2 flex flex-col opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); moveStep(i, -1) }}
+                    disabled={i === 0}
+                    className="text-gray-300 hover:text-gray-700 disabled:opacity-30 disabled:hover:text-gray-300 p-0.5"
+                    title="Move up"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7" /></svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); moveStep(i, 1) }}
+                    disabled={i === arr.length - 1}
+                    className="text-gray-300 hover:text-gray-700 disabled:opacity-30 disabled:hover:text-gray-300 p-0.5"
+                    title="Move down"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
+                  </button>
+                </div>
+              )}
+            </div>
           ))}
           <button
             onClick={() => {
