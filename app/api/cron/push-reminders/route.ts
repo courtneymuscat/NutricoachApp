@@ -82,7 +82,9 @@ export async function GET(req: NextRequest) {
   }
 
   // ── 1. Autoflow due steps ──────────────────────────────────────────────────
-
+  // Wrapped so a failure here (e.g. the message-log migration hasn't run yet)
+  // can't abort the cycle / check-in / birthday sections below.
+  try {
   const { data: activeFlows } = await supabase
     .from('client_autoflows')
     .select(`
@@ -191,12 +193,16 @@ export async function GET(req: NextRequest) {
       }
     }
   }
+  } catch (err) {
+    console.error('[cron] autoflow section failed:', err)
+  }
 
   // ── 2. Scheduled check-ins due today ──────────────────────────────────────
   //
   // Sent at 7am local time when it's the client's scheduled check-in day.
   // Handles weekly, biweekly, monthly, and once repeat types correctly.
 
+  try {
   const { data: schedules } = await supabase
     .from('checkin_schedules')
     .select(`
@@ -262,6 +268,9 @@ export async function GET(req: NextRequest) {
       pushed++
     }
   }
+  } catch (err) {
+    console.error('[cron] check-in schedule section failed:', err)
+  }
 
   // ── 3. Birthday alerts for coaches ────────────────────────────────────────
   //
@@ -269,6 +278,7 @@ export async function GET(req: NextRequest) {
   // We check ±1 day from UTC to catch clients in any timezone whose
   // birthday is "today" in their local time during this hourly run.
 
+  try {
   const yesterday = new Date(now.getTime() - 86400000).toISOString().split('T')[0]
   const tomorrow = new Date(now.getTime() + 86400000).toISOString().split('T')[0]
 
@@ -318,6 +328,9 @@ export async function GET(req: NextRequest) {
       }
     }
   }
+  } catch (err) {
+    console.error('[cron] birthday section failed:', err)
+  }
 
   // ── 4. Cycle tracking reminders for female clients ────────────────────────
   //
@@ -325,6 +338,7 @@ export async function GET(req: NextRequest) {
   // Message is phase-aware: adapts based on recent cycle history.
   // Opt-out via cycle_reminders = false on the profiles table (optional column).
 
+  try {
   // Select without cycle_reminders first — that column may not exist yet.
   // If it does exist, fetch it separately per-user to check opt-out.
   const { data: femaleClients } = await supabase
@@ -477,12 +491,16 @@ export async function GET(req: NextRequest) {
       pushed++
     }
   }
+  } catch (err) {
+    console.error('[cron] cycle reminder section failed:', err)
+  }
 
   // ── 5. 7-day no-check-in reminder ────────────────────────────────────────────
   //
   // Sent at 7am local time if the client hasn't submitted any check-in
   // (check_ins or autoflow_responses) in the past 7 days.
 
+  try {
   const { data: activeClients } = await supabase
     .from('coach_clients')
     .select('client_id, profiles!client_id ( timezone )')
@@ -530,6 +548,9 @@ export async function GET(req: NextRequest) {
       }).catch(() => {/* silent */})
       pushed++
     }
+  }
+  } catch (err) {
+    console.error('[cron] no-checkin section failed:', err)
   }
 
   return Response.json({ ok: true, pushed, checkedAt: now.toISOString() })
