@@ -14,6 +14,7 @@ export default async function MealPlansPage() {
       .from('meal_plans')
       .select('*')
       .eq('coach_id', coachId)
+      .eq('is_org_template', false)
       .order('created_at', { ascending: false }),
     fetchOrgTemplatesForCoach<{ id: string } & Record<string, unknown>>(coachId, 'meal_plans', '*'),
     getOrgForUser(coachId),

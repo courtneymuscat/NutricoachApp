@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { OrgPublisherBanner, CopiedFromOrgSubtitle } from '@/app/components/OrgTemplateBanner'
+import type { OrgTemplateContext } from '@/lib/org'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -90,6 +92,7 @@ type Program = {
   updated_at: string
   read_only?: boolean
   org_name?: string | null
+  org_context?: OrgTemplateContext
 }
 
 // ── Migration ──────────────────────────────────────────────────────────────────
@@ -891,6 +894,12 @@ export default function ProgramBuilderPage({ params }: { params: Promise<{ id: s
           </button>
         </div>
       )}
+      {program.org_context && (
+        <OrgPublisherBanner
+          ctx={program.org_context}
+          pushClientsLabel="Toggle Push to clients to also update active client programs."
+        />
+      )}
       {/* Header */}
       <div className="bg-white border-b px-6 py-4 flex items-center gap-4">
         <a href="/coach/programs" className="text-gray-400 hover:text-gray-700 transition-colors flex-shrink-0">
@@ -909,6 +918,7 @@ export default function ProgramBuilderPage({ params }: { params: Promise<{ id: s
               <svg className="w-3.5 h-3.5 text-gray-300 group-hover:text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
             </button>
           )}
+          {program.org_context && <CopiedFromOrgSubtitle ctx={program.org_context} />}
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
           {saveStatus === 'saving' && <span className="text-xs text-gray-400">Saving…</span>}

@@ -221,3 +221,107 @@ export async function fetchOrgTemplatesForCoach<T extends { id: string }>(
   const excluded = new Set(((exclusionsRes.data as { template_id: string }[] | null) ?? []).map((e) => e.template_id))
   return ((items as unknown) as T[] ?? []).filter((t) => !excluded.has(t.id))
 }
+
+// ─── Org template editor context ──────────────────────────────────────────────
+
+export type OrgTemplateContext = {
+  // True when the viewer is editing a row that is published to their org and
+  // their role lets them edit it (owner/admin). Editors should show a banner.
+  publishingToOrg: boolean
+  orgName: string | null
+  // Other coaches who will see the changes (org member count minus the viewer).
+  sharedCoachCount: number
+  // Set when this row was cloned from an org template that still exists and is
+  // still published to the same org. Editors should show a subtitle.
+  copiedFromOrgTemplate:
+    | { id: string; name: string; orgName: string | null }
+    | null
+}
+
+const NAME_FIELD: Record<OrgTemplateTable, string> = {
+  autoflow_templates: 'name',
+  programs: 'name',
+  meal_plans: 'name',
+  forms: 'title',
+  note_templates: 'name',
+  coach_services: 'name',
+  coach_resources: 'name',
+}
+
+/**
+ * Resolves the org-template editing context for a row: whether the viewer is
+ * editing the org-shared version (publishingToOrg) and whether the row is a
+ * personal copy of an org template (copiedFromOrgTemplate). Used by editors to
+ * render banners and subtitles consistently across content types.
+ */
+export async function getOrgTemplateContext(
+  viewerUserId: string,
+  table: OrgTemplateTable,
+  row: {
+    id: string
+    org_id?: string | null
+    is_org_template?: boolean | null
+    source_template_id?: string | null
+  },
+): Promise<OrgTemplateContext> {
+  const membership = await getOrgForUser(viewerUserId)
+  const admin = createAdminClient()
+  const nameField = NAME_FIELD[table]
+
+  // Publishing-to-org: this row is the org-shared version and viewer can edit
+  // it on behalf of the org (owner or admin in the same org).
+  let publishingToOrg = false
+  let sharedCoachCount = 0
+  if (
+    membership &&
+    (membership.role === 'owner' || membership.role === 'admin') &&
+    row.is_org_template === true &&
+    row.org_id === membership.org_id
+  ) {
+    publishingToOrg = true
+    const { count } = await admin
+      .from('org_members')
+      .select('user_id', { count: 'exact', head: true })
+      .eq('org_id', membership.org_id)
+      .neq('user_id', viewerUserId)
+    sharedCoachCount = count ?? 0
+  }
+
+  // Copied-from-org: the source row still exists, is still published, and the
+  // viewer is in the same org as the source (or no longer in any org — we
+  // still show the subtitle since the copy reference is informative).
+  let copiedFromOrgTemplate: OrgTemplateContext['copiedFromOrgTemplate'] = null
+  if (row.source_template_id) {
+    const { data: source } = await admin
+      .from(table)
+      .select(`id, ${nameField}, org_id, is_org_template`)
+      .eq('id', row.source_template_id)
+      .maybeSingle()
+    const src = source as
+      | (Record<string, unknown> & { id: string; org_id: string | null; is_org_template: boolean | null })
+      | null
+    if (src && src.is_org_template === true) {
+      let orgName: string | null = null
+      if (src.org_id) {
+        const { data: org } = await admin
+          .from('organisations')
+          .select('name')
+          .eq('id', src.org_id)
+          .maybeSingle()
+        orgName = (org as { name: string } | null)?.name ?? null
+      }
+      copiedFromOrgTemplate = {
+        id: src.id,
+        name: (src[nameField] as string | undefined) ?? 'Template',
+        orgName,
+      }
+    }
+  }
+
+  return {
+    publishingToOrg,
+    orgName: membership?.org_name ?? null,
+    sharedCoachCount,
+    copiedFromOrgTemplate,
+  }
+}

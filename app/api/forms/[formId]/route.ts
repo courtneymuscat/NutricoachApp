@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireCoach } from '@/lib/coach'
-import { getOrgForUser } from '@/lib/org'
+import { getOrgForUser, getOrgTemplateContext } from '@/lib/org'
 import type { NextRequest } from 'next/server'
 
 type Ctx = { params: Promise<{ formId: string }> }
@@ -20,7 +20,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
 
   const { data: form } = await admin
     .from('forms')
-    .select('id, title, description, type, is_active, coach_id, is_client_copy, client_id, org_id, is_org_template')
+    .select('id, title, description, type, is_active, coach_id, is_client_copy, client_id, org_id, is_org_template, source_template_id')
     .eq('id', formId)
     .single()
 
@@ -48,14 +48,26 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
   // can render in view mode.
   let readOnly = false
   let orgName: string | null = null
+  let orgContext: Awaited<ReturnType<typeof getOrgTemplateContext>> | null = null
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (user && form.is_org_template && form.coach_id !== user.id) {
-      const membership = await getOrgForUser(user.id)
-      if (membership && membership.role !== 'owner' && membership.org_id === form.org_id) {
-        readOnly = true
-        orgName = membership.org_name
+    if (user) {
+      if (form.is_org_template && form.coach_id !== user.id) {
+        const membership = await getOrgForUser(user.id)
+        if (membership && membership.role !== 'owner' && membership.org_id === form.org_id) {
+          readOnly = true
+          orgName = membership.org_name
+        }
+      }
+      // The form owner (or org publisher) gets full org context for the editor banner
+      if (form.coach_id === user.id) {
+        orgContext = await getOrgTemplateContext(user.id, 'forms', {
+          id: form.id,
+          org_id: form.org_id ?? null,
+          is_org_template: form.is_org_template ?? false,
+          source_template_id: (form as { source_template_id?: string | null }).source_template_id ?? null,
+        })
       }
     }
   } catch {
@@ -69,6 +81,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     client_name: clientName,
     read_only: readOnly,
     org_name: orgName,
+    org_context: orgContext,
   })
 }
 

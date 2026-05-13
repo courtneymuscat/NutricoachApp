@@ -2,6 +2,8 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import MealPlanFoodSearch from '@/app/components/MealPlanFoodSearch'
+import { OrgPublisherBanner, CopiedFromOrgSubtitle } from '@/app/components/OrgTemplateBanner'
+import type { OrgTemplateContext } from '@/lib/org'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -527,10 +529,12 @@ export default function MealPlanEditor({
   plan: initialPlan,
   readOnly = false,
   orgName = null,
+  orgContext = null,
 }: {
   plan: MealPlan
   readOnly?: boolean
   orgName?: string | null
+  orgContext?: OrgTemplateContext | null
 }) {
   const [plan, setPlan] = useState<MealPlan>({
     ...initialPlan,
@@ -664,6 +668,12 @@ export default function MealPlanEditor({
           </button>
         </div>
       )}
+      {orgContext && (
+        <OrgPublisherBanner
+          ctx={orgContext}
+          pushClientsLabel="Toggle Push to clients to also update active client meal plans."
+        />
+      )}
       {/* Header */}
       <div className="bg-white border-b px-6 py-4 flex items-center gap-4">
         <a
@@ -676,29 +686,32 @@ export default function MealPlanEditor({
           </svg>
         </a>
 
-        <div className="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
-          {editingName ? (
-            <input
-              autoFocus
-              type="text"
-              value={plan.name}
-              onChange={(e) => setPlan({ ...plan, name: e.target.value })}
-              onBlur={() => { setEditingName(false); scheduleSave(plan) }}
-              onKeyDown={(e) => { if (e.key === 'Enter') { setEditingName(false); scheduleSave(plan) } }}
-              className="text-lg font-bold text-gray-900 border border-blue-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 max-w-xs"
-            />
-          ) : (
-            <button
-              onClick={() => setEditingName(true)}
-              className="text-lg font-bold text-gray-900 hover:text-blue-600 transition-colors flex items-center gap-1.5 group text-left"
-              title="Click to rename"
-            >
-              {plan.name}
-              <svg className="w-3.5 h-3.5 text-gray-300 group-hover:text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-              </svg>
-            </button>
-          )}
+        <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+          <div className="flex items-center gap-2 flex-wrap">
+            {editingName ? (
+              <input
+                autoFocus
+                type="text"
+                value={plan.name}
+                onChange={(e) => setPlan({ ...plan, name: e.target.value })}
+                onBlur={() => { setEditingName(false); scheduleSave(plan) }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { setEditingName(false); scheduleSave(plan) } }}
+                className="text-lg font-bold text-gray-900 border border-blue-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 max-w-xs"
+              />
+            ) : (
+              <button
+                onClick={() => setEditingName(true)}
+                className="text-lg font-bold text-gray-900 hover:text-blue-600 transition-colors flex items-center gap-1.5 group text-left"
+                title="Click to rename"
+              >
+                {plan.name}
+                <svg className="w-3.5 h-3.5 text-gray-300 group-hover:text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </button>
+            )}
+          </div>
+          {orgContext && <CopiedFromOrgSubtitle ctx={orgContext} />}
         </div>
 
         <div className="flex items-center gap-3 flex-shrink-0">

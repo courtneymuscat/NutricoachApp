@@ -33,6 +33,7 @@ export default async function CoachFormsPage() {
       .from('forms')
       .select('id, title, type, is_active, created_at')
       .eq('coach_id', coachId)
+      .eq('is_org_template', false)
       .or('is_client_copy.is.null,is_client_copy.eq.false')
       .order('created_at', { ascending: false }),
     fetchOrgTemplatesForCoach<FormRow>(coachId, 'forms', 'id, title, type, is_active, created_at'),

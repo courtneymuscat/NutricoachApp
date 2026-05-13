@@ -27,6 +27,7 @@ export async function GET(_req: NextRequest) {
       .from('programs')
       .select('id, name, description, content, created_at, updated_at')
       .eq('coach_id', coachId)
+      .eq('is_org_template', false)
       .order('created_at', { ascending: false }),
     fetchOrgTemplatesForCoach<ProgramRow>(
       coachId,

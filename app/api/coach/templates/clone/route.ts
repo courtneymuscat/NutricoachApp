@@ -71,6 +71,10 @@ export async function POST(req: NextRequest) {
   copy.org_id = null
   copy.is_org_template = false
   copy.created_by = coachId
+  // Remember the org template this copy came from so the editor can show a
+  // "Copied from org template" subtitle and remind the coach upstream edits
+  // won't propagate to their copy.
+  copy.source_template_id = source_id
 
   // Resources reference the owner's folder by id — drop it so the cloned row
   // lands in the cloning coach's "uncategorised" bucket.

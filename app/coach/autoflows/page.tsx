@@ -24,6 +24,7 @@ export default async function CoachAutoflowsPage() {
       .from('autoflow_templates')
       .select('id, name, description, type, total_steps, created_at')
       .eq('coach_id', coachId)
+      .eq('is_org_template', false)
       .order('created_at', { ascending: false }),
     fetchOrgTemplatesForCoach<AutoflowRow>(
       coachId,

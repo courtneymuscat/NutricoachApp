@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireCoach } from '@/lib/coach'
-import { getOrgForUser } from '@/lib/org'
+import { getOrgForUser, getOrgTemplateContext } from '@/lib/org'
 import type { NextRequest } from 'next/server'
 
 export async function GET(
@@ -15,12 +15,25 @@ export async function GET(
   const supabase = await createClient()
   const { data: own } = await supabase
     .from('programs')
-    .select('id, name, description, content, created_at, updated_at')
+    .select('id, name, description, content, created_at, updated_at, org_id, is_org_template, source_template_id')
     .eq('id', id)
     .eq('coach_id', coachId)
     .maybeSingle()
 
-  if (own) return Response.json({ ...own, is_org_template: false, read_only: false })
+  if (own) {
+    const orgContext = await getOrgTemplateContext(coachId, 'programs', {
+      id: own.id,
+      org_id: own.org_id ?? null,
+      is_org_template: own.is_org_template ?? false,
+      source_template_id: own.source_template_id ?? null,
+    })
+    return Response.json({
+      ...own,
+      is_org_template: own.is_org_template ?? false,
+      read_only: false,
+      org_context: orgContext,
+    })
+  }
 
   // Allow viewing org templates that this coach has access to
   const membership = await getOrgForUser(coachId)

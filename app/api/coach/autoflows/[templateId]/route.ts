@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireCoach } from '@/lib/coach'
-import { getOrgForUser } from '@/lib/org'
+import { getOrgForUser, getOrgTemplateContext } from '@/lib/org'
 import type { NextRequest } from 'next/server'
 
 type Ctx = { params: Promise<{ templateId: string }> }
@@ -14,7 +14,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
   const supabase = await createClient()
   const { data: ownTemplate } = await supabase
     .from('autoflow_templates')
-    .select('id, name, description, type, total_steps, core_questions')
+    .select('id, name, description, type, total_steps, core_questions, org_id, is_org_template, source_template_id')
     .eq('id', templateId)
     .eq('coach_id', coachId)
     .maybeSingle()
@@ -28,7 +28,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
       const admin = createAdminClient()
       const { data: orgRow } = await admin
         .from('autoflow_templates')
-        .select('id, name, description, type, total_steps, core_questions')
+        .select('id, name, description, type, total_steps, core_questions, org_id, is_org_template, source_template_id')
         .eq('id', templateId)
         .eq('org_id', membership.org_id)
         .eq('is_org_template', true)
@@ -49,12 +49,20 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     .eq('template_id', templateId)
     .order('step_number')
 
+  const orgContext = await getOrgTemplateContext(coachId, 'autoflow_templates', {
+    id: template.id as string,
+    org_id: (template.org_id as string | null) ?? null,
+    is_org_template: (template.is_org_template as boolean | null) ?? false,
+    source_template_id: (template.source_template_id as string | null) ?? null,
+  })
+
   return Response.json({
     ...template,
     steps: steps ?? [],
     is_org_template: isOrgTemplate,
     read_only: isOrgTemplate,
     org_name: orgName,
+    org_context: orgContext,
   })
 }
 

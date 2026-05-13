@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef, use } from 'react'
 import { useRouter } from 'next/navigation'
+import { OrgPublisherBanner, CopiedFromOrgSubtitle } from '@/app/components/OrgTemplateBanner'
+import type { OrgTemplateContext } from '@/lib/org'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -50,6 +52,7 @@ type Template = {
   steps: Step[]
   read_only?: boolean
   org_name?: string | null
+  org_context?: OrgTemplateContext
 }
 
 type CoachResource = {
@@ -734,17 +737,26 @@ export default function AutoflowTemplatePage({ params }: { params: Promise<{ tem
           </button>
         </div>
       )}
+      {template.org_context && (
+        <OrgPublisherBanner
+          ctx={template.org_context}
+          pushClientsLabel="Toggle Push to clients to also update active client flows."
+        />
+      )}
       {/* Header */}
       <div className="bg-white border-b px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <a href="/coach/autoflows" className="text-gray-400 hover:text-gray-700 transition-colors">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
           </a>
-          <input
-            value={template.name}
-            onChange={e => setTemplate({ ...template, name: e.target.value })}
-            className="text-lg font-bold text-gray-900 bg-transparent border-none focus:outline-none focus:ring-0 min-w-0"
-          />
+          <div className="flex flex-col min-w-0">
+            <input
+              value={template.name}
+              onChange={e => setTemplate({ ...template, name: e.target.value })}
+              className="text-lg font-bold text-gray-900 bg-transparent border-none focus:outline-none focus:ring-0 min-w-0"
+            />
+            {template.org_context && <CopiedFromOrgSubtitle ctx={template.org_context} />}
+          </div>
           <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full capitalize flex-shrink-0">
             {template.type === 'weekly_checkin' ? 'Weekly check-in' : 'Onboarding'} · {template.steps.length} steps
           </span>

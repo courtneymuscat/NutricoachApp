@@ -23,6 +23,7 @@ export async function GET() {
       .from('coach_resources')
       .select('*, coach_resource_folders(id, name, color, icon)')
       .eq('coach_id', coachId)
+      .eq('is_org_template', false)
       .order('created_at', { ascending: false }),
     fetchOrgTemplatesForCoach<ResourceRow>(
       coachId,

@@ -2,7 +2,7 @@ import { redirect, notFound } from 'next/navigation'
 import { requireCoach } from '@/lib/coach'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { getOrgForUser } from '@/lib/org'
+import { getOrgForUser, getOrgTemplateContext } from '@/lib/org'
 import { seedCoachTemplates } from '@/lib/seed-coach-templates'
 import MealPlanEditor from './MealPlanEditor'
 
@@ -27,7 +27,15 @@ export default async function MealPlanPage({
     .eq('coach_id', coachId)
     .maybeSingle()
 
-  if (own) return <MealPlanEditor plan={own} />
+  if (own) {
+    const orgContext = await getOrgTemplateContext(coachId, 'meal_plans', {
+      id: own.id,
+      org_id: own.org_id ?? null,
+      is_org_template: own.is_org_template ?? false,
+      source_template_id: own.source_template_id ?? null,
+    })
+    return <MealPlanEditor plan={own} orgContext={orgContext} />
+  }
 
   // Fall back to an org template the coach has access to (read-only view)
   const membership = await getOrgForUser(coachId)

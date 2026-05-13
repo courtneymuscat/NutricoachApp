@@ -3,6 +3,8 @@
 import { useState, useEffect, use } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { OrgPublisherBanner, CopiedFromOrgSubtitle } from '@/app/components/OrgTemplateBanner'
+import type { OrgTemplateContext } from '@/lib/org'
 
 type QuestionType = 'text' | 'textarea' | 'number' | 'scale' | 'yesno' | 'radio' | 'checkbox' | 'dropdown' | 'file_upload' | 'image' | 'signature'
 
@@ -58,6 +60,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ formId: 
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null)
   const [readOnly, setReadOnly] = useState(false)
   const [orgName, setOrgName] = useState<string | null>(null)
+  const [orgContext, setOrgContext] = useState<OrgTemplateContext | null>(null)
 
   useEffect(() => {
     if (isNew) return
@@ -69,6 +72,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ formId: 
         setClientName(d.client_name ?? null)
         setReadOnly(!!d.read_only)
         setOrgName(d.org_name ?? null)
+        setOrgContext(d.org_context ?? null)
         // Normalise questions from DB: convert legacy 'select' → 'radio', ensure options is always array|null
         const qs = (d.questions ?? []).map((q: Question) => ({
           ...q,
@@ -227,6 +231,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ formId: 
           </button>
         </div>
       )}
+      {orgContext && <OrgPublisherBanner ctx={orgContext} />}
       <div className="bg-white border-b px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <a
@@ -244,6 +249,7 @@ export default function FormBuilderPage({ params }: { params: Promise<{ formId: 
                 Client-specific copy — changes here only affect this client
               </p>
             )}
+            {orgContext && <CopiedFromOrgSubtitle ctx={orgContext} />}
           </div>
         </div>
         <div className="flex items-center gap-3">

@@ -20,6 +20,7 @@ export async function GET() {
       .from('note_templates')
       .select('id, name, body, created_at')
       .eq('coach_id', coachId)
+      .eq('is_org_template', false)
       .order('created_at', { ascending: true }),
     fetchOrgTemplatesForCoach<NoteTemplateRow>(
       coachId,
