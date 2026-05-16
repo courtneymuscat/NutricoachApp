@@ -106,7 +106,7 @@ function EditRow({
   )
 }
 
-export default function WeightLog() {
+export default function WeightLog({ initialHistory = [] }: { initialHistory?: WeightEntry[] }) {
   const router = useRouter()
   const [unit, setUnit] = useState<'lbs' | 'kg'>('lbs')
   const [weight, setWeight] = useState('')
@@ -114,7 +114,7 @@ export default function WeightLog() {
   const [pending, setPending] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [history, setHistory] = useState<WeightEntry[]>([])
+  const [history, setHistory] = useState<WeightEntry[]>(initialHistory)
   const [editingId, setEditingId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -135,8 +135,9 @@ export default function WeightLog() {
     if (data) setHistory(data)
   }
 
+  // Re-fetch only when a weight is logged elsewhere — initial data came from
+  // the server-rendered page, so we don't refetch on mount.
   useEffect(() => {
-    fetchHistory()
     const handler = () => fetchHistory()
     window.addEventListener('weight-logged', handler)
     return () => window.removeEventListener('weight-logged', handler)

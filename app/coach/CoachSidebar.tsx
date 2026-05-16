@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { useBranding } from '@/app/components/BrandingProvider'
 import { logout } from '@/app/actions/auth'
 import Link from 'next/link'
+import Image from 'next/image'
 
 type NavItem = { href: string; label: string; icon: React.ReactNode; badge?: boolean; messageBadge?: boolean; checkinBadge?: boolean; needs?: 'training' | 'nutrition' }
 
@@ -200,7 +201,7 @@ export default function CoachSidebar({
         <div className="px-5 pt-6 pb-5">
           <Link href="/dashboard" className="flex items-center gap-2">
             {branding.logoUrl ? (
-              <img src={branding.logoUrl} alt={branding.appName} className="h-6 object-contain" />
+              <Image src={branding.logoUrl} alt={branding.appName} width={96} height={24} className="h-6 w-auto object-contain" />
             ) : (
               <span className="text-[15px] font-bold tracking-tight text-gray-900">{branding.appName}</span>
             )}
@@ -317,7 +318,7 @@ export default function CoachSidebar({
            style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         <div className="flex items-center gap-2 py-3">
           {branding.logoUrl ? (
-            <img src={branding.logoUrl} alt={branding.appName} className="h-6 object-contain" />
+            <Image src={branding.logoUrl} alt={branding.appName} width={96} height={24} className="h-6 w-auto object-contain" />
           ) : (
             <span className="text-[15px] font-bold tracking-tight text-gray-900">{branding.appName}</span>
           )}

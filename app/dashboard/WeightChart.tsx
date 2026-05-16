@@ -26,9 +26,20 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-export default function WeightChart() {
-  const [points, setPoints] = useState<DataPoint[]>([])
-  const [loading, setLoading] = useState(true)
+type InitialLog = { logged_at: string; weight_lbs: number }
+
+function toPoints(rows: InitialLog[]): DataPoint[] {
+  // Source rows are newest-first (server query is descending). Chart expects
+  // chronological order.
+  return rows
+    .slice()
+    .reverse()
+    .map((r) => ({ date: r.logged_at, weightLbs: r.weight_lbs }))
+}
+
+export default function WeightChart({ initialLogs = [] }: { initialLogs?: InitialLog[] }) {
+  const [points, setPoints] = useState<DataPoint[]>(() => toPoints(initialLogs))
+  const [loading, setLoading] = useState(initialLogs.length === 0)
   const [unit, setUnit] = useState<'lbs' | 'kg'>('lbs')
   const [tooltip, setTooltip] = useState<TooltipState>(null)
   const svgRef = useRef<SVGSVGElement>(null)
@@ -55,8 +66,8 @@ export default function WeightChart() {
     const saved = localStorage.getItem('checkin_weight_unit')
     if (saved === 'kg' || saved === 'lbs') setUnit(saved)
 
-    load()
-
+    // Refetch only when weight changes elsewhere — initial points were
+    // rendered from server-supplied data.
     window.addEventListener('weight-logged', load)
     return () => window.removeEventListener('weight-logged', load)
   }, [load])

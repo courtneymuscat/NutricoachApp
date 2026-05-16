@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { noteBodyToHtml } from '@/lib/noteUtils'
 const CheckInFeedback = lazy(() => import('./CheckInFeedback'))
@@ -1616,7 +1617,7 @@ function PhotoComparePanel({ label, photo, onSelect }: {
         }`}>
         {photo ? (
           <>
-            <img src={photo.url} alt={photoCatLabel(photo.category)} className="w-full h-full object-cover" />
+            <Image src={photo.url} alt={photoCatLabel(photo.category)} fill sizes="(max-width: 768px) 50vw, 240px" className="object-cover" />
             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 transition-colors flex items-center justify-center">
               <span className="opacity-0 group-hover:opacity-100 text-white text-xs font-semibold bg-black/50 px-3 py-1.5 rounded-lg transition-opacity">Change</span>
             </div>
@@ -1677,7 +1678,7 @@ function PhotoPickModal({ photos, onPick, onClose }: {
               {filtered.map(photo => (
                 <button key={photo.id} onClick={() => { onPick(photo); onClose() }}
                   className="aspect-[3/4] rounded-xl overflow-hidden relative group">
-                  <img src={photo.url} alt={photoCatLabel(photo.category)} className="w-full h-full object-cover" />
+                  <Image src={photo.url} alt={photoCatLabel(photo.category)} fill sizes="(max-width: 640px) 33vw, 160px" className="object-cover" />
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
                   <div className="absolute top-1.5 left-1.5">
                     <span className={`text-xs font-bold px-1.5 py-0.5 rounded-md ${PHOTO_CAT_COLORS[photo.category]}`}>
@@ -1808,7 +1809,7 @@ function CoachProgressPhotos({ clientId }: { clientId: string }) {
                       {group.map((p) => (
                         <button key={p.id} onClick={() => setLightbox(p)}
                           className="aspect-[3/4] rounded-xl overflow-hidden relative group">
-                          <img src={p.url} alt={photoCatLabel(p.category)} className="w-full h-full object-cover" />
+                          <Image src={p.url} alt={photoCatLabel(p.category)} fill sizes="(max-width: 640px) 33vw, 200px" className="object-cover" />
                           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
                           <div className="absolute top-1.5 left-1.5">
                             <span className={`text-xs font-bold px-1.5 py-0.5 rounded-md ${PHOTO_CAT_COLORS[p.category]}`}>
@@ -1834,8 +1835,14 @@ function CoachProgressPhotos({ clientId }: { clientId: string }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setLightbox(null)}>
           <div className="absolute inset-0 bg-black/85" />
           <div className="relative w-full max-w-sm mx-4" onClick={(e) => e.stopPropagation()}>
-            <img src={lightbox.url} alt={photoCatLabel(lightbox.category)}
-              className="w-full max-h-[75vh] object-contain rounded-2xl" />
+            <Image
+              src={lightbox.url}
+              alt={photoCatLabel(lightbox.category)}
+              width={1284}
+              height={2778}
+              sizes="(max-width: 640px) 100vw, 384px"
+              className="w-full max-h-[75vh] h-auto object-contain rounded-2xl"
+            />
             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent rounded-b-2xl p-5">
               <p className="text-white font-bold text-base">{photoFmtDate(lightbox.taken_at)}</p>
               <p className="text-white/70 text-sm mt-0.5">
@@ -4119,7 +4126,7 @@ function FoodLogsTab({ clientId }: { clientId: string }) {
                           </div>
                           {mealNote.photo_url && (
                             <a href={mealNote.photo_url} target="_blank" rel="noopener noreferrer" className="flex-shrink-0">
-                              <img src={mealNote.photo_url} alt="Meal photo" className="h-16 w-24 object-cover rounded-lg border border-blue-100 hover:opacity-80 transition-opacity" />
+                              <Image src={mealNote.photo_url} alt="Meal photo" width={96} height={64} sizes="96px" className="h-16 w-24 object-cover rounded-lg border border-blue-100 hover:opacity-80 transition-opacity" />
                             </a>
                           )}
                         </div>
@@ -4149,7 +4156,7 @@ function FoodLogsTab({ clientId }: { clientId: string }) {
                               {l.scan_image_url && (
                                 <div className="mt-2">
                                   <a href={l.scan_image_url} target="_blank" rel="noopener noreferrer">
-                                    <img src={l.scan_image_url} alt="AI meal scan" className="h-20 w-28 object-cover rounded-lg border border-gray-100 hover:opacity-80 transition-opacity" />
+                                    <Image src={l.scan_image_url} alt="AI meal scan" width={112} height={80} sizes="112px" className="h-20 w-28 object-cover rounded-lg border border-gray-100 hover:opacity-80 transition-opacity" />
                                   </a>
                                   <p className="text-[10px] text-gray-400 mt-0.5">AI scanned</p>
                                 </div>
@@ -4158,7 +4165,7 @@ function FoodLogsTab({ clientId }: { clientId: string }) {
                             <div className="flex items-start gap-2 flex-shrink-0">
                               {l.meal_photo_url && (
                                 <a href={l.meal_photo_url} target="_blank" rel="noopener noreferrer">
-                                  <img src={l.meal_photo_url} alt="Meal photo" className="h-12 w-16 object-cover rounded-lg border border-gray-100 hover:opacity-80 transition-opacity" />
+                                  <Image src={l.meal_photo_url} alt="Meal photo" width={64} height={48} sizes="64px" className="h-12 w-16 object-cover rounded-lg border border-gray-100 hover:opacity-80 transition-opacity" />
                                 </a>
                               )}
                               <p className="text-xs text-gray-500 mt-0.5">{Math.round(l.calories)} kcal</p>

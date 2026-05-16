@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -397,8 +398,15 @@ function PhotoDetailModal({ photo, onClose, onDelete, onEdit }: {
     <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={onClose}>
       <div className="absolute inset-0 bg-black/85" />
       <div className="relative w-full max-w-sm mx-4" onClick={e => e.stopPropagation()}>
-        <img src={photo.url} alt={catLabel(photo.category)}
-          className="w-full max-h-[75vh] object-contain rounded-2xl" />
+        <Image
+          src={photo.url}
+          alt={catLabel(photo.category)}
+          width={1284}
+          height={2778}
+          sizes="(max-width: 640px) 100vw, 384px"
+          unoptimized={/^blob:/.test(photo.url)}
+          className="w-full max-h-[75vh] h-auto object-contain rounded-2xl"
+        />
 
         {/* Info overlay */}
         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent rounded-b-2xl p-5">
@@ -485,7 +493,14 @@ function PickPhotoModal({ photos, onPick, onClose }: {
               {filtered.map(photo => (
                 <button key={photo.id} onClick={() => { onPick(photo); onClose() }}
                   className="aspect-[3/4] rounded-xl overflow-hidden relative group">
-                  <img src={photo.url} alt={catLabel(photo.category)} className="w-full h-full object-cover" />
+                  <Image
+                    src={photo.url}
+                    alt={catLabel(photo.category)}
+                    fill
+                    sizes="(max-width: 640px) 33vw, 160px"
+                    unoptimized={/^blob:/.test(photo.url)}
+                    className="object-cover"
+                  />
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
                   <div className="absolute top-1.5 left-1.5">
                     <span className={`text-xs font-bold px-1.5 py-0.5 rounded-md ${CAT_COLORS[photo.category]}`}>
@@ -521,7 +536,14 @@ function ComparePanel({ label, photo, onSelect }: {
         }`}>
         {photo ? (
           <>
-            <img src={photo.url} alt={catLabel(photo.category)} className="w-full h-full object-cover" />
+            <Image
+              src={photo.url}
+              alt={catLabel(photo.category)}
+              fill
+              sizes="(max-width: 640px) 50vw, 240px"
+              unoptimized={/^blob:/.test(photo.url)}
+              className="object-cover"
+            />
             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 transition-colors flex items-center justify-center">
               <span className="opacity-0 group-hover:opacity-100 text-white text-xs font-semibold bg-black/50 px-3 py-1.5 rounded-lg transition-opacity">
                 Change
@@ -743,7 +765,14 @@ export default function ProgressPhotos({ canCompare = false }: { canCompare?: bo
                     {monthPhotos.map(photo => (
                       <button key={photo.id} onClick={() => setSelectedPhoto(photo)}
                         className="aspect-[3/4] rounded-xl overflow-hidden relative group">
-                        <img src={photo.url} alt={catLabel(photo.category)} className="w-full h-full object-cover" />
+                        <Image
+                          src={photo.url}
+                          alt={catLabel(photo.category)}
+                          fill
+                          sizes="(max-width: 640px) 33vw, 200px"
+                          unoptimized={/^blob:/.test(photo.url)}
+                          className="object-cover"
+                        />
                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
                         <div className="absolute top-1.5 left-1.5">
                           <span className={`text-xs font-bold px-1.5 py-0.5 rounded-md ${CAT_COLORS[photo.category]}`}>

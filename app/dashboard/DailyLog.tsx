@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import FoodSearch, { type FoodResult } from './FoodSearch'
 import EditFoodLogForm from './EditFoodLogForm'
@@ -63,6 +64,24 @@ function parseMealIngredients(notes: string | null): MealIngredient[] | null {
   return null
 }
 
+type InitialFoodLog = FoodLog & { meal_type?: string | null }
+type InitialMealNote = { meal_type: string; note: string | null; photo_url: string | null }
+
+function groupFoodLogs(rows: InitialFoodLog[]): Record<MealKey, FoodLog[]> {
+  const grouped: Record<MealKey, FoodLog[]> = { breakfast: [], lunch: [], dinner: [], snacks: [] }
+  for (const log of rows) {
+    const meal = ((log.meal_type ?? 'breakfast') as MealKey)
+    if (meal in grouped) grouped[meal].push(log as FoodLog)
+  }
+  return grouped
+}
+
+function mapMealNotes(rows: InitialMealNote[]): Record<string, { note: string | null; photo_url: string | null }> {
+  const map: Record<string, { note: string | null; photo_url: string | null }> = {}
+  for (const n of rows) map[n.meal_type] = { note: n.note, photo_url: n.photo_url }
+  return map
+}
+
 export default function DailyLog({
   canScanMeal = false,
   foodLogAccess = 'full',
@@ -70,6 +89,9 @@ export default function DailyLog({
   targetProtein = null,
   targetCarbs = null,
   targetFat = null,
+  initialDate,
+  initialFoodLogs,
+  initialMealNotes,
 }: {
   canScanMeal?: boolean
   foodLogAccess?: 'full' | 'no_scan' | 'note_only' | 'off'
@@ -77,12 +99,16 @@ export default function DailyLog({
   targetProtein?: number | null
   targetCarbs?: number | null
   targetFat?: number | null
+  initialDate?: string
+  initialFoodLogs?: InitialFoodLog[]
+  initialMealNotes?: InitialMealNote[]
 }) {
-  const [date, setDate] = useState(todayString)
-  const [logsByMeal, setLogsByMeal] = useState<Record<MealKey, FoodLog[]>>({
-    breakfast: [], lunch: [], dinner: [], snacks: [],
-  })
-  const [loading, setLoading] = useState(true)
+  const hasInitialData = initialFoodLogs !== undefined && initialMealNotes !== undefined && !!initialDate
+  const [date, setDate] = useState(initialDate ?? todayString())
+  const [logsByMeal, setLogsByMeal] = useState<Record<MealKey, FoodLog[]>>(() =>
+    hasInitialData ? groupFoodLogs(initialFoodLogs!) : { breakfast: [], lunch: [], dinner: [], snacks: [] },
+  )
+  const [loading, setLoading] = useState(!hasInitialData)
   const [addingTo, setAddingTo] = useState<MealKey | null>(null)
   const [pendingEntry, setPendingEntry] = useState<{ food: FoodResult; grams: number; servingDescription?: string } | null>(null)
   const [saving, setSaving] = useState(false)
@@ -97,7 +123,9 @@ export default function DailyLog({
   const [uploadingPhotoId, setUploadingPhotoId] = useState<string | null>(null)
   const [noteError, setNoteError] = useState<string | null>(null)
   // Meal-level notes (one per meal per day, stored in meal_notes table)
-  const [mealNotes, setMealNotes] = useState<Record<string, { note: string | null; photo_url: string | null }>>({})
+  const [mealNotes, setMealNotes] = useState<Record<string, { note: string | null; photo_url: string | null }>>(() =>
+    hasInitialData ? mapMealNotes(initialMealNotes!) : {},
+  )
   const [mealNoteOpen, setMealNoteOpen] = useState<MealKey | null>(null)
   const [mealNoteDraft, setMealNoteDraft] = useState('')
   const [uploadingMealNote, setUploadingMealNote] = useState<MealKey | null>(null)
@@ -153,7 +181,16 @@ export default function DailyLog({
     setLoading(false)
   }, [date])
 
-  useEffect(() => { fetchLogs() }, [fetchLogs])
+  // Skip the initial fetch when the server already supplied today's data —
+  // the prop-derived state is already correct.
+  const skipNextFetch = useRef(hasInitialData)
+  useEffect(() => {
+    if (skipNextFetch.current) {
+      skipNextFetch.current = false
+      return
+    }
+    fetchLogs()
+  }, [fetchLogs])
 
   useEffect(() => {
     Promise.all([
@@ -774,7 +811,7 @@ export default function DailyLog({
                     {/* Meal photo thumbnail */}
                     {mealNote?.photo_url && (
                       <a href={mealNote.photo_url} target="_blank" rel="noopener noreferrer">
-                        <img src={mealNote.photo_url} alt="Meal" className="h-9 w-12 object-cover rounded-lg border border-gray-100 hover:opacity-80 transition-opacity" />
+                        <Image src={mealNote.photo_url} alt="Meal" width={48} height={36} sizes="48px" className="h-9 w-12 object-cover rounded-lg border border-gray-100 hover:opacity-80 transition-opacity" />
                       </a>
                     )}
                     {!noteOnly && (!isAdding ? (
@@ -854,7 +891,7 @@ export default function DailyLog({
                       </label>
                       {mealNote?.photo_url && (
                         <a href={mealNote.photo_url} target="_blank" rel="noopener noreferrer">
-                          <img src={mealNote.photo_url} alt="Meal photo" className="h-10 w-14 object-cover rounded-lg border border-gray-200 hover:opacity-80 transition-opacity" />
+                          <Image src={mealNote.photo_url} alt="Meal photo" width={56} height={40} sizes="56px" className="h-10 w-14 object-cover rounded-lg border border-gray-200 hover:opacity-80 transition-opacity" />
                         </a>
                       )}
                     </div>
@@ -1007,7 +1044,7 @@ export default function DailyLog({
                                 {/* Meal photo thumbnail */}
                                 {log.meal_photo_url && (
                                   <a href={log.meal_photo_url} target="_blank" rel="noopener noreferrer" className="flex-shrink-0">
-                                    <img src={log.meal_photo_url} alt="Meal" className="h-9 w-12 object-cover rounded-lg border border-gray-100 hover:opacity-80 transition-opacity" />
+                                    <Image src={log.meal_photo_url} alt="Meal" width={48} height={36} sizes="48px" className="h-9 w-12 object-cover rounded-lg border border-gray-100 hover:opacity-80 transition-opacity" />
                                   </a>
                                 )}
                                 <div className="flex items-center gap-2 text-xs flex-shrink-0">
@@ -1105,7 +1142,7 @@ export default function DailyLog({
                                     </label>
                                     {log.meal_photo_url && (
                                       <a href={log.meal_photo_url} target="_blank" rel="noopener noreferrer">
-                                        <img src={log.meal_photo_url} alt="Meal photo" className="h-10 w-14 object-cover rounded-lg border border-gray-200 hover:opacity-80 transition-opacity" />
+                                        <Image src={log.meal_photo_url} alt="Meal photo" width={56} height={40} sizes="56px" className="h-10 w-14 object-cover rounded-lg border border-gray-200 hover:opacity-80 transition-opacity" />
                                       </a>
                                     )}
                                   </div>

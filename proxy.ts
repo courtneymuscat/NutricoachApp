@@ -34,7 +34,32 @@ export async function proxy(req: NextRequest) {
   // Next 16's runtime doesn't always set x-invoke-path on its own.
   requestHeaders.set('x-pathname', req.nextUrl.pathname)
 
-  let res = NextResponse.next({ request: { headers: requestHeaders } })
+  const res = NextResponse.next({ request: { headers: requestHeaders } })
+
+  const path = req.nextUrl.pathname
+  const isProtected =
+    path.startsWith('/dashboard') ||
+    path.startsWith('/onboarding') ||
+    path.startsWith('/coach') ||
+    path.startsWith('/messages') ||
+    path.startsWith('/org') ||
+    path.startsWith('/print')
+  const isAuthPage = path === '/login' || path === '/signup'
+
+  // Fast path: a request without any Supabase auth cookie can't be signed in,
+  // so we skip the Supabase round-trip entirely. Saves ~50–150 ms on every
+  // bottom-nav SPA navigation for logged-out users and on public marketing
+  // pages. Logged-in users only pay the cost where it's actually used.
+  const hasSupabaseCookie = req.cookies.getAll().some((c) => c.name.startsWith('sb-'))
+  const needsSession = (isProtected || isAuthPage) && hasSupabaseCookie
+
+  if (isProtected && !hasSupabaseCookie) {
+    return NextResponse.redirect(new URL('/login', req.url))
+  }
+
+  if (!needsSession) {
+    return res
+  }
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -51,23 +76,13 @@ export async function proxy(req: NextRequest) {
           })
         },
       },
-    }
+    },
   )
 
-  // Refresh session if expired — required for Server Components
+  // Refresh session if expired — required for Server Components.
   const {
     data: { session },
   } = await supabase.auth.getSession()
-
-  const path = req.nextUrl.pathname
-  const isProtected =
-    path.startsWith('/dashboard') ||
-    path.startsWith('/onboarding') ||
-    path.startsWith('/coach') ||
-    path.startsWith('/messages') ||
-    path.startsWith('/org') ||
-    path.startsWith('/print')
-  const isAuthPage = path === '/login' || path === '/signup'
 
   if (isProtected && !session) {
     return NextResponse.redirect(new URL('/login', req.url))

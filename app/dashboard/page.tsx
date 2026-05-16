@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { after } from 'next/server'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
@@ -48,11 +49,30 @@ export default async function DashboardPage() {
 
   const admin = createAdminClient()
 
+  // Today in local-ish format for the food log default selection. The client
+  // component re-fetches if the user picks a different date, but seeding it
+  // here means today's meals paint immediately without a post-hydration spinner.
+  const todayLocal = (() => {
+    // eslint-disable-next-line react-hooks/purity -- server component, runs once per request
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  })()
+
   // ── Top-level parallel batch ────────────────────────────────────────────────
-  // Combines the profile, coach relationship, pending org invite, and feature
-  // overrides into a single round-trip group. Previously these ran sequentially
-  // (and profile was even fetched twice — once here, once inside getSubscription).
-  const [profileRes, coachRelRes, pendingInviteRes, featureOverrides] = await Promise.all([
+  // Combines the profile, coach relationship, pending org invite, feature
+  // overrides, AND the top-of-page panel data (weight history, today's food
+  // logs and meal notes) into one round-trip group. Previously the panels
+  // refetched everything from the browser after hydration — visible spinner
+  // cascade for ~1–2 s on mobile.
+  const [
+    profileRes,
+    coachRelRes,
+    pendingInviteRes,
+    featureOverrides,
+    weightLogsRes,
+    foodLogsRes,
+    mealNotesRes,
+  ] = await Promise.all([
     supabase
       .from('profiles')
       .select(
@@ -81,11 +101,31 @@ export default async function DashboardPage() {
           .maybeSingle()
       : Promise.resolve({ data: null }),
     getFeatureOverrides().catch(() => ({} as Record<string, Record<string, boolean>>)),
+    supabase
+      .from('weight_logs')
+      .select('id, weight_lbs, weight_unit, logged_at')
+      .eq('user_id', user.id)
+      .order('logged_at', { ascending: false })
+      .limit(60),
+    supabase
+      .from('food_logs')
+      .select('id, food_name, calories, protein, carbs, fat, notes, meal_notes, meal_photo_url, meal_type, serving_description')
+      .eq('user_id', user.id)
+      .eq('log_date', todayLocal)
+      .order('created_at', { ascending: true }),
+    supabase
+      .from('meal_notes')
+      .select('meal_type, note, photo_url')
+      .eq('user_id', user.id)
+      .eq('log_date', todayLocal),
   ])
 
   const profile = profileRes.data
   const coachRel = coachRelRes.data
   const pendingInvite = pendingInviteRes.data
+  const initialWeightLogs = weightLogsRes.data ?? []
+  const initialFoodLogs = foodLogsRes.data ?? []
+  const initialMealNotes = mealNotesRes.data ?? []
 
   // Pending org invite — redirect if not already a member. Kept synchronous
   // because a redirect must complete before render; the membership check is
@@ -300,7 +340,7 @@ export default async function DashboardPage() {
       <nav className="bg-white px-6 py-3.5 flex justify-between items-center border-b border-gray-100 sticky top-0 z-20">
         {effectiveLogo ? (
           <div className="flex items-center gap-2.5">
-            <img src={effectiveLogo} alt={effectiveName} className="h-9 w-9 object-cover rounded-full border border-gray-100 flex-shrink-0" />
+            <Image src={effectiveLogo} alt={effectiveName} width={36} height={36} className="h-9 w-9 object-cover rounded-full border border-gray-100 flex-shrink-0" />
             {coachBrandName && (
               <span className="text-[15px] font-bold tracking-tight text-gray-900">{coachBrandName}</span>
             )}
@@ -517,9 +557,9 @@ export default async function DashboardPage() {
 
         {/* Weight — log + chart */}
         <section id="tour-weight" className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-stretch">
-          <WeightLog />
+          <WeightLog initialHistory={initialWeightLogs.slice(0, 10)} />
           {canWeightChart
-            ? <WeightChart />
+            ? <WeightChart initialLogs={initialWeightLogs} />
             : <UpgradePrompt plan="Optimiser" feature="Weight trend chart" />
           }
         </section>
@@ -548,6 +588,9 @@ export default async function DashboardPage() {
           targetProtein={(!isCoached || showDailyTargets) ? (profile?.target_protein ?? null) : null}
           targetCarbs={(!isCoached || showDailyTargets) ? (profile?.target_carbs ?? null) : null}
           targetFat={(!isCoached || showDailyTargets) ? (profile?.target_fat ?? null) : null}
+          initialDate={todayLocal}
+          initialFoodLogs={initialFoodLogs}
+          initialMealNotes={initialMealNotes}
         />
         </div>
 
