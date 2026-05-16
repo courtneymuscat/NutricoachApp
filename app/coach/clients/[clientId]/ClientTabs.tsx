@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, lazy, Suspense } from 'react'
+import { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { noteBodyToHtml } from '@/lib/noteUtils'
 const CheckInFeedback = lazy(() => import('./CheckInFeedback'))
@@ -92,6 +92,20 @@ type AutoflowCheckIn = {
   coach_feedback?: string | null
 }
 
+type CustomMetric = {
+  id: string
+  name: string
+  unit: string
+  sort_order: number
+}
+
+type CustomMetricLog = {
+  id: string
+  metric_id: string
+  value: number
+  logged_at: string
+}
+
 type ClientData = {
   checkIns: CheckIn[]
   formCheckIns: FormCheckIn[]
@@ -100,6 +114,8 @@ type ClientData = {
   weightLogs: WeightLog[]
   foodLogs: FoodLog[]
   mealNotes: MealNote[]
+  customMetrics?: CustomMetric[]
+  customMetricLogs?: CustomMetricLog[]
 }
 
 import TDEESection from './TDEESection'
@@ -1075,6 +1091,166 @@ const WC_IH = WC_H - WC_PAD.top - WC_PAD.bottom
 
 function fmtShortDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+// ── Custom metrics (coach read-only view) ────────────────────────────────────
+
+const MT_CHART_W = 600
+const MT_CHART_H = 160
+const MT_PAD = { top: 12, right: 12, bottom: 28, left: 40 }
+const MT_INNER_W = MT_CHART_W - MT_PAD.left - MT_PAD.right
+const MT_INNER_H = MT_CHART_H - MT_PAD.top - MT_PAD.bottom
+
+function MetricMiniChart({ logs }: { logs: CustomMetricLog[] }) {
+  const ordered = [...logs].slice().reverse()
+  if (ordered.length < 2) return null
+  const values = ordered.map(l => l.value)
+  const minVal = Math.min(...values)
+  const maxVal = Math.max(...values)
+  const spread = maxVal - minVal || Math.max(1, Math.abs(maxVal) * 0.1)
+  const yMin = minVal - spread * 0.15
+  const yMax = maxVal + spread * 0.15
+
+  const toX = (i: number) => MT_PAD.left + (i / (ordered.length - 1)) * MT_INNER_W
+  const toY = (v: number) => MT_PAD.top + MT_INNER_H - ((v - yMin) / (yMax - yMin)) * MT_INNER_H
+
+  const pathD = ordered
+    .map((p, i) => `${i === 0 ? 'M' : 'L'} ${toX(i).toFixed(1)} ${toY(p.value).toFixed(1)}`)
+    .join(' ')
+  const areaD = pathD +
+    ` L ${toX(ordered.length - 1).toFixed(1)} ${(MT_PAD.top + MT_INNER_H).toFixed(1)}` +
+    ` L ${MT_PAD.left.toFixed(1)} ${(MT_PAD.top + MT_INNER_H).toFixed(1)} Z`
+
+  const yTicks = [0, 0.5, 1].map((t) => yMin + t * (yMax - yMin))
+  const labelCount = Math.min(4, ordered.length)
+  const labelStep = Math.floor((ordered.length - 1) / Math.max(1, labelCount - 1)) || 1
+  const labelIndices = Array.from({ length: labelCount }, (_, k) =>
+    Math.min(k * labelStep, ordered.length - 1)
+  )
+
+  return (
+    <div className="overflow-x-auto -mx-1">
+      <svg viewBox={`0 0 ${MT_CHART_W} ${MT_CHART_H}`} className="w-full" style={{ height: MT_CHART_H }}>
+        <defs>
+          <linearGradient id="metric-grad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#1D9E75" stopOpacity="0.18" />
+            <stop offset="100%" stopColor="#1D9E75" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {yTicks.map((v, i) => (
+          <g key={i}>
+            <line x1={MT_PAD.left} x2={MT_PAD.left + MT_INNER_W} y1={toY(v)} y2={toY(v)} stroke="#f3f4f6" strokeWidth={1} />
+            <text x={MT_PAD.left - 6} y={toY(v)} textAnchor="end" dominantBaseline="middle" fontSize={10} fill="#9ca3af">
+              {v.toFixed(1)}
+            </text>
+          </g>
+        ))}
+        <path d={areaD} fill="url(#metric-grad)" />
+        <path d={pathD} fill="none" stroke="#1D9E75" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+        {ordered.length <= 20 && ordered.map((p, i) => (
+          <circle key={i} cx={toX(i)} cy={toY(p.value)} r={3} fill="white" stroke="#1D9E75" strokeWidth={2} />
+        ))}
+        {labelIndices.map((idx) => (
+          <text key={idx} x={toX(idx)} y={MT_PAD.top + MT_INNER_H + 16} textAnchor="middle" fontSize={10} fill="#9ca3af">
+            {new Date(ordered[idx].logged_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+          </text>
+        ))}
+      </svg>
+    </div>
+  )
+}
+
+function CoachMetricCard({ metric, logs }: { metric: CustomMetric; logs: CustomMetricLog[] }) {
+  const [expanded, setExpanded] = useState(false)
+  const latest = logs[0] ?? null
+  const previous = logs[1] ?? null
+  const delta = latest && previous ? latest.value - previous.value : null
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200">
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between gap-3 p-5 text-left hover:bg-gray-50 transition-colors rounded-2xl"
+      >
+        <div>
+          <h3 className="text-base font-semibold text-gray-900">{metric.name}</h3>
+          {latest ? (
+            <p className="text-xs text-gray-400 mt-0.5">
+              Latest: <span className="text-gray-700 font-medium">{latest.value} {metric.unit}</span>
+              <span className="text-gray-300"> · {new Date(latest.logged_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+              {delta !== null && (
+                <span className={`ml-2 font-semibold ${delta < 0 ? 'text-green-600' : delta > 0 ? 'text-red-500' : 'text-gray-400'}`}>
+                  {delta >= 0 ? '+' : ''}{delta.toFixed(1)}
+                </span>
+              )}
+            </p>
+          ) : (
+            <p className="text-xs text-gray-400 mt-0.5">No entries yet · unit: {metric.unit}</p>
+          )}
+        </div>
+        <svg
+          className={`w-4 h-4 text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`}
+          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {expanded && (
+        <div className="px-5 pb-5 space-y-4 border-t border-gray-100 pt-4">
+          {logs.length >= 2 ? (
+            <MetricMiniChart logs={logs} />
+          ) : (
+            <p className="text-xs text-gray-400">Not enough entries yet to chart.</p>
+          )}
+          {logs.length > 0 && (
+            <div>
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-2">History</p>
+              <div className="space-y-1.5 max-h-72 overflow-y-auto">
+                {logs.map((l) => (
+                  <div key={l.id} className="flex items-center justify-between text-xs">
+                    <span className="text-gray-400">{new Date(l.logged_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                    <span className="font-semibold text-gray-700">{l.value} {metric.unit}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function MetricsTab({ metrics, logs }: { metrics: CustomMetric[]; logs: CustomMetricLog[] }) {
+  const logsByMetric = useMemo(() => {
+    const map: Record<string, CustomMetricLog[]> = {}
+    for (const m of metrics) map[m.id] = []
+    for (const l of logs) {
+      if (map[l.metric_id]) map[l.metric_id].push(l)
+    }
+    return map
+  }, [metrics, logs])
+
+  if (metrics.length === 0) {
+    return (
+      <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-8 text-center">
+        <p className="text-sm font-semibold text-gray-700">No custom metrics tracked</p>
+        <p className="text-xs text-gray-400 mt-1">
+          Your client can add their own metrics — body fat, measurements, RHR, etc. — from their Metrics page.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      {metrics.map((m) => (
+        <CoachMetricCard key={m.id} metric={m} logs={logsByMetric[m.id] ?? []} />
+      ))}
+    </div>
+  )
 }
 
 function WeightFullChart({ logs }: { logs: WeightLog[] }) {
@@ -7676,7 +7852,7 @@ function CycleTab({ clientId }: { clientId: string }) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-type TabId = 'overview' | 'checkins' | 'nutrition' | 'training' | 'program' | 'calendar' | 'mealplan' | 'habits' | 'notes' | 'files' | 'flows' | 'preview' | 'resources' | 'cheatsheet' | 'supplements' | 'protocol' | 'cycle' | 'plan'
+type TabId = 'overview' | 'checkins' | 'nutrition' | 'training' | 'program' | 'calendar' | 'mealplan' | 'habits' | 'notes' | 'files' | 'flows' | 'preview' | 'resources' | 'cheatsheet' | 'supplements' | 'protocol' | 'cycle' | 'plan' | 'metrics'
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'overview', label: 'Overview' },
@@ -7693,6 +7869,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'supplements', label: 'Supplements' },
   { id: 'protocol', label: 'Protocol' },
   { id: 'habits', label: 'Habits' },
+  { id: 'metrics', label: 'Metrics' },
   { id: 'checkins', label: 'Check-ins' },
   { id: 'notes', label: 'Notes' },
   { id: 'files', label: 'Files' },
@@ -7711,7 +7888,7 @@ export default function ClientTabs({ clientId, initialTab, coachTier = 'coach_pr
     if (t.id === 'mealplan' || t.id === 'cheatsheet') return hasNutrition
     return true
   })
-  const validTabs: TabId[] = ['overview', 'checkins', 'nutrition', 'training', 'program', 'calendar', 'mealplan', 'habits', 'notes', 'files', 'flows', 'preview', 'resources', 'cheatsheet', 'supplements', 'protocol', 'cycle', 'plan']
+  const validTabs: TabId[] = ['overview', 'checkins', 'nutrition', 'training', 'program', 'calendar', 'mealplan', 'habits', 'notes', 'files', 'flows', 'preview', 'resources', 'cheatsheet', 'supplements', 'protocol', 'cycle', 'plan', 'metrics']
   const [tab, setTab] = useState<TabId>(validTabs.includes(initialTab as TabId) ? initialTab as TabId : 'overview')
   const [autoflowRefreshKey, setAutoflowRefreshKey] = useState(0)
   const [data, setData] = useState<ClientData | null>(null)
@@ -7910,6 +8087,11 @@ export default function ClientTabs({ clientId, initialTab, coachTier = 'coach_pr
 
       {/* Habits */}
       {tab === 'habits' && <HabitsTab clientId={clientId} />}
+
+      {/* Custom metrics */}
+      {tab === 'metrics' && data && (
+        <MetricsTab metrics={data.customMetrics ?? []} logs={data.customMetricLogs ?? []} />
+      )}
 
       {/* Notes */}
       {tab === 'notes' && <NotesTab clientId={clientId} />}

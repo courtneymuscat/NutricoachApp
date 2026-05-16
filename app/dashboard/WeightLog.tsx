@@ -254,6 +254,13 @@ export default function WeightLog() {
         >
           {pending ? 'Saving...' : 'Log Weight'}
         </button>
+
+        <a
+          href="/metrics"
+          className="text-center text-xs font-medium text-gray-500 hover:text-gray-900 -mt-1 transition-colors"
+        >
+          Log other metrics →
+        </a>
       </form>
 
       {history.length > 0 && (

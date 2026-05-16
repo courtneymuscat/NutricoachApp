@@ -152,7 +152,7 @@ export async function GET(
     })
   }
 
-  const [checkIns, workoutsRaw, weightLogs, foodLogs, mealNotesRaw] = await Promise.all([
+  const [checkIns, workoutsRaw, weightLogs, foodLogs, mealNotesRaw, customMetricsRes, customMetricLogsRes] = await Promise.all([
     admin
       .from('check_ins')
       .select('id, created_at, sleep_hours, sleep_quality, energy_level, rhr, hrv, notes, coach_feedback, reviewed_by_coach')
@@ -188,6 +188,20 @@ export async function GET(
       .eq('user_id', clientId)
       .order('log_date', { ascending: false })
       .limit(50),
+
+    admin
+      .from('custom_metrics')
+      .select('id, name, unit, sort_order')
+      .eq('user_id', clientId)
+      .eq('archived', false)
+      .order('sort_order', { ascending: true }),
+
+    admin
+      .from('custom_metric_logs')
+      .select('id, metric_id, value, logged_at')
+      .eq('user_id', clientId)
+      .order('logged_at', { ascending: false })
+      .limit(500),
   ])
 
   // Fetch exercise details for workouts
@@ -230,6 +244,8 @@ export async function GET(
     weightLogs: weightLogs.data ?? [],
     foodLogs: foodLogs.data ?? [],
     mealNotes: mealNotesRaw.data ?? [],
+    customMetrics: customMetricsRes.data ?? [],
+    customMetricLogs: customMetricLogsRes.data ?? [],
   })
 }
 
