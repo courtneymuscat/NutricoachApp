@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Geist_Mono, Geist, Syne, DM_Sans } from "next/font/google";
+import { Inter, Geist } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import InstallPrompt from "@/app/components/InstallPrompt";
@@ -44,31 +44,11 @@ async function loadNavContext(): Promise<{ sex: string | null; tier: string | nu
   }
 }
 
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
+const geist = Geist({ subsets: ['latin'], variable: '--font-sans' });
 
 const inter = Inter({
   variable: "--font-inter",
   subsets: ["latin"],
-  display: "swap",
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-  display: "swap",
-});
-
-const syne = Syne({
-  variable: "--font-syne",
-  subsets: ["latin"],
-  weight: ["700", "800"],
-  display: "swap",
-});
-
-const dmSans = DM_Sans({
-  variable: "--font-dm-sans",
-  subsets: ["latin"],
-  weight: ["300", "400", "500"],
   display: "swap",
 });
 
@@ -125,7 +105,7 @@ export default async function RootLayout({
   return (
     <html
       lang="en"
-      className={cn("h-full", "antialiased", inter.variable, geistMono.variable, "font-sans", geist.variable, syne.variable, dmSans.variable)}
+      className={cn("h-full", "antialiased", inter.variable, "font-sans", geist.variable)}
     >
       <head>
         <style dangerouslySetInnerHTML={{ __html: cssVars }} />

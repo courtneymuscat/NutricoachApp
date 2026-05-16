@@ -1,8 +1,16 @@
 import { redirect } from 'next/navigation'
+import { after } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { getSubscription } from '@/lib/subscription'
-import { FEATURES } from '@/lib/features'
+import {
+  FEATURES,
+  TIER_FEATURES,
+  COACH_TIER_FEATURES,
+  type Feature,
+  type SubscriptionTier,
+  type UserType,
+} from '@/lib/features'
+import { getFeatureOverrides } from '@/lib/feature-matrix'
 import { logout } from '@/app/actions/auth'
 import { headers } from 'next/headers'
 import { getBrandingFromHeaders, DEFAULT_BRANDING } from '@/lib/branding'
@@ -38,102 +46,120 @@ export default async function DashboardPage() {
   const user = session?.user
   if (!user) redirect('/login')
 
-  // If this user has a pending org invite addressed to their email and isn't
-  // yet a member of that org, send them to /org/invite/[token] so the
-  // auto-accept can complete. Catches the case where an invited coach
-  // confirmed their email but didn't end up landing on the invite page
-  // (e.g. they manually navigated, link mangled, etc.) and ended up on the
-  // free Tracker dashboard instead of /coach/dashboard.
-  if (user.email) {
-    const adminClient = createAdminClient()
-    const { data: pendingInvite } = await adminClient
-      .from('org_invites')
-      .select('token, org_id, role')
-      .eq('email', user.email.toLowerCase())
-      .eq('is_active', true)
-      .gt('expires_at', new Date().toISOString())
-      .is('accepted_at', null)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
+  const admin = createAdminClient()
 
-    if (pendingInvite) {
-      const { data: existingMember } = await adminClient
-        .from('org_members')
-        .select('id')
-        .eq('org_id', pendingInvite.org_id)
-        .eq('user_id', user.id)
-        .eq('is_active', true)
-        .maybeSingle()
-      if (!existingMember) {
-        redirect(`/org/invite/${pendingInvite.token}`)
-      }
-    }
-  }
-
-  // Reconcile against Stripe when the profile looks suspicious — paid Stripe
-  // record but free-tier DB row, or no stored customer id at all. This protects
-  // against webhook failures that strand a paid coach on individual_free.
-  {
-    const { data: rawProfile } = await supabase
+  // ── Top-level parallel batch ────────────────────────────────────────────────
+  // Combines the profile, coach relationship, pending org invite, and feature
+  // overrides into a single round-trip group. Previously these ran sequentially
+  // (and profile was even fetched twice — once here, once inside getSubscription).
+  const [profileRes, coachRelRes, pendingInviteRes, featureOverrides] = await Promise.all([
+    supabase
       .from('profiles')
-      .select('subscription_tier, user_type, stripe_customer_id')
+      .select(
+        'onboarding_completed, goal, target_calories, target_protein, target_carbs, target_fat, tdee, sex, full_name, subscription_tier, user_type, phone, date_of_birth, payment_failed_at, stripe_customer_id, stripe_last_synced_at',
+      )
       .eq('id', user.id)
-      .single()
-    const looksFree =
-      rawProfile?.subscription_tier === 'individual_free' ||
-      rawProfile?.subscription_tier == null
-    if (rawProfile?.stripe_customer_id || looksFree) {
-      try {
-        const result = await syncProfileFromStripe(user.id)
-        if (result.changed) {
-          // Re-route now that user_type may have flipped to coach
-          const tier = result.tier ?? ''
-          if (tier.startsWith('coach_') || tier.startsWith('wl_')) {
-            redirect('/coach/dashboard')
-          }
-        }
-      } catch (err) {
-        console.error('dashboard: syncProfileFromStripe failed', err)
-      }
+      .single(),
+    // form_id included here so we don't need a second query for it in the
+    // coached branch below.
+    admin
+      .from('coach_clients')
+      .select('coach_id, show_daily_targets, food_log_access, show_meal_builder, show_saved_meals, targets_source, targets_meal_plan_id, form_id')
+      .eq('client_id', user.id)
+      .eq('status', 'active')
+      .maybeSingle(),
+    user.email
+      ? admin
+          .from('org_invites')
+          .select('token, org_id, role')
+          .eq('email', user.email.toLowerCase())
+          .eq('is_active', true)
+          .gt('expires_at', new Date().toISOString())
+          .is('accepted_at', null)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    getFeatureOverrides().catch(() => ({} as Record<string, Record<string, boolean>>)),
+  ])
+
+  const profile = profileRes.data
+  const coachRel = coachRelRes.data
+  const pendingInvite = pendingInviteRes.data
+
+  // Pending org invite — redirect if not already a member. Kept synchronous
+  // because a redirect must complete before render; the membership check is
+  // only hit on the rare hot-path where an invite is actually present.
+  if (pendingInvite) {
+    const { data: existingMember } = await admin
+      .from('org_members')
+      .select('id')
+      .eq('org_id', pendingInvite.org_id)
+      .eq('user_id', user.id)
+      .eq('is_active', true)
+      .maybeSingle()
+    if (!existingMember) {
+      redirect(`/org/invite/${pendingInvite.token}`)
     }
   }
 
-  // Check onboarding status + fetch targets
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('onboarding_completed, goal, target_calories, target_protein, target_carbs, target_fat, tdee, sex, full_name, subscription_tier, user_type, phone, date_of_birth, payment_failed_at')
-    .eq('id', user.id)
-    .single()
+  // Reconcile against Stripe when the profile looks suspicious. Throttled to
+  // once per hour and run via `after()` so the dashboard never blocks on
+  // Stripe round-trips — the webhook is the primary sync mechanism.
+  {
+    const looksFree =
+      profile?.subscription_tier === 'individual_free' || profile?.subscription_tier == null
+    const lastSynced = (profile as Record<string, unknown> | null)?.stripe_last_synced_at as string | null
+    // Server component renders once per request — Date.now() is the correct
+    // way to read "now". The React purity lint is intended for client renders.
+    // eslint-disable-next-line react-hooks/purity
+    const nowMs = Date.now()
+    const recentlySynced = lastSynced
+      ? nowMs - new Date(lastSynced).getTime() < 60 * 60 * 1000
+      : false
+    if (!recentlySynced && (profile?.stripe_customer_id || looksFree)) {
+      after(async () => {
+        try {
+          await syncProfileFromStripe(user.id)
+        } catch (err) {
+          console.error('dashboard: syncProfileFromStripe failed', err)
+        }
+      })
+    }
+  }
 
   // Coaches belong on /coach/dashboard, not the tracker page.
   if (profile?.user_type === 'coach' || profile?.user_type === 'business') {
     redirect('/coach/dashboard')
   }
-  // Everyone reaches the dashboard — profile setup for individuals is prompted inline.
 
-  // Subscription feature access
-  const sub = await getSubscription()
-  const canWeightChart      = sub.canAccess(FEATURES.WEIGHT_TRACKING)
-  const canMealBuilder      = sub.canAccess(FEATURES.MEAL_BUILDER)
-  const canFullCheckin      = sub.canAccess(FEATURES.DAILY_CHECKIN)
-  const canMealScanner        = sub.canAccess(FEATURES.MEAL_SCANNER)
-  const canAdvancedAnalytics  = sub.canAccess(FEATURES.ADVANCED_ANALYTICS)
+  // ── Inline subscription resolution ──────────────────────────────────────────
+  // Replaces getSubscription() which would do another profile + coach_clients
+  // read — we already have everything it needs from the parallel batch above.
+  const storedTier = (profile?.subscription_tier as SubscriptionTier | null) ?? 'individual_free'
+  const userType = (profile?.user_type as UserType | null) ?? 'individual'
+  const tier: SubscriptionTier = coachRel ? 'coached' : storedTier
+  const isCoach = userType === 'coach'
+  const isCoached = tier === 'coached' || !!coachRel
 
-  const isCoach = sub.userType === 'coach'
-
-  // Use admin client to check for an active coach relationship — bypasses RLS so this
-  // is never blocked regardless of policy, ensuring coached layout always appears correctly.
-  const adminForCoachCheck = createAdminClient()
-  const { data: activeCoachRel } = await adminForCoachCheck
-    .from('coach_clients')
-    .select('id')
-    .eq('client_id', user.id)
-    .eq('status', 'active')
-    .maybeSingle()
-
-  const isCoached = sub.tier === 'coached' || !!activeCoachRel
-  let coachEmail: string | null = null
+  const featureSet: Set<Feature> = new Set(
+    userType === 'coach'
+      ? [...(COACH_TIER_FEATURES[tier] ?? []), ...TIER_FEATURES['individual_elite']]
+      : (TIER_FEATURES[tier] ?? TIER_FEATURES['individual_free']),
+  )
+  for (const [feature, tierMap] of Object.entries(featureOverrides ?? {})) {
+    const tm = tierMap as Record<string, boolean>
+    if (tier in tm) {
+      if (tm[tier]) featureSet.add(feature as Feature)
+      else featureSet.delete(feature as Feature)
+    }
+  }
+  const canAccess = (f: Feature) => featureSet.has(f)
+  const canWeightChart = canAccess(FEATURES.WEIGHT_TRACKING)
+  const canMealBuilder = canAccess(FEATURES.MEAL_BUILDER)
+  const canFullCheckin = canAccess(FEATURES.DAILY_CHECKIN)
+  const canMealScanner = canAccess(FEATURES.MEAL_SCANNER)
+  const canAdvancedAnalytics = canAccess(FEATURES.ADVANCED_ANALYTICS)
 
   let showDailyTargets = true
   let foodLogAccess = 'full'
@@ -147,113 +173,54 @@ export default async function DashboardPage() {
   let coachBrandColour: string | null = null
   let coachLogoUrl: string | null = null
   let coachBrandName: string | null = null
+  let coachEmail: string | null = null
 
-  if (isCoached) {
-    const { data: coachRel } = await supabase
-      .from('coach_clients')
-      .select('coach_id, show_daily_targets, food_log_access, show_meal_builder, show_saved_meals, targets_source, targets_meal_plan_id')
-      .eq('client_id', user.id)
-      .eq('status', 'active')
-      .maybeSingle()
+  if (isCoached && coachRel) {
+    const rel = coachRel as Record<string, unknown>
+    showDailyTargets = (coachRel.show_daily_targets as boolean | null) ?? true
+    foodLogAccess = (coachRel.food_log_access as string) ?? 'full'
+    showMealBuilder = (rel.show_meal_builder as boolean) ?? true
+    showSavedMeals = (rel.show_saved_meals as boolean) ?? true
+    const coachFormId = (rel.form_id as string | null) ?? null
 
-    if (coachRel) {
-      const rel = coachRel as Record<string, unknown>
-      showDailyTargets = coachRel.show_daily_targets ?? true
-      foodLogAccess = (coachRel.food_log_access as string) ?? 'full'
-      showMealBuilder = rel.show_meal_builder as boolean ?? true
-      showSavedMeals = rel.show_saved_meals as boolean ?? true
-
-      // If coach has selected meal plan as target source, override profile targets with plan macros
-      if (rel.targets_source === 'meal_plan' && rel.targets_meal_plan_id) {
-        try {
-          const admin = createAdminClient()
-          const { data: plan } = await admin
+    // ── Coached-branch parallel batch ──────────────────────────────────────────
+    // Six independent reads collapsed into a single round-trip group.
+    const [
+      coachProfileRes,
+      planRes,
+      submissionRes,
+      feedbackEventsRes,
+      mealPlanCountRes,
+      habitsCountRes,
+    ] = await Promise.all([
+      admin
+        .from('profiles')
+        .select('email, brand_colour, logo_url, brand_name')
+        .eq('id', coachRel.coach_id)
+        .single(),
+      rel.targets_source === 'meal_plan' && rel.targets_meal_plan_id
+        ? admin
             .from('client_meal_plans')
             .select('content, total_calories')
             .eq('id', rel.targets_meal_plan_id as string)
             .single()
-          if (plan) {
-            type MealFood = { calories?: number; protein?: number; carbs?: number; fat?: number }
-            type MealSlot = { foods?: MealFood[] }
-            let cal = 0, pro = 0, carb = 0, fat = 0
-            for (const slot of (Array.isArray(plan.content) ? plan.content : []) as MealSlot[]) {
-              for (const food of (Array.isArray(slot?.foods) ? slot.foods : []) as MealFood[]) {
-                cal  += Number(food?.calories) || 0
-                pro  += Number(food?.protein)  || 0
-                carb += Number(food?.carbs)    || 0
-                fat  += Number(food?.fat)      || 0
-              }
-            }
-            if (cal > 0 || (plan.total_calories ?? 0) > 0) {
-              // Patch the profile object with meal plan targets (only in memory, no DB write)
-              if (profile) {
-                (profile as Record<string, unknown>).target_calories = cal > 0 ? Math.round(cal) : plan.total_calories
-                if (pro > 0) (profile as Record<string, unknown>).target_protein = Math.round(pro)
-                if (carb > 0) (profile as Record<string, unknown>).target_carbs = Math.round(carb)
-                if (fat > 0) (profile as Record<string, unknown>).target_fat = Math.round(fat)
-              }
-            }
-          }
-        } catch { /* meal plan fetch failed, fall back to profile targets */ }
-      }
-
-      const admin = createAdminClient()
-      const { data: coachProfile } = await admin
-        .from('profiles')
-        .select('email, brand_colour, logo_url, brand_name')
-        .eq('id', coachRel.coach_id)
-        .single()
-      coachEmail = coachProfile?.email ?? null
-      coachBrandColour = (coachProfile as Record<string, unknown>)?.brand_colour as string | null ?? null
-      coachLogoUrl = (coachProfile as Record<string, unknown>)?.logo_url as string | null ?? null
-      coachBrandName = (coachProfile as Record<string, unknown>)?.brand_name as string | null ?? null
-    }
-
-    // Check for a pending coach-assigned form (not yet submitted by this client)
-    try {
-      const { data: formRow } = await supabase
-        .from('coach_clients')
-        .select('form_id')
-        .eq('client_id', user.id)
-        .eq('status', 'active')
-        .maybeSingle()
-      const coachFormId = (formRow as Record<string, unknown>)?.form_id as string | null ?? null
-      if (coachFormId) {
-        const { data: submission } = await supabase
-          .from('form_submissions')
-          .select('id')
-          .eq('form_id', coachFormId)
-          .eq('client_id', user.id)
-          .not('submitted_at', 'is', null)
-          .maybeSingle()
-        if (!submission) pendingFormId = coachFormId
-      }
-    } catch { /* form_id column may not exist yet */ }
-
-    // Check for unseen coach feedback on workout results — collect ALL unseen, not just the first
-    try {
-      const { data: feedbackEvents } = await supabase
+        : Promise.resolve({ data: null as { content?: unknown; total_calories?: number | null } | null }),
+      coachFormId
+        ? supabase
+            .from('form_submissions')
+            .select('id')
+            .eq('form_id', coachFormId)
+            .eq('client_id', user.id)
+            .not('submitted_at', 'is', null)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+      supabase
         .from('calendar_events')
         .select('id, content, event_date')
         .eq('client_id', user.id)
         .eq('type', 'program_workout_result')
         .order('event_date', { ascending: false })
-        .limit(30)
-      pendingFeedbacks = (feedbackEvents ?? [])
-        .filter((e) => {
-          const c = e.content as Record<string, unknown>
-          return c.feedback_left_at && !c.feedback_seen
-        })
-        .map((e) => {
-          const c = e.content as Record<string, unknown>
-          return {
-            eventId: e.id,
-            dayName: (c.day_name as string | undefined) ?? 'your workout',
-          }
-        })
-    } catch { /* silent */ }
-
-    const [mealPlanResult, habitsResult] = await Promise.all([
+        .limit(30),
       supabase
         .from('client_meal_plans')
         .select('id', { count: 'exact', head: true })
@@ -265,8 +232,52 @@ export default async function DashboardPage() {
         .eq('client_id', user.id)
         .eq('active', true),
     ])
-    hasMealPlan = (mealPlanResult.count ?? 0) > 0
-    hasHabits = (habitsResult.count ?? 0) > 0
+
+    const coachProfile = coachProfileRes.data
+    coachEmail = coachProfile?.email ?? null
+    coachBrandColour = (coachProfile as Record<string, unknown>)?.brand_colour as string | null ?? null
+    coachLogoUrl = (coachProfile as Record<string, unknown>)?.logo_url as string | null ?? null
+    coachBrandName = (coachProfile as Record<string, unknown>)?.brand_name as string | null ?? null
+
+    // Meal-plan macro override: patch profile in memory only.
+    const plan = planRes.data
+    if (plan && profile) {
+      type MealFood = { calories?: number; protein?: number; carbs?: number; fat?: number }
+      type MealSlot = { foods?: MealFood[] }
+      let cal = 0, pro = 0, carb = 0, fat = 0
+      for (const slot of (Array.isArray(plan.content) ? plan.content : []) as MealSlot[]) {
+        for (const food of (Array.isArray(slot?.foods) ? slot.foods : []) as MealFood[]) {
+          cal  += Number(food?.calories) || 0
+          pro  += Number(food?.protein)  || 0
+          carb += Number(food?.carbs)    || 0
+          fat  += Number(food?.fat)      || 0
+        }
+      }
+      if (cal > 0 || (plan.total_calories ?? 0) > 0) {
+        (profile as Record<string, unknown>).target_calories = cal > 0 ? Math.round(cal) : plan.total_calories
+        if (pro > 0) (profile as Record<string, unknown>).target_protein = Math.round(pro)
+        if (carb > 0) (profile as Record<string, unknown>).target_carbs = Math.round(carb)
+        if (fat > 0) (profile as Record<string, unknown>).target_fat = Math.round(fat)
+      }
+    }
+
+    if (coachFormId && !submissionRes.data) pendingFormId = coachFormId
+
+    pendingFeedbacks = (feedbackEventsRes.data ?? [])
+      .filter((e) => {
+        const c = e.content as Record<string, unknown>
+        return c.feedback_left_at && !c.feedback_seen
+      })
+      .map((e) => {
+        const c = e.content as Record<string, unknown>
+        return {
+          eventId: e.id,
+          dayName: (c.day_name as string | undefined) ?? 'your workout',
+        }
+      })
+
+    hasMealPlan = (mealPlanCountRes.count ?? 0) > 0
+    hasHabits = (habitsCountRes.count ?? 0) > 0
   }
 
   // For coached clients on the main domain, apply coach's branding over defaults
@@ -340,15 +351,15 @@ export default async function DashboardPage() {
           </div>
           {/* Tier badge */}
           <a href="/pricing" className="text-xs font-semibold px-3 py-1.5 rounded-full border hover:opacity-80 transition-colors" style={{
-            backgroundColor: isCoach ? '#eff6ff' : sub.tier === 'individual_elite' ? '#f3e8ff' : sub.tier === 'individual_optimiser' || sub.tier === 'coached' ? 'rgba(29,158,117,0.08)' : '#f3f4f6',
-            color: isCoach ? '#1d4ed8' : sub.tier === 'individual_elite' ? '#7c3aed' : sub.tier === 'individual_optimiser' || sub.tier === 'coached' ? '#1D9E75' : '#6b7280',
-            borderColor: isCoach ? '#bfdbfe' : sub.tier === 'individual_elite' ? '#e9d5ff' : sub.tier === 'individual_optimiser' || sub.tier === 'coached' ? 'rgba(29,158,117,0.18)' : '#e5e7eb',
+            backgroundColor: isCoach ? '#eff6ff' : tier === 'individual_elite' ? '#f3e8ff' : tier === 'individual_optimiser' || tier === 'coached' ? 'rgba(29,158,117,0.08)' : '#f3f4f6',
+            color: isCoach ? '#1d4ed8' : tier === 'individual_elite' ? '#7c3aed' : tier === 'individual_optimiser' || tier === 'coached' ? '#1D9E75' : '#6b7280',
+            borderColor: isCoach ? '#bfdbfe' : tier === 'individual_elite' ? '#e9d5ff' : tier === 'individual_optimiser' || tier === 'coached' ? 'rgba(29,158,117,0.18)' : '#e5e7eb',
           }}>
             {isCoach
-              ? `Coach — ${sub.tier === 'coach_business' ? 'Business' : sub.tier === 'coach_pro' ? 'Pro' : 'Solo'}`
-              : sub.tier === 'individual_elite' ? 'Elite'
-              : sub.tier === 'individual_optimiser' ? 'Optimiser'
-              : sub.tier === 'coached' ? 'Coached'
+              ? `Coach — ${tier === 'coach_business' ? 'Business' : tier === 'coach_pro' ? 'Pro' : 'Solo'}`
+              : tier === 'individual_elite' ? 'Elite'
+              : tier === 'individual_optimiser' ? 'Optimiser'
+              : tier === 'coached' ? 'Coached'
               : 'Tracker — Free'}
           </a>
         </div>

@@ -74,6 +74,13 @@ export async function syncProfileFromStripe(userId: string): Promise<{
 
   if (!profile) return { changed: false, tier: null, reason: 'no profile' }
 
+  // Always stamp the synced-at, even on a no-op exit, so the dashboard's
+  // hourly skip-window doesn't keep retrying users with no Stripe customer.
+  await admin
+    .from('profiles')
+    .update({ stripe_last_synced_at: new Date().toISOString() })
+    .eq('id', userId)
+
   const stripe = getStripe()
 
   // Resolve customer id — prefer the stored one, fall back to email lookup

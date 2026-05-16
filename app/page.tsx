@@ -1,7 +1,15 @@
 import type { Metadata } from 'next'
+import { DM_Sans } from 'next/font/google'
 import LandingPage from './LandingPage'
 import { createClient } from '@/lib/supabase/server'
 import { getOrgForUser } from '@/lib/org'
+
+const dmSans = DM_Sans({
+  variable: '--font-dm-sans',
+  subsets: ['latin'],
+  weight: ['300', '400', '500'],
+  display: 'swap',
+})
 
 export const metadata: Metadata = {
   title: 'Prokol Health — Nutrition, Training & Health Data Coaching Platform',
@@ -29,5 +37,9 @@ export default async function Page() {
     ? { orgName: membership.org_name }
     : null
 
-  return <LandingPage orgManaged={orgManaged} />
+  return (
+    <div className={dmSans.variable}>
+      <LandingPage orgManaged={orgManaged} />
+    </div>
+  )
 }
