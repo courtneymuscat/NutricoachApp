@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { signup } from '@/app/actions/auth'
 import { useBranding } from '@/app/components/BrandingProvider'
 import PublicFooter from '@/app/components/PublicFooter'
@@ -83,7 +84,7 @@ function SignupForm() {
       <div className="w-full max-w-md bg-white rounded-2xl shadow-sm border p-8 space-y-6">
         <div>
           {branding.logoUrl ? (
-            <img src={branding.logoUrl} alt={branding.appName} className="h-8 object-contain" />
+            <Image src={branding.logoUrl} alt={branding.appName} width={128} height={32} className="h-8 w-auto object-contain" />
           ) : (
             <Link href="/" className="text-xl font-bold text-gray-900">{branding.appName}</Link>
           )}

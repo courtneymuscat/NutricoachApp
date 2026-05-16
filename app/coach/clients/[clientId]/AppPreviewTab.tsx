@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Image from 'next/image'
 
 type PreviewData = {
   branding: { brand_colour: string | null; logo_url: string | null; brand_name: string | null }
@@ -443,7 +444,7 @@ export default function AppPreviewTab({
           {/* App nav */}
           <div className="bg-white px-4 py-3 border-b border-gray-100 sticky top-0 z-10 flex items-center gap-2">
             {branding.logo_url ? (
-              <img src={branding.logo_url} alt={appName} className="h-7 w-7 object-cover rounded-full border border-gray-100 flex-shrink-0" />
+              <Image src={branding.logo_url} alt={appName} width={28} height={28} className="h-7 w-7 object-cover rounded-full border border-gray-100 flex-shrink-0" />
             ) : null}
             <span className="text-[13px] font-bold" style={{ color: brandColour }}>{appName}</span>
           </div>

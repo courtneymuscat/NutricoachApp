@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Image from 'next/image'
 
 const TEMPLATE_TOS_URL = '/prokol-tos-template.html'
 const STORAGE_KEY = 'payment_initiated'
@@ -62,7 +63,7 @@ export default function InviteFlow({
       {/* Brand header */}
       <div className="mb-8 flex items-center gap-2">
         {logoUrl ? (
-          <img src={logoUrl} alt={displayName} className="h-8 object-contain" />
+          <Image src={logoUrl} alt={displayName} width={128} height={32} className="h-8 w-auto object-contain" />
         ) : (
           <span className="text-xl font-bold text-gray-900">{displayName}</span>
         )}

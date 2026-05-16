@@ -3,6 +3,7 @@
 import { useActionState, Suspense, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { login } from '@/app/actions/auth'
 import { useBranding } from '@/app/components/BrandingProvider'
 import PublicFooter from '@/app/components/PublicFooter'
@@ -26,7 +27,7 @@ function LoginForm() {
         {/* Logo */}
         <div className="text-center mb-8">
           {branding.logoUrl ? (
-            <img src={branding.logoUrl} alt={branding.appName} className="h-10 mx-auto object-contain" />
+            <Image src={branding.logoUrl} alt={branding.appName} width={160} height={40} priority className="h-10 w-auto mx-auto object-contain" />
           ) : (
             <span className="text-2xl font-bold tracking-tight text-gray-900">{branding.appName}</span>
           )}

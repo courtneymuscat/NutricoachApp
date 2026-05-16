@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import Image from 'next/image'
 import TimezoneSelector from '@/app/components/TimezoneSelector'
 import BillingSection from '@/app/components/BillingSection'
 
@@ -368,7 +369,7 @@ function BrandingSection({
         <div className="space-y-2">
           <label className="block text-xs font-medium text-gray-500">Logo</label>
           {orgManaged.logo_url ? (
-            <img src={orgManaged.logo_url} alt={`${orgManaged.org_name} logo`} className="h-12 w-12 object-contain rounded-xl border bg-white" />
+            <Image src={orgManaged.logo_url} alt={`${orgManaged.org_name} logo`} width={48} height={48} className="h-12 w-12 object-contain rounded-xl border bg-white" />
           ) : (
             <div className="h-12 w-12 rounded-xl border border-dashed border-gray-200 flex items-center justify-center text-gray-300 text-xs">
               No logo
@@ -472,7 +473,7 @@ function BrandingSection({
         <label className="block text-xs font-medium text-gray-700">Logo</label>
         <div className="flex items-center gap-4">
           {logoUrl ? (
-            <img src={logoUrl} alt="Brand logo" className="h-12 w-12 object-contain rounded-xl border" />
+            <Image src={logoUrl} alt="Brand logo" width={48} height={48} className="h-12 w-12 object-contain rounded-xl border" />
           ) : (
             <div className="h-12 w-12 rounded-xl border border-dashed border-gray-300 flex items-center justify-center text-gray-300 text-xs">
               No logo

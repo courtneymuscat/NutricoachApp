@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logout } from '@/app/actions/auth'
@@ -56,7 +57,7 @@ export default async function SettingsPage() {
       <nav className="bg-white px-6 py-3.5 flex justify-between items-center border-b border-gray-100 sticky top-0 z-20">
         {navLogo ? (
           <a href="/dashboard" className="flex items-center gap-2.5">
-            <img src={navLogo} alt={navName} className="h-9 w-9 object-cover rounded-full border border-gray-100 flex-shrink-0" />
+            <Image src={navLogo} alt={navName} width={36} height={36} className="h-9 w-9 object-cover rounded-full border border-gray-100 flex-shrink-0" />
             {coachBrandName && (
               <span className="text-[15px] font-bold tracking-tight text-gray-900">{coachBrandName}</span>
             )}

@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import TosAcceptanceGate from './TosAcceptanceGate'
@@ -87,7 +88,7 @@ export default async function CoachedOnboardingPage() {
       {/* Logo / brand header */}
       <div className="mb-8 flex items-center gap-2">
         {coachLogoUrl ? (
-          <img src={coachLogoUrl} alt={displayName} className="h-8 object-contain" />
+          <Image src={coachLogoUrl} alt={displayName} width={128} height={32} className="h-8 w-auto object-contain" />
         ) : (
           <span className="text-xl font-bold text-gray-900">{displayName}</span>
         )}
