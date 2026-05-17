@@ -48,16 +48,20 @@ export async function proxy(req: NextRequest) {
 
   // Fast path: a request without any Supabase auth cookie can't be signed in,
   // so we skip the Supabase round-trip entirely. Saves ~50–150 ms on every
-  // bottom-nav SPA navigation for logged-out users and on public marketing
-  // pages. Logged-in users only pay the cost where it's actually used.
+  // request from anonymous users (marketing pages, public asset routes).
+  //
+  // Logged-in users still hit Supabase on every matched request because
+  // middleware is where access tokens get rotated when they near expiry.
+  // Skipping the refresh on non-protected routes would silently log users
+  // out after ~1h of browsing pages like /cycle, /workouts, /forms, etc.,
+  // which are NOT in `isProtected` but are still logged-in-only routes.
   const hasSupabaseCookie = req.cookies.getAll().some((c) => c.name.startsWith('sb-'))
-  const needsSession = (isProtected || isAuthPage) && hasSupabaseCookie
 
   if (isProtected && !hasSupabaseCookie) {
     return NextResponse.redirect(new URL('/login', req.url))
   }
 
-  if (!needsSession) {
+  if (!hasSupabaseCookie) {
     return res
   }
 
