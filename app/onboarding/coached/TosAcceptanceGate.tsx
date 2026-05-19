@@ -65,7 +65,16 @@ export default function TosAcceptanceGate({
       {paymentLink ? (
         <div className={`bg-white rounded-2xl border border-gray-200 p-5 space-y-3 transition-opacity ${accepted ? '' : 'opacity-60'}`}>
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Next step</p>
-          <p className="text-sm font-semibold text-gray-900">Complete payment</p>
+          <p className="text-sm font-semibold text-gray-900">Complete payment to continue</p>
+
+          {/* Always-visible instruction so the new-tab payment flow is obvious */}
+          <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2.5 text-xs text-blue-900 leading-relaxed">
+            <p className="font-semibold mb-1">After paying, come back to this page to finish signing up.</p>
+            <p className="text-blue-800">
+              We&apos;ll open a secure checkout in a new tab. Once your payment is complete, return to this tab — we&apos;ll continue your signup automatically.
+            </p>
+          </div>
+
           {!accepted && (
             <p className="text-xs text-amber-600 bg-amber-50 rounded-xl px-3 py-2">
               Please read and accept the Terms of Service above before proceeding to payment.
