@@ -326,8 +326,10 @@ export default function CoachSidebar({
         </div>
       </div>
 
-      {/* Mobile top spacer */}
-      <div className="md:hidden h-14" />
+      {/* Mobile top spacer — must match the fixed bar's actual rendered
+          height (content + safe-area-inset-top) or page content slides up
+          behind the bar on iPhones with a dynamic island/notch. */}
+      <div className="md:hidden" style={{ height: 'calc(56px + env(safe-area-inset-top, 0px))' }} />
 
       {/* Mobile "More" drawer — full-screen overlay */}
       {moreOpen && (
