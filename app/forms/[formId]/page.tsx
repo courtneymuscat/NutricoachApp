@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, use } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import SignaturePad from '../SignaturePad'
 
@@ -27,6 +27,13 @@ type FormData = {
 export default function FormFillPage({ params }: { params: Promise<{ formId: string }> }) {
   const { formId } = use(params)
   const router = useRouter()
+  const searchParams = useSearchParams()
+  // When the form is opened from an autoflow step, the link carries a
+  // `?return=/autoflows/.../<step>` query param. We honour it on success so
+  // clients are sent straight back to the step to mark it complete, instead
+  // of dropping them on the dashboard where they'd never finish the step.
+  const rawReturnTo = searchParams.get('return')
+  const returnTo = rawReturnTo && rawReturnTo.startsWith('/') ? rawReturnTo : null
 
   const [form, setForm] = useState<FormData | null>(null)
   const [answers, setAnswers] = useState<Record<string, string>>({})
@@ -169,9 +176,24 @@ export default function FormFillPage({ params }: { params: Promise<{ formId: str
           </div>
           <h2 className="text-xl font-bold text-gray-900">{isEditing ? 'Response updated!' : 'Submitted!'}</h2>
           <p className="text-gray-500 text-sm">Your response has been sent to your coach.</p>
-          <a href="/dashboard" className="inline-block mt-2 text-sm font-medium text-blue-600 hover:underline">
-            Back to dashboard
-          </a>
+          {returnTo ? (
+            <div className="space-y-2">
+              <p className="text-xs text-gray-500">One more step — go back and finish the task.</p>
+              <a
+                href={returnTo}
+                className="inline-block w-full bg-blue-600 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors"
+              >
+                Return to your step →
+              </a>
+              <a href="/dashboard" className="block text-xs text-gray-400 hover:text-gray-600">
+                Back to dashboard
+              </a>
+            </div>
+          ) : (
+            <a href="/dashboard" className="inline-block mt-2 text-sm font-medium text-blue-600 hover:underline">
+              Back to dashboard
+            </a>
+          )}
         </div>
       </div>
     )

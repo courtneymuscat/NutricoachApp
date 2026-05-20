@@ -464,9 +464,14 @@ export default function AutoflowStepPage({ params }: { params: Promise<{ flowId:
             <div className="flex-1 min-w-0">
               <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-0.5">Form to complete</p>
               <p className="text-sm font-semibold text-amber-900">{data.linked_form.title}</p>
-              <a href={`/forms/${data.linked_form.id}`}
-                className="inline-block mt-2 text-xs font-semibold text-amber-800 underline hover:text-amber-900">
-                Fill out form →
+              <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+                Open the form, fill it in, and tap <strong>Submit</strong>. You&apos;ll then return here to finish this step.
+              </p>
+              <a
+                href={`/forms/${data.linked_form.id}?return=${encodeURIComponent(`/autoflows/${flowId}/${step}`)}`}
+                className="inline-block mt-2 text-xs font-semibold text-amber-800 underline hover:text-amber-900"
+              >
+                Open form →
               </a>
             </div>
           </div>
@@ -496,7 +501,11 @@ export default function AutoflowStepPage({ params }: { params: Promise<{ flowId:
                   {task.link_type && task.link_url && (
                     <div className="pl-8">
                       <a
-                        href={task.link_url}
+                        href={
+                          task.link_type === 'form'
+                            ? `${task.link_url}${task.link_url.includes('?') ? '&' : '?'}return=${encodeURIComponent(`/autoflows/${flowId}/${step}`)}`
+                            : task.link_url
+                        }
                         target={task.link_type === 'form' ? '_self' : '_blank'}
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 underline"
