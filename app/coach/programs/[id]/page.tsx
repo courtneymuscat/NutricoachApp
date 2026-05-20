@@ -229,6 +229,172 @@ function cloneWeek(source: Week, newLabel: string): Week {
   }
 }
 
+// Re-key all ids in a list of items pulled from a saved workout (top-level
+// ids, set ids, alternate ids, section-exercise ids). Superset_ids are
+// re-keyed via a local map so grouped exercises stay grouped within the
+// inserted block without colliding with other groups in the target day.
+function cloneSavedItems(items: unknown[]): DayItem[] {
+  const supersetMap = new Map<string, string>()
+  return (items ?? []).map((raw): DayItem | null => {
+    const it = raw as Partial<DayItem> & Record<string, unknown>
+    if (it?.type === 'section') {
+      const s = it as Partial<ProgramSection>
+      return {
+        type: 'section',
+        id: crypto.randomUUID(),
+        title: typeof s.title === 'string' ? s.title : '',
+        notes: typeof s.notes === 'string' ? s.notes : '',
+        scoreType: (s.scoreType as ProgramSection['scoreType']) ?? 'none',
+        scoreValue: typeof s.scoreValue === 'string' ? s.scoreValue : '',
+        exercises: Array.isArray(s.exercises)
+          ? s.exercises.map((e) => ({ ...e, id: crypto.randomUUID() }))
+          : [],
+      }
+    }
+    if (it?.type === 'exercise') {
+      const e = it as Partial<ProgramExercise>
+      let nextSupersetId: string | null = e.superset_id ?? null
+      if (nextSupersetId) {
+        const mapped = supersetMap.get(nextSupersetId)
+        if (mapped) nextSupersetId = mapped
+        else {
+          const fresh = crypto.randomUUID()
+          supersetMap.set(nextSupersetId, fresh)
+          nextSupersetId = fresh
+        }
+      }
+      return {
+        type: 'exercise',
+        id: crypto.randomUUID(),
+        exercise_id: e.exercise_id ?? null,
+        name: e.name ?? '',
+        category: e.category ?? '',
+        equipment: e.equipment ?? '',
+        video_url: e.video_url ?? '',
+        metrics: (e.metrics as Metrics) ?? 'weight+reps',
+        showRest: e.showRest ?? false,
+        sets: Array.isArray(e.sets)
+          ? e.sets.map((s, i) => ({ ...s, id: crypto.randomUUID(), setNumber: s?.setNumber ?? i + 1 } as ProgramSet))
+          : [],
+        notes: e.notes ?? '',
+        alternates: Array.isArray(e.alternates)
+          ? e.alternates.map((a) => ({ ...a, id: crypto.randomUUID() }))
+          : undefined,
+        superset_id: nextSupersetId,
+      }
+    }
+    return null
+  }).filter((x): x is DayItem => x !== null)
+}
+
+type SavedWorkoutRow = {
+  id: string
+  name: string
+  description: string | null
+  content: { name?: string; items?: unknown[] }
+  is_org_template: boolean
+  org_id: string | null
+  updated_at: string
+}
+
+function SavedWorkoutPicker({ onSelect, onClose }: {
+  onSelect: (workout: { name: string; items: DayItem[] }) => void
+  onClose: () => void
+}) {
+  const [own, setOwn] = useState<SavedWorkoutRow[]>([])
+  const [orgTemplates, setOrgTemplates] = useState<SavedWorkoutRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [q, setQ] = useState('')
+
+  useEffect(() => {
+    fetch('/api/coach/saved-workouts')
+      .then((r) => r.json())
+      .then((d) => {
+        setOwn(Array.isArray(d?.own) ? d.own : [])
+        setOrgTemplates(Array.isArray(d?.org_templates) ? d.org_templates : [])
+      })
+      .finally(() => setLoading(false))
+  }, [])
+
+  const ql = q.trim().toLowerCase()
+  const matches = (w: SavedWorkoutRow) => !ql || w.name?.toLowerCase().includes(ql)
+  const ownFilt = own.filter(matches)
+  const orgFilt = orgTemplates.filter(matches)
+  const empty = !loading && ownFilt.length === 0 && orgFilt.length === 0
+
+  function pick(w: SavedWorkoutRow) {
+    const items = Array.isArray(w.content?.items) ? w.content.items : []
+    const cloned = cloneSavedItems(items)
+    onSelect({ name: w.content?.name || w.name, items: cloned })
+  }
+
+  function summary(w: SavedWorkoutRow) {
+    const items = Array.isArray(w.content?.items) ? w.content.items : []
+    const ex = items.filter((i) => (i as { type?: string })?.type === 'exercise').length
+    const sec = items.filter((i) => (i as { type?: string })?.type !== 'exercise').length
+    const parts: string[] = []
+    if (ex > 0) parts.push(`${ex} exercise${ex === 1 ? '' : 's'}`)
+    if (sec > 0) parts.push(`${sec} section${sec === 1 ? '' : 's'}`)
+    return parts.join(' · ') || 'Empty'
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+         onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-5 max-h-[80vh] flex flex-col">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="text-base font-bold text-gray-900">Use a saved workout</h2>
+            <p className="text-xs text-gray-400 mt-0.5">Append its exercises and sections to this day</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+        <input type="text" value={q} onChange={(e) => setQ(e.target.value)}
+          placeholder="Search saved workouts…"
+          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3" />
+        <div className="flex-1 overflow-y-auto -mx-1 px-1 space-y-4">
+          {loading && <p className="text-sm text-gray-400 text-center py-8">Loading…</p>}
+          {empty && (
+            <div className="text-center py-8">
+              <p className="text-sm text-gray-600 font-semibold">No saved workouts</p>
+              <p className="text-xs text-gray-400 mt-1">Build a day, then tap <span className="font-mono">📥 Save as workout</span> to reuse it.</p>
+            </div>
+          )}
+          {orgFilt.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-[10px] uppercase tracking-wider font-semibold text-blue-700 px-1">Organisation workouts</p>
+              {orgFilt.map((w) => (
+                <button key={w.id} onClick={() => pick(w)} className="w-full text-left bg-blue-50/40 border border-blue-100 rounded-xl p-3 hover:bg-blue-50 transition-colors">
+                  <p className="text-sm font-semibold text-gray-900">{w.name}</p>
+                  {w.description && <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{w.description}</p>}
+                  <p className="text-[11px] text-gray-400 mt-1">{summary(w)}</p>
+                </button>
+              ))}
+            </div>
+          )}
+          {ownFilt.length > 0 && (
+            <div className="space-y-2">
+              {orgFilt.length > 0 && <p className="text-[10px] uppercase tracking-wider font-semibold text-gray-500 px-1">Your workouts</p>}
+              {ownFilt.map((w) => (
+                <button key={w.id} onClick={() => pick(w)} className="w-full text-left bg-white border border-gray-200 rounded-xl p-3 hover:bg-gray-50 transition-colors">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-semibold text-gray-900 flex-1">{w.name}</p>
+                    {w.is_org_template && <span className="text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100 flex-shrink-0">Published</span>}
+                  </div>
+                  {w.description && <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{w.description}</p>}
+                  <p className="text-[11px] text-gray-400 mt-1">{summary(w)}</p>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Move buttons ──────────────────────────────────────────────────────────────
 
 function MoveButtons({ onUp, onDown, canUp, canDown }: { onUp: () => void; onDown: () => void; canUp: boolean; canDown: boolean }) {
@@ -705,6 +871,7 @@ function DayBlock({ day, dayIndex, isDragging, isDragOver, onChange, onDelete, o
   const [editingName, setEditingName] = useState(false)
   const [showAddMenu, setShowAddMenu] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
+  const [showSavedPicker, setShowSavedPicker] = useState(false)
 
   function updateItem(i: number, item: DayItem) {
     const items = [...day.items]; items[i] = item; onChange({ ...day, items })
@@ -729,6 +896,14 @@ function DayBlock({ day, dayIndex, isDragging, isDragOver, onChange, onDelete, o
 
   function addSection() {
     onChange({ ...day, items: [...day.items, newSectionItem()] })
+    setShowAddMenu(false)
+  }
+
+  function insertSavedWorkout(w: { name: string; items: DayItem[] }) {
+    const nameAlreadySet = day.name && day.name.trim() && !/^Day\s*\d*$/.test(day.name.trim())
+    const nextName = nameAlreadySet ? day.name : (w.name?.trim() || day.name)
+    onChange({ ...day, name: nextName, items: [...day.items, ...w.items] })
+    setShowSavedPicker(false)
     setShowAddMenu(false)
   }
 
@@ -963,21 +1138,31 @@ function DayBlock({ day, dayIndex, isDragging, isDragOver, onChange, onDelete, o
           <ExercisePicker onSelect={addExercise} onClose={() => { setShowSearch(false); setShowAddMenu(false) }} />
         )}
 
+        {showSavedPicker && (
+          <SavedWorkoutPicker onSelect={insertSavedWorkout} onClose={() => setShowSavedPicker(false)} />
+        )}
+
         {!showSearch && (
           showAddMenu ? (
-            <div className="flex gap-2">
-              <button onClick={() => setShowSearch(true)}
-                className="flex-1 flex items-center justify-center gap-2 bg-blue-600 text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-blue-700 transition-colors">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                Add Exercise
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <button onClick={() => setShowSearch(true)}
+                  className="flex-1 flex items-center justify-center gap-2 bg-blue-600 text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-blue-700 transition-colors">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                  Add Exercise
+                </button>
+                <button onClick={addSection}
+                  className="flex-1 flex items-center justify-center gap-2 border border-purple-200 text-purple-600 rounded-xl py-2.5 text-sm font-semibold hover:bg-purple-50 transition-colors">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" /></svg>
+                  Add Section
+                </button>
+                <button onClick={() => setShowAddMenu(false)}
+                  className="w-10 flex items-center justify-center text-gray-400 hover:text-gray-600 border border-gray-200 rounded-xl text-lg">✕</button>
+              </div>
+              <button onClick={() => setShowSavedPicker(true)}
+                className="w-full flex items-center justify-center gap-2 border border-amber-200 text-amber-700 rounded-xl py-2 text-sm font-semibold hover:bg-amber-50 transition-colors">
+                📥 Use saved workout
               </button>
-              <button onClick={addSection}
-                className="flex-1 flex items-center justify-center gap-2 border border-purple-200 text-purple-600 rounded-xl py-2.5 text-sm font-semibold hover:bg-purple-50 transition-colors">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" /></svg>
-                Add Section
-              </button>
-              <button onClick={() => setShowAddMenu(false)}
-                className="w-10 flex items-center justify-center text-gray-400 hover:text-gray-600 border border-gray-200 rounded-xl text-lg">✕</button>
             </div>
           ) : (
             <button onClick={() => setShowAddMenu(true)}
