@@ -116,7 +116,16 @@ export default async function CoachLayout({ children }: { children: React.ReactN
                   .from('autoflow_templates')
                   .select('id, type')
                   .in('id', tplIds)
-                const weeklyTplIds = new Set((tpls ?? []).filter((t) => t.type === 'weekly_checkin').map((t) => t.id))
+                // Include onboarding + custom autoflow types in the unread
+                // badge — the original filter only counted weekly_checkin,
+                // which hid the unread badge for new clients submitting their
+                // onboarding flow.
+                const RESPONSE_TEMPLATE_TYPES = new Set(['weekly_checkin', 'onboarding', 'custom'])
+                const weeklyTplIds = new Set(
+                  (tpls ?? [])
+                    .filter((t) => RESPONSE_TEMPLATE_TYPES.has((t as Record<string, unknown>).type as string))
+                    .map((t) => t.id),
+                )
                 const weeklyFlowIds = (weeklyFlows ?? []).filter((f) => weeklyTplIds.has(f.template_id)).map((f) => f.id)
                 if (weeklyFlowIds.length) {
                   const { count } = await admin

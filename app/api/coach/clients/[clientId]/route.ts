@@ -84,9 +84,16 @@ export async function GET(
       .select('id, type, core_questions')
       .in('id', templateIds)
 
-    // Only show check-in type flows in the check-ins tab
+    // Surface every autoflow type whose responses are meaningful to the coach
+    // (weekly_checkin, onboarding, custom). The original filter only included
+    // weekly_checkin, which silently hid all onboarding/custom flow submissions
+    // from the coach's check-ins tab — clients filled in their onboarding
+    // autoflow but the coach saw nothing.
+    const RESPONSE_TEMPLATE_TYPES = new Set(['weekly_checkin', 'onboarding', 'custom'])
     const checkinTemplateIds = new Set(
-      (templates ?? []).filter((t) => t.type === 'weekly_checkin').map((t) => t.id)
+      (templates ?? [])
+        .filter((t) => RESPONSE_TEMPLATE_TYPES.has((t as Record<string, unknown>).type as string))
+        .map((t) => t.id)
     )
     const checkinFlowIds = clientFlows.filter((f) => checkinTemplateIds.has(f.template_id)).map((f) => f.id)
 

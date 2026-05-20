@@ -107,7 +107,9 @@ export default async function CoachCheckInsPage() {
       }
     }
 
-    // Autoflow responses for weekly_checkin type flows
+    // Autoflow responses across every flow type the coach should see — was
+    // restricted to weekly_checkin, which silently hid onboarding/custom
+    // flow submissions from the coach's main check-ins feed.
     const { data: allFlows } = await admin
       .from('client_autoflows')
       .select('id, name, template_id, client_id')
@@ -120,7 +122,12 @@ export default async function CoachCheckInsPage() {
         .from('autoflow_templates')
         .select('id, type')
         .in('id', tplIds)
-      const weeklyTplIds = new Set((templates ?? []).filter((t) => t.type === 'weekly_checkin').map((t) => t.id))
+      const RESPONSE_TEMPLATE_TYPES = new Set(['weekly_checkin', 'onboarding', 'custom'])
+      const weeklyTplIds = new Set(
+        (templates ?? [])
+          .filter((t) => RESPONSE_TEMPLATE_TYPES.has((t as Record<string, unknown>).type as string))
+          .map((t) => t.id),
+      )
       const weeklyFlows = allFlows.filter((f) => weeklyTplIds.has(f.template_id))
       const weeklyFlowIds = weeklyFlows.map((f) => f.id)
       const flowMeta: Record<string, { name: string; client_id: string }> = Object.fromEntries(
