@@ -37,15 +37,20 @@ export default function InviteFlow({
     hasService ? 'terms_pay' : 'choose_account'
   )
   const [accepted, setAccepted] = useState(false)
+  const [paymentInitiated, setPaymentInitiated] = useState(false)
 
   const effectiveTosUrl = service?.tos_url ?? TEMPLATE_TOS_URL
   const isTemplate = !service?.tos_url
 
   // When returning from the Stripe payment tab, advance to account creation
   useEffect(() => {
+    if (sessionStorage.getItem(STORAGE_KEY)) {
+      setPaymentInitiated(true)
+    }
     function handleVisibilityChange() {
       if (document.visibilityState === 'visible' && sessionStorage.getItem(STORAGE_KEY)) {
         sessionStorage.removeItem(STORAGE_KEY)
+        setPaymentInitiated(false)
         setStep('choose_account')
       }
     }
@@ -55,7 +60,14 @@ export default function InviteFlow({
 
   function handlePayNow() {
     sessionStorage.setItem(STORAGE_KEY, '1')
+    setPaymentInitiated(true)
     window.open(service!.payment_link!, '_blank', 'noopener,noreferrer')
+  }
+
+  function reopenCheckout() {
+    if (service?.payment_link) {
+      window.open(service.payment_link, '_blank', 'noopener,noreferrer')
+    }
   }
 
   return (
@@ -159,20 +171,48 @@ export default function InviteFlow({
               <div className={`bg-white rounded-2xl border border-gray-200 p-5 space-y-3 transition-opacity ${accepted ? '' : 'opacity-60'}`}>
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Next step</p>
                 <p className="text-sm font-semibold text-gray-900">Complete payment to continue</p>
-                {!accepted && (
+
+                {/* Always-visible heads up so the new-tab payment flow is obvious */}
+                <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2.5 text-xs text-blue-900 leading-relaxed">
+                  <p className="font-semibold mb-1">After paying, come back to this tab to finish signing up.</p>
+                  <p className="text-blue-800">
+                    We&apos;ll open a secure checkout in a new tab. Once payment is complete, return here — we&apos;ll continue your signup automatically.
+                  </p>
+                </div>
+
+                {!accepted && !paymentInitiated && (
                   <p className="text-xs text-amber-600 bg-amber-50 rounded-xl px-3 py-2">
                     Please accept the Terms of Service above before proceeding to payment.
                   </p>
                 )}
-                <div className={accepted ? '' : 'pointer-events-none'}>
-                  <button
-                    onClick={handlePayNow}
-                    className="w-full text-center py-2.5 rounded-xl text-sm font-semibold text-white transition-opacity hover:opacity-90"
-                    style={{ backgroundColor: brandColour ?? '#1D9E75' }}
-                  >
-                    Pay now →
-                  </button>
-                </div>
+
+                {paymentInitiated ? (
+                  <div className="space-y-3">
+                    <div className="rounded-xl bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-900 space-y-1">
+                      <p className="font-semibold">Checkout opened in a new tab</p>
+                      <p className="text-xs text-green-800 leading-relaxed">
+                        Complete your payment there, then <strong>come back to this tab</strong>.
+                        We&apos;ll take you to the next step automatically as soon as you return.
+                      </p>
+                    </div>
+                    <button
+                      onClick={reopenCheckout}
+                      className="block w-full text-center py-2 rounded-xl text-xs font-semibold text-gray-600 border border-gray-200 hover:bg-gray-50 transition-colors"
+                    >
+                      Re-open checkout if you closed it
+                    </button>
+                  </div>
+                ) : (
+                  <div className={accepted ? '' : 'pointer-events-none'}>
+                    <button
+                      onClick={handlePayNow}
+                      className="w-full text-center py-2.5 rounded-xl text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                      style={{ backgroundColor: brandColour ?? '#1D9E75' }}
+                    >
+                      Pay now →
+                    </button>
+                  </div>
+                )}
               </div>
             ) : (
               <div>
