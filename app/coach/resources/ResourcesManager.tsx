@@ -30,7 +30,7 @@ type Resource = {
 const PRESET_FOLDERS = [
   { name: 'Nutrition', color: 'green', icon: '🥗' },
   { name: 'Training', color: 'blue', icon: '💪' },
-  { name: 'Mindset', color: 'purple', icon: '🧠' },
+  { name: 'Mindset', color: 'teal', icon: '🧠' },
   { name: 'Onboarding', color: 'amber', icon: '👋' },
 ]
 
@@ -55,10 +55,17 @@ const PRESET_RESOURCES: { name: string; description: string; type: Resource['typ
 export const FOLDER_COLORS: Record<string, { bg: string; text: string; border: string }> = {
   blue:   { bg: 'bg-blue-50',   text: 'text-blue-700',   border: 'border-blue-200' },
   green:  { bg: 'bg-green-50',  text: 'text-green-700',  border: 'border-green-200' },
-  purple: { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
+  teal:   { bg: 'bg-teal-50',   text: 'text-teal-700',   border: 'border-teal-200' },
   amber:  { bg: 'bg-amber-50',  text: 'text-amber-700',  border: 'border-amber-200' },
   red:    { bg: 'bg-red-50',    text: 'text-red-700',    border: 'border-red-200' },
   gray:   { bg: 'bg-gray-100',  text: 'text-gray-600',   border: 'border-gray-200' },
+}
+
+// Legacy: folders saved with the old 'purple' identifier should render as teal
+// after the brand-wide purple → teal swap. Centralised here so every consumer
+// of FOLDER_COLORS picks up the alias without conditionals.
+function normaliseFolderColor(name: string): string {
+  return name === 'purple' ? 'teal' : name
 }
 
 export const TYPE_META: Record<Resource['type'], { icon: string; label: string }> = {
@@ -78,7 +85,7 @@ function ResourceCard({ resource, onEdit, onDelete }: {
 }) {
   const meta = TYPE_META[resource.type]
   const folder = resource.coach_resource_folders
-  const colors = folder ? (FOLDER_COLORS[folder.color] ?? FOLDER_COLORS.gray) : FOLDER_COLORS.gray
+  const colors = folder ? (FOLDER_COLORS[normaliseFolderColor(folder.color)] ?? FOLDER_COLORS.gray) : FOLDER_COLORS.gray
 
   return (
     <div className="bg-white rounded-2xl border border-gray-200 flex flex-col group hover:border-gray-300 transition-colors overflow-hidden">
@@ -330,7 +337,7 @@ function ResourceModal({ initial, folders, onSave, onClose }: {
 
 // ── Folder Modal ───────────────────────────────────────────────────────────────
 
-const FOLDER_COLOR_OPTIONS = ['blue', 'green', 'purple', 'amber', 'red', 'gray']
+const FOLDER_COLOR_OPTIONS = ['blue', 'green', 'teal', 'amber', 'red', 'gray']
 const FOLDER_ICON_OPTIONS = ['📁', '🥗', '💪', '🧠', '👋', '⚡', '📚', '🎯', '💡', '🌟']
 
 function FolderModal({ initial, onSave, onClose }: {

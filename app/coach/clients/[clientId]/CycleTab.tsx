@@ -232,7 +232,7 @@ export default function CycleTab({ clientId }: { clientId: string }) {
                 {isInFertile && <span className="w-1.5 h-1.5 rounded-full bg-teal-300" />}
                 {(isOvHint || isMittelschmerz) && !isPeriod && <span className="w-1.5 h-1.5 rounded-full bg-teal-400" />}
                 {hasSymptoms && <span className="w-1.5 h-1.5 rounded-full bg-orange-400" />}
-                {hasMood && <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />}
+                {hasMood && <span className="w-1.5 h-1.5 rounded-full bg-teal-400" />}
                 {hasFertility && <span className="w-1.5 h-1.5 rounded-full bg-teal-600" />}
               </div>
             </button>
@@ -248,7 +248,7 @@ export default function CycleTab({ clientId }: { clientId: string }) {
           { color: 'bg-teal-100 border border-teal-400', label: 'Est. ovulation' },
           { color: 'bg-teal-50 border border-teal-200', label: 'Fertile window' },
           { color: 'bg-orange-400', label: 'Symptoms' },
-          { color: 'bg-purple-400', label: 'Mood' },
+          { color: 'bg-teal-400', label: 'Mood' },
           { color: 'bg-teal-600', label: 'Fertility data' },
         ].map(({ color, label }) => (
           <div key={label} className="flex items-center gap-1.5">
@@ -286,7 +286,7 @@ export default function CycleTab({ clientId }: { clientId: string }) {
             )}
             {hoveredLog.mood && (
               <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-purple-400 flex-shrink-0" />
+                <span className="w-2 h-2 rounded-full bg-teal-400 flex-shrink-0" />
                 <span className="text-sm text-gray-700">{MOOD_EMOJI_C[hoveredLog.mood]} {hoveredLog.mood.charAt(0).toUpperCase() + hoveredLog.mood.slice(1)}</span>
               </div>
             )}

@@ -10,7 +10,7 @@ type Lead = {
 
 const STATUS_COLORS: Record<string, string> = {
   new: 'bg-blue-100 text-blue-700', contacted: 'bg-yellow-100 text-yellow-700',
-  follow_up: 'bg-orange-100 text-orange-700', qualified: 'bg-purple-100 text-purple-700',
+  follow_up: 'bg-orange-100 text-orange-700', qualified: 'bg-teal-100 text-teal-700',
   won: 'bg-green-100 text-green-700', lost: 'bg-gray-100 text-gray-500',
 }
 const STATUS_LABELS: Record<string, string> = {

@@ -21,7 +21,7 @@ const EVENT_COLORS: Record<string, string> = {
   workout:        'bg-blue-50 text-blue-700 border-blue-200',
   steps:          'bg-green-50 text-green-700 border-green-200',
   note:           'bg-yellow-50 text-yellow-700 border-yellow-200',
-  habit:          'bg-purple-50 text-purple-700 border-purple-200',
+  habit:          'bg-teal-50 text-teal-700 border-teal-200',
   autoflow:       'bg-indigo-50 text-indigo-700 border-indigo-200',
   personal:       'bg-orange-50 text-orange-700 border-orange-200',
   travel:         'bg-sky-50 text-sky-700 border-sky-200',
@@ -510,9 +510,9 @@ function CoachPersonalWorkoutModal({ event, clientId, onClose }: {
                 </div>
               ))}
               {detail.sections.map((s, i) => (
-                <div key={i} className="bg-purple-50 rounded-xl px-4 py-3 space-y-1">
+                <div key={i} className="bg-teal-50 rounded-xl px-4 py-3 space-y-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-purple-600 uppercase tracking-wide">Section</span>
+                    <span className="text-xs font-semibold text-teal-600 uppercase tracking-wide">Section</span>
                     {s.title && <p className="text-sm font-semibold text-gray-800">{s.title}</p>}
                   </div>
                   {s.notes && <p className="text-sm text-gray-600">{s.notes}</p>}
@@ -834,7 +834,7 @@ export default function CalendarTab({ clientId }: { clientId: string }) {
       {habits.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {habits.map((h) => (
-            <span key={h.id} className="text-[10px] font-medium bg-purple-50 text-purple-700 border border-purple-100 rounded-full px-2 py-0.5">
+            <span key={h.id} className="text-[10px] font-medium bg-teal-50 text-teal-700 border border-teal-100 rounded-full px-2 py-0.5">
               {h.icon ?? '✅'} {h.name}
             </span>
           ))}
@@ -907,7 +907,7 @@ export default function CalendarTab({ clientId }: { clientId: string }) {
                   </div>
                 )}
                 {habits.length > 0 && (
-                  <div className="text-[10px] bg-purple-50 text-purple-600 border border-purple-100 rounded-md px-1.5 py-0.5 font-medium">
+                  <div className="text-[10px] bg-teal-50 text-teal-600 border border-teal-100 rounded-md px-1.5 py-0.5 font-medium">
                     {habits.length} habit{habits.length !== 1 ? 's' : ''}
                   </div>
                 )}

@@ -380,9 +380,9 @@ export default function WorkoutEditor({ workoutId, onClose, onSaved }: Props) {
 
       {/* Sections */}
       {sections.map((section) => (
-        <div key={section.id} className="bg-white rounded-xl border border-purple-100 p-4 space-y-3">
+        <div key={section.id} className="bg-white rounded-xl border border-teal-100 p-4 space-y-3">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full uppercase tracking-wide flex-shrink-0">
+            <span className="text-xs font-semibold text-teal-600 bg-teal-50 px-2 py-0.5 rounded-full uppercase tracking-wide flex-shrink-0">
               Section
             </span>
             <input
@@ -401,7 +401,7 @@ export default function WorkoutEditor({ workoutId, onClose, onSaved }: Props) {
             onChange={(e) => updateSection(section.id, 'notes', e.target.value)}
             placeholder="Add notes, instructions, or reminders..."
             rows={3}
-            className="w-full text-sm text-gray-700 border rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-purple-300 placeholder:text-gray-300"
+            className="w-full text-sm text-gray-700 border rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-teal-300 placeholder:text-gray-300"
           />
           {/* Score */}
           <div className="space-y-2">
@@ -411,7 +411,7 @@ export default function WorkoutEditor({ workoutId, onClose, onSaved }: Props) {
                 <button
                   key={t}
                   onClick={() => setSections((prev) => prev.map((s) => s.id === section.id ? { ...s, scoreType: t, scoreValue: '' } : s))}
-                  className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize transition-colors ${section.scoreType === t ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                  className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize transition-colors ${section.scoreType === t ? 'bg-teal-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                 >
                   {t === 'rounds' ? 'Rounds+Reps' : t}
                 </button>
@@ -422,7 +422,7 @@ export default function WorkoutEditor({ workoutId, onClose, onSaved }: Props) {
               value={section.scoreValue}
               onChange={(e) => setSections((prev) => prev.map((s) => s.id === section.id ? { ...s, scoreValue: e.target.value } : s))}
               placeholder={section.scoreType === 'custom' ? 'e.g. 21-15-9, Rx...' : '0'}
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
+              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-teal-300"
             />
           </div>
         </div>
@@ -430,7 +430,7 @@ export default function WorkoutEditor({ workoutId, onClose, onSaved }: Props) {
 
       <button
         onClick={addSection}
-        className="w-full flex items-center justify-center gap-2 border border-dashed border-purple-200 rounded-xl py-3 text-sm text-purple-400 hover:border-purple-400 hover:text-purple-600 transition-colors"
+        className="w-full flex items-center justify-center gap-2 border border-dashed border-teal-200 rounded-xl py-3 text-sm text-teal-400 hover:border-teal-400 hover:text-teal-600 transition-colors"
       >
         + Add Section
       </button>

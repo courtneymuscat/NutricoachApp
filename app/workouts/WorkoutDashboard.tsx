@@ -355,7 +355,7 @@ function WorkoutCard({ workout, onClone, onEdit }: { workout: WorkoutSummary; on
               {detail.sections.map((s, i) => (
                 <div key={i} className="border-t border-gray-100 pt-3 space-y-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full uppercase tracking-wide">Section</span>
+                    <span className="text-xs font-semibold text-teal-600 bg-teal-50 px-2 py-0.5 rounded-full uppercase tracking-wide">Section</span>
                     {s.title && <p className="text-sm font-semibold text-gray-800">{s.title}</p>}
                   </div>
                   {s.notes && <p className="text-sm text-gray-600">{s.notes}</p>}

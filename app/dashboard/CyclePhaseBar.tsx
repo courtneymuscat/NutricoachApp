@@ -80,7 +80,7 @@ const NUTRITION: Record<PhaseName, NutritionGuide> = {
     ],
     foods: ['Sweet potato', 'Avocado', 'Dark chocolate', 'Oats', 'Legumes', 'Salmon'],
     tip: 'Add ~100–200 kcal extra if hunger is elevated — this is physiological, not a lack of willpower. Prioritise stable blood sugar to manage mood and cravings.',
-    accentBg: 'bg-purple-50', accentText: 'text-purple-700', tagBg: 'bg-purple-100',
+    accentBg: 'bg-teal-50', accentText: 'text-teal-700', tagBg: 'bg-teal-100',
   },
 }
 
@@ -158,10 +158,10 @@ const PHASES: Record<PhaseName, Omit<Phase, 'name' | 'day'>> = {
   Luteal: {
     tagline: 'Turn inward & recover',
     description: 'Progesterone rises, slowing you down. Focus on recovery, nourishing meals and lower-intensity movement. Cravings and emotional sensitivity may increase as progesterone drops.',
-    gradient: 'from-purple-500 to-violet-400',
+    gradient: 'from-teal-500 to-violet-400',
     text: 'text-white',
-    muted: 'text-purple-100',
-    segment: 'bg-purple-400',
+    muted: 'text-teal-100',
+    segment: 'bg-teal-400',
   },
 }
 

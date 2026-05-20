@@ -26,7 +26,7 @@ const CATEGORIES: { value: Category; label: string; short: string }[] = [
 
 const CAT_COLORS: Record<Category, string> = {
   front:      'bg-blue-100 text-blue-700',
-  back:       'bg-purple-100 text-purple-700',
+  back:       'bg-teal-100 text-teal-700',
   side_left:  'bg-teal-100 text-teal-700',
   side_right: 'bg-orange-100 text-orange-700',
 }

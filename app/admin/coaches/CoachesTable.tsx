@@ -24,7 +24,7 @@ const TIER_LABELS: Record<string, string> = {
 const TIER_COLORS: Record<string, string> = {
   coach_solo: 'bg-zinc-700 text-zinc-300',
   coach_pro: 'bg-blue-900 text-blue-300',
-  coach_business: 'bg-purple-900 text-purple-300',
+  coach_business: 'bg-teal-900 text-teal-300',
 }
 
 export default function CoachesTable({

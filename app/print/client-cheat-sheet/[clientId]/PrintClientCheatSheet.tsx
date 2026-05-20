@@ -197,7 +197,7 @@ export default function PrintClientCheatSheet({
                   <p className="text-[10px] text-gray-500">serves / day</p>
                 </div>
                 <div>
-                  <p className="text-[10px] uppercase tracking-wider text-purple-600 font-semibold">Carbs</p>
+                  <p className="text-[10px] uppercase tracking-wider text-teal-600 font-semibold">Carbs</p>
                   <p className="text-xl font-bold text-gray-900">{fmtServes(targets.carb_serves)}</p>
                   <p className="text-[10px] text-gray-500">serves / day</p>
                 </div>

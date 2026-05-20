@@ -585,7 +585,7 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
                         </span>
                       )}
                       {s.resources?.length > 0 && (
-                        <span className="text-[10px] text-purple-500">{s.resources.length} resource{s.resources.length !== 1 ? 's' : ''}</span>
+                        <span className="text-[10px] text-teal-500">{s.resources.length} resource{s.resources.length !== 1 ? 's' : ''}</span>
                       )}
                       {s.linked_form && (
                         <span className="text-[10px] text-amber-500">form</span>

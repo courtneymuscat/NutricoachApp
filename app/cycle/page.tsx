@@ -79,17 +79,17 @@ export default async function CyclePage() {
         <CycleReminderToggle initialEnabled={profile?.cycle_reminders !== false} />
 
         {!canCycleIntelligence && (
-          <div className="flex items-center gap-4 bg-purple-50 border border-purple-100 rounded-2xl px-5 py-4">
+          <div className="flex items-center gap-4 bg-teal-50 border border-teal-100 rounded-2xl px-5 py-4">
             <span className="text-2xl">🔮</span>
             <div className="flex-1">
-              <p className="text-sm font-semibold text-purple-900">Cycle Intelligence</p>
-              <p className="text-xs text-purple-600 mt-0.5">
+              <p className="text-sm font-semibold text-teal-900">Cycle Intelligence</p>
+              <p className="text-xs text-teal-600 mt-0.5">
                 Predict your next period, ovulation &amp; phase windows — plus personalised insights based on your data.
               </p>
             </div>
             <a
               href="/pricing"
-              className="flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg text-purple-900 hover:opacity-90 transition-colors"
+              className="flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg text-teal-900 hover:opacity-90 transition-colors"
               style={{ backgroundColor: '#e9d5ff' }}
             >
               Try Elite →

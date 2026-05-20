@@ -160,9 +160,9 @@ function ScoreInput({ type, value, onChange }: { type: ScoreType; value: string;
     return (
       <div className="flex items-center gap-2">
         <div className="flex items-center gap-1 flex-1">
-          <input type="number" inputMode="numeric" placeholder="00" value={mm ?? ''} onChange={(e) => update(e.target.value, ss ?? '')} className="w-full border rounded-lg px-3 py-2 text-sm text-center focus:outline-none focus:ring-1 focus:ring-purple-300" />
+          <input type="number" inputMode="numeric" placeholder="00" value={mm ?? ''} onChange={(e) => update(e.target.value, ss ?? '')} className="w-full border rounded-lg px-3 py-2 text-sm text-center focus:outline-none focus:ring-1 focus:ring-teal-300" />
           <span className="text-gray-400 font-bold">:</span>
-          <input type="number" inputMode="numeric" placeholder="00" min={0} max={59} value={ss ?? ''} onChange={(e) => update(mm ?? '', e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm text-center focus:outline-none focus:ring-1 focus:ring-purple-300" />
+          <input type="number" inputMode="numeric" placeholder="00" min={0} max={59} value={ss ?? ''} onChange={(e) => update(mm ?? '', e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm text-center focus:outline-none focus:ring-1 focus:ring-teal-300" />
         </div>
         <span className="text-xs text-gray-400 flex-shrink-0">min : sec</span>
       </div>
@@ -174,9 +174,9 @@ function ScoreInput({ type, value, onChange }: { type: ScoreType; value: string;
     const update = (r: string, rep: string) => onChange(`${r}+${rep}`)
     return (
       <div className="flex items-center gap-2">
-        <input type="number" inputMode="numeric" placeholder="0" value={rounds ?? ''} onChange={(e) => update(e.target.value, reps ?? '')} className="flex-1 border rounded-lg px-3 py-2 text-sm text-center focus:outline-none focus:ring-1 focus:ring-purple-300" />
+        <input type="number" inputMode="numeric" placeholder="0" value={rounds ?? ''} onChange={(e) => update(e.target.value, reps ?? '')} className="flex-1 border rounded-lg px-3 py-2 text-sm text-center focus:outline-none focus:ring-1 focus:ring-teal-300" />
         <span className="text-xs text-gray-400">rounds +</span>
-        <input type="number" inputMode="numeric" placeholder="0" value={reps ?? ''} onChange={(e) => update(rounds ?? '', e.target.value)} className="flex-1 border rounded-lg px-3 py-2 text-sm text-center focus:outline-none focus:ring-1 focus:ring-purple-300" />
+        <input type="number" inputMode="numeric" placeholder="0" value={reps ?? ''} onChange={(e) => update(rounds ?? '', e.target.value)} className="flex-1 border rounded-lg px-3 py-2 text-sm text-center focus:outline-none focus:ring-1 focus:ring-teal-300" />
         <span className="text-xs text-gray-400">reps</span>
       </div>
     )
@@ -191,7 +191,7 @@ function ScoreInput({ type, value, onChange }: { type: ScoreType; value: string;
         placeholder={type === 'custom' ? 'e.g. 21-15-9, Rx, scaled...' : '0'}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-300"
+        className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-teal-300"
       />
       {UNITS[type] && <span className="text-xs text-gray-400 flex-shrink-0">{UNITS[type]}</span>}
     </div>
@@ -221,7 +221,7 @@ function FreestyleBlock({ section, canUp, canDown, onChange, onRemove, onMoveUp,
       {/* Header */}
       <div className="flex items-center gap-2">
         <MoveButtons onUp={onMoveUp} onDown={onMoveDown} canUp={canUp} canDown={canDown} />
-        <span className="text-xs font-semibold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full uppercase tracking-wide flex-shrink-0">
+        <span className="text-xs font-semibold text-teal-600 bg-teal-50 px-2 py-0.5 rounded-full uppercase tracking-wide flex-shrink-0">
           Section
         </span>
         <input
@@ -239,7 +239,7 @@ function FreestyleBlock({ section, canUp, canDown, onChange, onRemove, onMoveUp,
         onChange={(e) => onChange({ ...section, notes: e.target.value })}
         placeholder="Add notes, instructions, or reminders..."
         rows={3}
-        className="w-full text-sm text-gray-700 border rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-purple-300 placeholder:text-gray-300"
+        className="w-full text-sm text-gray-700 border rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-teal-300 placeholder:text-gray-300"
       />
 
       {/* Score */}
@@ -250,7 +250,7 @@ function FreestyleBlock({ section, canUp, canDown, onChange, onRemove, onMoveUp,
             <button
               key={t}
               onClick={() => onChange({ ...section, scoreType: t, scoreValue: '' })}
-              className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize transition-colors ${section.scoreType === t ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+              className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize transition-colors ${section.scoreType === t ? 'bg-teal-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
             >
               {t === 'rounds' ? 'Rounds + Reps' : t}
             </button>
@@ -289,7 +289,7 @@ function FreestyleBlock({ section, canUp, canDown, onChange, onRemove, onMoveUp,
       ) : (
         <button
           onClick={() => setShowExSearch(true)}
-          className="w-full flex items-center gap-2 border border-dashed border-gray-200 rounded-lg px-3 py-2.5 text-sm text-gray-400 hover:border-purple-300 hover:text-purple-500 transition-colors"
+          className="w-full flex items-center gap-2 border border-dashed border-gray-200 rounded-lg px-3 py-2.5 text-sm text-gray-400 hover:border-teal-300 hover:text-teal-500 transition-colors"
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
           Link an exercise demo video
@@ -652,17 +652,17 @@ function ExerciseNotes({
       />
       {canUploadVideo ? (
         formVideoUrl ? (
-          <div className="flex items-center gap-3 bg-purple-50 rounded-lg px-3 py-2">
-            <svg className="w-4 h-4 text-purple-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="flex items-center gap-3 bg-teal-50 rounded-lg px-3 py-2">
+            <svg className="w-4 h-4 text-teal-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.723v6.554a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
             </svg>
-            <a href={formVideoUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-purple-700 font-medium flex-1 truncate">
+            <a href={formVideoUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-teal-700 font-medium flex-1 truncate">
               View form video
             </a>
             <button onClick={() => onFormVideoChange(null)} className="text-xs text-gray-400 hover:text-red-500 transition-colors flex-shrink-0">Remove</button>
           </div>
         ) : (
-          <label className="cursor-pointer flex items-center gap-1.5 text-xs text-purple-600 hover:text-purple-800 transition-colors">
+          <label className="cursor-pointer flex items-center gap-1.5 text-xs text-teal-600 hover:text-teal-800 transition-colors">
             <input
               ref={fileInputRef}
               type="file"
@@ -677,7 +677,7 @@ function ExerciseNotes({
           </label>
         )
       ) : (
-        <a href="/pricing" className="text-xs text-purple-400 hover:text-purple-600 flex items-center gap-1">
+        <a href="/pricing" className="text-xs text-teal-400 hover:text-teal-600 flex items-center gap-1">
           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
           </svg>
@@ -1257,7 +1257,7 @@ export default function ActiveWorkout({ onFinish, onBack, template, canUploadVid
                 onClick={addFreestyleSection}
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors text-left"
               >
-                <span className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center text-purple-600 font-bold text-sm flex-shrink-0">§</span>
+                <span className="w-8 h-8 rounded-lg bg-teal-100 flex items-center justify-center text-teal-600 font-bold text-sm flex-shrink-0">§</span>
                 <div>
                   <p className="text-sm font-medium text-gray-900">Section</p>
                   <p className="text-xs text-gray-400">Notes, score logging, and exercise demo</p>

@@ -226,7 +226,7 @@ function getPhase(logs: Record<string, CycleLog>, todayStr: string, avgCycleLeng
     name: 'Luteal',
     day: dayOfCycle,
     description: 'Progesterone rises after ovulation, bringing a calmer but more inward energy. PMS symptoms in the final days signal progesterone dropping.',
-    color: 'text-purple-700', bg: 'bg-purple-50', dot: 'bg-purple-400',
+    color: 'text-teal-700', bg: 'bg-teal-50', dot: 'bg-teal-400',
   }
 }
 
@@ -275,7 +275,6 @@ function Chip({ label, selected, onClick, color = 'blue' }: {
     blue:   selected ? 'bg-blue-600 text-white border-blue-600'    : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300',
     rose:   selected ? 'bg-rose-500 text-white border-rose-500'    : 'bg-white text-gray-600 border-gray-200 hover:border-rose-300',
     teal:   selected ? 'bg-teal-500 text-white border-teal-500'    : 'bg-white text-gray-600 border-gray-200 hover:border-teal-300',
-    purple: selected ? 'bg-purple-500 text-white border-purple-500': 'bg-white text-gray-600 border-gray-200 hover:border-purple-300',
     amber:  selected ? 'bg-amber-500 text-white border-amber-500'  : 'bg-white text-gray-600 border-gray-200 hover:border-amber-300',
     orange: selected ? 'bg-orange-500 text-white border-orange-500': 'bg-white text-gray-600 border-gray-200 hover:border-orange-300',
     indigo: selected ? 'bg-indigo-500 text-white border-indigo-500': 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300',
@@ -658,7 +657,7 @@ function CycleModal({ log, saving, onUpdate, onClose, advancedAccess = true }: {
                 ]}
                 selected={local.symptoms} onToggle={toggleSymptom} />
 
-              <SymptomGroup title="Hormonal / Cyclical" color="purple"
+              <SymptomGroup title="Hormonal / Cyclical" color="teal"
                 symptoms={[
                   { key: 'breast_tenderness', label: 'Breast tenderness' },
                   { key: 'fatigue', label: 'Fatigue' },
@@ -693,7 +692,7 @@ function CycleModal({ log, saving, onUpdate, onClose, advancedAccess = true }: {
                   { key: 'low', label: 'Low' },
                   { key: 'weepy', label: 'Weepy' },
                 ] as { key: Mood; label: string }[]).map(({ key, label }) => (
-                  <Chip key={key} label={label} selected={local.mood === key} onClick={() => pick('mood', key)} color="purple" />
+                  <Chip key={key} label={label} selected={local.mood === key} onClick={() => pick('mood', key)} color="teal" />
                 ))}
               </div>
               <p className="text-xs text-gray-400 leading-relaxed">
@@ -1005,7 +1004,7 @@ export default function CycleTracker({ advancedAccess = true }: { advancedAccess
                   {isInFertileWindow && <span className="w-1.5 h-1.5 rounded-full bg-teal-300" />}
                   {(isOvulation || isMittelschmerz) && !isPeriod && <span className="w-1.5 h-1.5 rounded-full bg-teal-400" />}
                   {hasSymptoms && <span className="w-1.5 h-1.5 rounded-full bg-orange-400" />}
-                  {hasMood && <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />}
+                  {hasMood && <span className="w-1.5 h-1.5 rounded-full bg-teal-400" />}
                   {hasFertility && <span className="w-1.5 h-1.5 rounded-full bg-teal-600" />}
                 </div>
               </button>
@@ -1020,7 +1019,7 @@ export default function CycleTracker({ advancedAccess = true }: { advancedAccess
             { color: 'bg-teal-100 border border-teal-400', label: 'Est. ovulation' },
             { color: 'bg-teal-50 border border-teal-200', label: 'Fertile window' },
             { color: 'bg-orange-400', label: 'Symptoms' },
-            { color: 'bg-purple-400', label: 'Mood' },
+            { color: 'bg-teal-400', label: 'Mood' },
             { color: 'bg-teal-600', label: 'Fertility data' },
           ].map(({ color, label }) => (
             <div key={label} className="flex items-center gap-1.5">

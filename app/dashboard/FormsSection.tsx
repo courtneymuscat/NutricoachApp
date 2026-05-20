@@ -17,7 +17,7 @@ const TYPE_LABELS: Record<string, string> = {
 }
 
 const TYPE_COLORS: Record<string, string> = {
-  onboarding: 'bg-purple-50 text-purple-600',
+  onboarding: 'bg-teal-50 text-teal-600',
   weekly_checkin: 'bg-blue-50 text-blue-600',
   custom: 'bg-gray-100 text-gray-600',
 }

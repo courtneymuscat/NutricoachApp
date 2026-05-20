@@ -1600,7 +1600,7 @@ const PHOTO_CATS: { value: ProgressPhoto['category']; label: string; short: stri
 
 const PHOTO_CAT_COLORS: Record<ProgressPhoto['category'], string> = {
   front:      'bg-blue-100 text-blue-700',
-  back:       'bg-purple-100 text-purple-700',
+  back:       'bg-teal-100 text-teal-700',
   side_left:  'bg-teal-100 text-teal-700',
   side_right: 'bg-orange-100 text-orange-700',
 }
@@ -3277,7 +3277,7 @@ export default function ClientTabs({ clientId, initialTab, coachTier = 'coach_pr
                             href={ex.video_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-xs text-purple-600 hover:text-purple-800 font-medium flex items-center gap-1 ml-auto flex-shrink-0"
+                            className="text-xs text-teal-600 hover:text-teal-800 font-medium flex items-center gap-1 ml-auto flex-shrink-0"
                           >
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.723v6.554a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />

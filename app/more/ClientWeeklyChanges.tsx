@@ -282,7 +282,7 @@ export default function ClientWeeklyChanges() {
                           <div className="flex gap-4 mt-2">
                             {wd.protein_g != null && (
                               <div className="text-center">
-                                <p className="text-sm font-bold text-purple-500">{wd.protein_g}g</p>
+                                <p className="text-sm font-bold text-teal-500">{wd.protein_g}g</p>
                                 <p className="text-[10px] text-gray-400">protein</p>
                               </div>
                             )}
@@ -310,7 +310,7 @@ export default function ClientWeeklyChanges() {
                         <div className="flex gap-4">
                           {wd.protein_g != null && (
                             <div className="text-center">
-                              <p className="text-sm font-bold text-purple-500">{wd.protein_g}g</p>
+                              <p className="text-sm font-bold text-teal-500">{wd.protein_g}g</p>
                               <p className="text-[10px] text-gray-400">protein</p>
                             </div>
                           )}

@@ -222,7 +222,7 @@ function ResultRow({ food, onSelect }: { food: FoodResult; onSelect: (f: FoodRes
         </span>
       </div>
       <div className="flex flex-wrap gap-1.5 mt-1.5">
-        <span className="text-[11px] bg-purple-50 text-purple-600 font-medium px-1.5 py-0.5 rounded-full">P {food.protein_per_100g}g</span>
+        <span className="text-[11px] bg-teal-50 text-teal-600 font-medium px-1.5 py-0.5 rounded-full">P {food.protein_per_100g}g</span>
         <span className="text-[11px] bg-green-50 text-green-600 font-medium px-1.5 py-0.5 rounded-full">C {food.carbs_per_100g}g</span>
         <span className="text-[11px] bg-blue-50 text-blue-500 font-medium px-1.5 py-0.5 rounded-full">F {food.fat_per_100g}g</span>
       </div>
@@ -538,9 +538,9 @@ function BarcodeLookupModal({ onFound, onClose }: {
 
               {/* Photo upload option */}
               <button type="button" onClick={() => photoInputRef.current?.click()}
-                className="w-full flex items-center gap-4 p-4 border-2 border-gray-100 rounded-2xl hover:border-purple-300 hover:bg-purple-50 transition-colors text-left group">
-                <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center flex-shrink-0 group-hover:bg-purple-200 transition-colors">
-                  <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                className="w-full flex items-center gap-4 p-4 border-2 border-gray-100 rounded-2xl hover:border-teal-300 hover:bg-teal-50 transition-colors text-left group">
+                <div className="w-10 h-10 rounded-xl bg-teal-100 flex items-center justify-center flex-shrink-0 group-hover:bg-teal-200 transition-colors">
+                  <svg className="w-5 h-5 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
                 </div>
@@ -905,7 +905,7 @@ export default function MealPlanFoodSearch({ onAdd }: { onAdd: (food: MealFood) 
                 {[
                   { label: 'kcal', val: cal, color: 'text-gray-800' },
                   { label: 'P', val: `${pro}g`, color: 'text-pink-600' },
-                  { label: 'C', val: `${carb}g`, color: 'text-purple-500' },
+                  { label: 'C', val: `${carb}g`, color: 'text-teal-500' },
                   { label: 'F', val: `${fat}g`, color: 'text-blue-400' },
                 ].map(m => (
                   <div key={m.label} className="bg-white rounded-lg p-1.5 text-center">

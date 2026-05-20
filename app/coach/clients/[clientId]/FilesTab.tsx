@@ -188,7 +188,7 @@ export default function FilesTab({ clientId }: { clientId: string }) {
                     <span className="text-[10px] bg-indigo-50 text-indigo-500 font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0">Form</span>
                   ) : null}
                   {f.source === 'coach' && (
-                    <span className="text-[10px] bg-purple-50 text-purple-500 font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0">Coach</span>
+                    <span className="text-[10px] bg-teal-50 text-teal-500 font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0">Coach</span>
                   )}
                 </div>
               )}

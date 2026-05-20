@@ -326,16 +326,16 @@ export default function AppPreviewTab({
                 disabled={savingTargetsSource || meal_plans.length === 0}
                 className={`w-full flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors disabled:opacity-40 ${
                   targetsSource === 'meal_plan'
-                    ? 'border-purple-400 bg-purple-50'
+                    ? 'border-teal-400 bg-teal-50'
                     : 'border-gray-200 hover:border-gray-300 bg-white'
                 }`}
               >
                 <span className="text-base">🍽️</span>
                 <div className="flex-1 min-w-0">
-                  <p className={`text-xs font-semibold ${targetsSource === 'meal_plan' ? 'text-purple-700' : 'text-gray-700'}`}>From Meal Plan</p>
+                  <p className={`text-xs font-semibold ${targetsSource === 'meal_plan' ? 'text-teal-700' : 'text-gray-700'}`}>From Meal Plan</p>
                   <p className="text-[11px] text-gray-400">{meal_plans.length === 0 ? 'No active meal plans' : 'Uses targets from an active meal plan'}</p>
                 </div>
-                {targetsSource === 'meal_plan' && <span className="w-4 h-4 rounded-full bg-purple-500 flex-shrink-0 flex items-center justify-center"><svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg></span>}
+                {targetsSource === 'meal_plan' && <span className="w-4 h-4 rounded-full bg-teal-500 flex-shrink-0 flex items-center justify-center"><svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg></span>}
               </button>
               {/* Plan picker when meal_plan is selected */}
               {targetsSource === 'meal_plan' && meal_plans.length > 1 && (
@@ -343,7 +343,7 @@ export default function AppPreviewTab({
                   value={targetsMealPlanId ?? ''}
                   onChange={e => onTargetsSource('meal_plan', e.target.value || null)}
                   disabled={savingTargetsSource}
-                  className="w-full border border-purple-200 rounded-xl px-3 py-2 text-xs text-purple-900 bg-purple-50 focus:outline-none focus:ring-2 focus:ring-purple-300 disabled:opacity-50"
+                  className="w-full border border-teal-200 rounded-xl px-3 py-2 text-xs text-teal-900 bg-teal-50 focus:outline-none focus:ring-2 focus:ring-teal-300 disabled:opacity-50"
                 >
                   {meal_plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
@@ -425,7 +425,7 @@ export default function AppPreviewTab({
                   <p className="text-[10px] text-emerald-600 font-medium">Client can see allocated food serves</p>
                   <div className="flex flex-wrap gap-1">
                     {serve_targets.protein_serves > 0 && <span className="text-[9px] bg-pink-50 text-pink-600 px-1.5 py-0.5 rounded-full">P ×{serve_targets.protein_serves}</span>}
-                    {serve_targets.carb_serves > 0 && <span className="text-[9px] bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded-full">C ×{serve_targets.carb_serves}</span>}
+                    {serve_targets.carb_serves > 0 && <span className="text-[9px] bg-teal-50 text-teal-600 px-1.5 py-0.5 rounded-full">C ×{serve_targets.carb_serves}</span>}
                     {serve_targets.fat_serves > 0 && <span className="text-[9px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full">F ×{serve_targets.fat_serves}</span>}
                     {serve_targets.fruit_serves > 0 && <span className="text-[9px] bg-orange-50 text-orange-600 px-1.5 py-0.5 rounded-full">Fruit ×{serve_targets.fruit_serves}</span>}
                     {serve_targets.veg_unlimited && <span className="text-[9px] bg-green-50 text-green-600 px-1.5 py-0.5 rounded-full">Veg ∞</span>}
@@ -526,7 +526,7 @@ export default function AppPreviewTab({
                   <div className="grid grid-cols-4 gap-2 text-center">
                     <div><p className="text-sm font-bold text-gray-900">{previewTargets.cal}</p><p className="text-[10px] text-gray-400">kcal</p></div>
                     <div><p className="text-sm font-bold text-pink-500">{previewTargets.pro ?? '—'}g</p><p className="text-[10px] text-gray-400">protein</p></div>
-                    <div><p className="text-sm font-bold text-purple-500">{previewTargets.carb ?? '—'}g</p><p className="text-[10px] text-gray-400">carbs</p></div>
+                    <div><p className="text-sm font-bold text-teal-500">{previewTargets.carb ?? '—'}g</p><p className="text-[10px] text-gray-400">carbs</p></div>
                     <div><p className="text-sm font-bold text-blue-400">{previewTargets.fat ?? '—'}g</p><p className="text-[10px] text-gray-400">fat</p></div>
                   </div>
                   {selectedPlan && (
@@ -617,7 +617,7 @@ export default function AppPreviewTab({
                   </div>
                   <div className="flex flex-wrap gap-1.5 px-3 pb-2.5">
                     {serve_targets.protein_serves > 0 && <span className="text-[10px] bg-pink-100 text-pink-700 font-semibold px-2 py-0.5 rounded-full">Protein × {serve_targets.protein_serves}</span>}
-                    {serve_targets.carb_serves > 0 && <span className="text-[10px] bg-purple-100 text-purple-700 font-semibold px-2 py-0.5 rounded-full">Carbs × {serve_targets.carb_serves}</span>}
+                    {serve_targets.carb_serves > 0 && <span className="text-[10px] bg-teal-100 text-teal-700 font-semibold px-2 py-0.5 rounded-full">Carbs × {serve_targets.carb_serves}</span>}
                     {serve_targets.fat_serves > 0 && <span className="text-[10px] bg-blue-100 text-blue-700 font-semibold px-2 py-0.5 rounded-full">Fats × {serve_targets.fat_serves}</span>}
                     {serve_targets.fruit_serves > 0 && <span className="text-[10px] bg-orange-100 text-orange-700 font-semibold px-2 py-0.5 rounded-full">Fruit × {serve_targets.fruit_serves}</span>}
                     {serve_targets.veg_unlimited && <span className="text-[10px] bg-green-100 text-green-700 font-semibold px-2 py-0.5 rounded-full">Veg unlimited</span>}

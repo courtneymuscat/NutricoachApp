@@ -532,7 +532,7 @@ export default async function DashboardPage() {
                 <p className="text-xs text-gray-400 mt-0.5">kcal</p>
               </div>
               <div>
-                <p className="text-xl font-bold text-purple-400">{profile.target_protein}g</p>
+                <p className="text-xl font-bold text-teal-400">{profile.target_protein}g</p>
                 <p className="text-xs text-gray-400 mt-0.5">protein</p>
               </div>
               <div>
@@ -598,13 +598,13 @@ export default async function DashboardPage() {
 
         {/* Elite teaser — AI meal scanner */}
         {!canMealScanner && (
-          <div className="flex items-center gap-4 bg-purple-50 border border-purple-100 rounded-2xl px-5 py-4">
+          <div className="flex items-center gap-4 bg-teal-50 border border-teal-100 rounded-2xl px-5 py-4">
             <span className="text-2xl">📸</span>
             <div className="flex-1">
-              <p className="text-sm font-semibold text-purple-900">Log meals instantly with AI</p>
-              <p className="text-xs text-purple-600 mt-0.5">Take a photo of your meal and let AI detect and log the foods automatically.</p>
+              <p className="text-sm font-semibold text-teal-900">Log meals instantly with AI</p>
+              <p className="text-xs text-teal-600 mt-0.5">Take a photo of your meal and let AI detect and log the foods automatically.</p>
             </div>
-            <a href="/pricing" className="flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg text-purple-900 hover:opacity-90 transition-colors" style={{ backgroundColor: '#e9d5ff' }}>
+            <a href="/pricing" className="flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg text-teal-900 hover:opacity-90 transition-colors" style={{ backgroundColor: '#e9d5ff' }}>
               Try Elite →
             </a>
           </div>
@@ -623,13 +623,13 @@ export default async function DashboardPage() {
 
         {/* Advanced Analytics — teaser for non-Elite */}
         {!canAdvancedAnalytics && (
-          <div className="flex items-center gap-4 bg-purple-50 border border-purple-100 rounded-2xl px-5 py-4">
+          <div className="flex items-center gap-4 bg-teal-50 border border-teal-100 rounded-2xl px-5 py-4">
             <span className="text-2xl">📊</span>
             <div className="flex-1">
-              <p className="text-sm font-semibold text-purple-900">Advanced Analytics</p>
-              <p className="text-xs text-purple-600 mt-0.5">Spot trends across your nutrition, training, and recovery — all in one dashboard.</p>
+              <p className="text-sm font-semibold text-teal-900">Advanced Analytics</p>
+              <p className="text-xs text-teal-600 mt-0.5">Spot trends across your nutrition, training, and recovery — all in one dashboard.</p>
             </div>
-            <a href="/pricing" className="flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg text-purple-900 hover:opacity-90 transition-colors" style={{ backgroundColor: '#e9d5ff' }}>
+            <a href="/pricing" className="flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg text-teal-900 hover:opacity-90 transition-colors" style={{ backgroundColor: '#e9d5ff' }}>
               Try Elite →
             </a>
           </div>

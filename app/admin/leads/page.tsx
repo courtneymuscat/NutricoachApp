@@ -19,7 +19,7 @@ const STATUS_COLORS: Record<string, string> = {
   new: 'bg-blue-900 text-blue-300',
   contacted: 'bg-yellow-900 text-yellow-300',
   follow_up: 'bg-orange-900 text-orange-300',
-  qualified: 'bg-purple-900 text-purple-300',
+  qualified: 'bg-teal-900 text-teal-300',
   won: 'bg-green-900 text-green-300',
   lost: 'bg-zinc-700 text-zinc-400',
 }

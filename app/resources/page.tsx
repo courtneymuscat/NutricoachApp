@@ -21,7 +21,7 @@ type Assignment = {
 
 const TYPE_META: Record<string, { icon: string; label: string; bg: string; text: string; border: string }> = {
   link:     { icon: '🔗', label: 'Link',     bg: 'bg-blue-50',   text: 'text-blue-700',   border: 'border-blue-100' },
-  video:    { icon: '🎬', label: 'Video',    bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-100' },
+  video:    { icon: '🎬', label: 'Video',    bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-100' },
   pdf:      { icon: '📄', label: 'PDF',      bg: 'bg-red-50',    text: 'text-red-700',    border: 'border-red-100' },
   document: { icon: '📝', label: 'Document', bg: 'bg-gray-50',   text: 'text-gray-700',   border: 'border-gray-200' },
   image:    { icon: '🖼️', label: 'Image',    bg: 'bg-gray-50',   text: 'text-gray-700',   border: 'border-gray-200' },
@@ -30,10 +30,14 @@ const TYPE_META: Record<string, { icon: string; label: string; bg: string; text:
 const FOLDER_COLORS: Record<string, { bg: string; text: string; border: string }> = {
   blue:   { bg: 'bg-blue-50',   text: 'text-blue-700',   border: 'border-blue-200' },
   green:  { bg: 'bg-green-50',  text: 'text-green-700',  border: 'border-green-200' },
-  purple: { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
+  teal:   { bg: 'bg-teal-50',   text: 'text-teal-700',   border: 'border-teal-200' },
   amber:  { bg: 'bg-amber-50',  text: 'text-amber-700',  border: 'border-amber-200' },
   red:    { bg: 'bg-red-50',    text: 'text-red-700',    border: 'border-red-200' },
   gray:   { bg: 'bg-gray-100',  text: 'text-gray-600',   border: 'border-gray-200' },
+}
+// Legacy 'purple' identifier should render as teal after the brand swap.
+function normaliseFolderColor(name: string): string {
+  return name === 'purple' ? 'teal' : name
 }
 
 export default async function ResourcesPage() {
@@ -89,7 +93,7 @@ export default async function ResourcesPage() {
         ) : (
           <>
             {Array.from(folders.values()).map(folder => {
-              const colors = FOLDER_COLORS[folder.color] ?? FOLDER_COLORS.gray
+              const colors = FOLDER_COLORS[normaliseFolderColor(folder.color)] ?? FOLDER_COLORS.gray
               return (
                 <section key={folder.name}>
                   <div className="flex items-center gap-2 mb-3">

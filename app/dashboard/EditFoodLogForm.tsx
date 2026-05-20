@@ -182,7 +182,7 @@ export default function EditFoodLogForm({
             {[
               { label: 'kcal', val: String(cal),    unit: '',  color: 'text-gray-900' },
               { label: 'g',    val: String(pro),    unit: 'P', color: 'text-rose-500' },
-              { label: 'g',    val: String(carb),   unit: 'C', color: 'text-purple-500' },
+              { label: 'g',    val: String(carb),   unit: 'C', color: 'text-teal-500' },
               { label: 'g',    val: String(fat),    unit: 'F', color: 'text-blue-400'  },
             ].map((m, i) => (
               <div key={i} className="bg-white rounded-lg p-2 text-center">

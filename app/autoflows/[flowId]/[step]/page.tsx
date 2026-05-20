@@ -55,7 +55,7 @@ type LockedData = {
 
 const RESOURCE_TYPE_META: Record<string, { icon: string; label: string; color: string }> = {
   link:     { icon: '🔗', label: 'Link',     color: 'bg-blue-50 border-blue-200 text-blue-800' },
-  video:    { icon: '🎬', label: 'Video',    color: 'bg-purple-50 border-purple-200 text-purple-800' },
+  video:    { icon: '🎬', label: 'Video',    color: 'bg-teal-50 border-teal-200 text-teal-800' },
   pdf:      { icon: '📄', label: 'PDF',      color: 'bg-red-50 border-red-200 text-red-800' },
   document: { icon: '📝', label: 'Document', color: 'bg-gray-50 border-gray-200 text-gray-800' },
   image:    { icon: '🖼️', label: 'Image',    color: 'bg-gray-50 border-gray-200 text-gray-800' },

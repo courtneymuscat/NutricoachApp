@@ -40,7 +40,7 @@ type SearchResult = {
 
 const CATEGORIES = [
   { id: 'protein',   label: 'Protein',     serve: '1 serve = ~30g protein',  color: 'bg-pink-50 border-pink-200',     badge: 'bg-pink-100 text-pink-700',     dot: 'bg-pink-400' },
-  { id: 'carb',      label: 'Carbs',       serve: '1 serve = ~20g carbs',    color: 'bg-purple-50 border-purple-200', badge: 'bg-purple-100 text-purple-700', dot: 'bg-purple-400' },
+  { id: 'carb',      label: 'Carbs',       serve: '1 serve = ~20g carbs',    color: 'bg-teal-50 border-teal-200', badge: 'bg-teal-100 text-teal-700', dot: 'bg-teal-400' },
   { id: 'fruit',     label: 'Fruit',       serve: '1 serve = ~20g carbs',    color: 'bg-orange-50 border-orange-200', badge: 'bg-orange-100 text-orange-700', dot: 'bg-orange-400' },
   { id: 'fat',       label: 'Fats',        serve: '1 serve = ~10g fat',      color: 'bg-green-50 border-green-200',   badge: 'bg-green-100 text-green-700',   dot: 'bg-green-400' },
   { id: 'condiment', label: 'Condiments',  serve: '~1 fat or carb serve',    color: 'bg-blue-50 border-blue-200',     badge: 'bg-blue-100 text-blue-700',     dot: 'bg-blue-400' },
@@ -49,7 +49,7 @@ const CATEGORIES = [
 ]
 
 const SEC_LABELS: Record<string, string> = { fat: '+ 1 fat serve', carb: '+ 1 carb serve', fat_half: '+ ½ fat serve', carb_half: '+ ½ carb serve', protein_half: '+ ½ protein serve', protein: '+ 1 protein serve' }
-const SEC_COLORS: Record<string, string> = { fat: 'bg-green-100 text-green-700', carb: 'bg-purple-100 text-purple-700', fat_half: 'bg-green-50 text-green-600', carb_half: 'bg-purple-50 text-purple-600', protein_half: 'bg-pink-50 text-pink-600', protein: 'bg-pink-100 text-pink-700' }
+const SEC_COLORS: Record<string, string> = { fat: 'bg-green-100 text-green-700', carb: 'bg-teal-100 text-teal-700', fat_half: 'bg-green-50 text-green-600', carb_half: 'bg-teal-50 text-teal-600', protein_half: 'bg-pink-50 text-pink-600', protein: 'bg-pink-100 text-pink-700' }
 
 // Calculate per-serve macros given serving_g and per-100g macros
 function perServe(per100: number, servingG: number) {
@@ -278,7 +278,7 @@ export default function CheatSheetEditor() {
         <div>
           <label className="text-xs text-gray-500 block mb-1.5">Macros per serve</label>
           <div className="grid grid-cols-4 gap-2">
-            {([['calories_per_serve','Cal','text-gray-600'],['protein_per_serve','Protein g','text-pink-600'],['carbs_per_serve','Carbs g','text-purple-600'],['fat_per_serve','Fat g','text-green-600']] as const).map(([key, label, color]) => (
+            {([['calories_per_serve','Cal','text-gray-600'],['protein_per_serve','Protein g','text-pink-600'],['carbs_per_serve','Carbs g','text-teal-600'],['fat_per_serve','Fat g','text-green-600']] as const).map(([key, label, color]) => (
               <div key={key}>
                 <label className={`text-[10px] font-semibold block mb-0.5 ${color}`}>{label}</label>
                 <input type="number" value={d[key]} onChange={e => setD({ [key]: e.target.value } as Partial<EditDraft>)}
@@ -479,7 +479,7 @@ export default function CheatSheetEditor() {
                 {[
                   { label: 'Cal', val: Math.round(selectedFood.calories_per_100g * parseFloat(servingG) / 100), color: 'text-gray-600' },
                   { label: 'Protein', val: perServe(selectedFood.protein_per_100g, parseFloat(servingG)), color: 'text-pink-600' },
-                  { label: 'Carbs', val: perServe(selectedFood.carbs_per_100g, parseFloat(servingG)), color: 'text-purple-600' },
+                  { label: 'Carbs', val: perServe(selectedFood.carbs_per_100g, parseFloat(servingG)), color: 'text-teal-600' },
                   { label: 'Fat', val: perServe(selectedFood.fat_per_100g, parseFloat(servingG)), color: 'text-green-600' },
                 ].map(m => (
                   <span key={m.label} className={`font-semibold ${m.color}`}>{m.label}: {m.val}</span>
@@ -542,7 +542,7 @@ export default function CheatSheetEditor() {
                       onClick={() => setSubcategory(subcategory === opt.id ? null : opt.id)}
                       className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${
                         subcategory === opt.id
-                          ? 'bg-purple-100 text-purple-700 border-purple-300'
+                          ? 'bg-teal-100 text-teal-700 border-teal-300'
                           : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'
                       }`}
                     >
@@ -662,7 +662,7 @@ export default function CheatSheetEditor() {
                           {f.serving_desc && <span className="text-gray-400 text-xs ml-2">{f.serving_desc}</span>}
                         </td>
                         <td className="px-3 py-2.5 text-right text-gray-600 tabular-nums text-xs">{f.calories_per_serve ?? '—'}</td>
-                        <td className="px-3 py-2.5 text-right text-purple-700 font-medium tabular-nums text-xs">{f.carbs_per_serve ?? '—'}</td>
+                        <td className="px-3 py-2.5 text-right text-teal-700 font-medium tabular-nums text-xs">{f.carbs_per_serve ?? '—'}</td>
                         <td className="px-3 py-2.5 text-right text-green-700 font-medium tabular-nums text-xs">{f.fat_per_serve ?? '—'}</td>
                         <td className="px-3 py-2.5 text-right text-pink-700 font-medium tabular-nums text-xs">{f.protein_per_serve ?? '—'}</td>
                         <td className="px-3 py-2.5 text-right">

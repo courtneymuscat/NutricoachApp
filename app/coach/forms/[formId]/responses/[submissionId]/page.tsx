@@ -16,7 +16,7 @@ type QuestionRef = {
 
 const BUBBLE_COLORS = [
   'bg-indigo-100 text-indigo-700',
-  'bg-purple-100 text-purple-700',
+  'bg-teal-100 text-teal-700',
   'bg-blue-100 text-blue-700',
   'bg-teal-100 text-teal-700',
   'bg-green-100 text-green-700',

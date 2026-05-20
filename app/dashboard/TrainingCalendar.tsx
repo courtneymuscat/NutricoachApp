@@ -276,7 +276,7 @@ function eventColour(type: string): string {
     case 'travel':         return 'bg-sky-100 text-sky-800 border-sky-200'
     case 'extra_activity': return 'bg-emerald-100 text-emerald-800 border-emerald-200'
     case 'autoflow':       return 'bg-indigo-100 text-indigo-800 border-indigo-200'
-    default:               return 'bg-purple-100 text-purple-800 border-purple-200'
+    default:               return 'bg-teal-100 text-teal-800 border-teal-200'
   }
 }
 
@@ -974,7 +974,7 @@ function WorkoutModal({ workout, onClose, onSaved, onMoved }: {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-gray-800">
                       {groupLabel && (
-                        <span className="inline-block text-[10px] font-bold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded mr-1.5 align-middle">{groupLabel}</span>
+                        <span className="inline-block text-[10px] font-bold text-teal-700 bg-teal-100 px-1.5 py-0.5 rounded mr-1.5 align-middle">{groupLabel}</span>
                       )}
                       {displayedName}
                     </p>
@@ -1146,8 +1146,8 @@ function WorkoutModal({ workout, onClose, onSaved, onMoved }: {
             // exercise cards).
             if (inGroup && meta?.isFirstInGroup) {
               return (
-                <div key={item.id} className="rounded-t-2xl border-t-2 border-x-2 border-purple-200 bg-purple-50/40 px-2 pt-3 pb-1 space-y-2">
-                  <p className="text-[10px] font-bold text-purple-700 uppercase tracking-widest px-1">
+                <div key={item.id} className="rounded-t-2xl border-t-2 border-x-2 border-teal-200 bg-teal-50/40 px-2 pt-3 pb-1 space-y-2">
+                  <p className="text-[10px] font-bold text-teal-700 uppercase tracking-widest px-1">
                     Superset {meta.supersetId ? supersetLabelById.get(meta.supersetId) : ''} — alternate sets between exercises
                   </p>
                   {exerciseCard}
@@ -1156,14 +1156,14 @@ function WorkoutModal({ workout, onClose, onSaved, onMoved }: {
             }
             if (inGroup && meta?.isLastInGroup) {
               return (
-                <div key={item.id} className="rounded-b-2xl border-b-2 border-x-2 border-purple-200 bg-purple-50/40 px-2 pb-2 -mt-3">
+                <div key={item.id} className="rounded-b-2xl border-b-2 border-x-2 border-teal-200 bg-teal-50/40 px-2 pb-2 -mt-3">
                   {exerciseCard}
                 </div>
               )
             }
             if (inGroup) {
               return (
-                <div key={item.id} className="border-x-2 border-purple-200 bg-purple-50/40 px-2 -mt-3">
+                <div key={item.id} className="border-x-2 border-teal-200 bg-teal-50/40 px-2 -mt-3">
                   {exerciseCard}
                 </div>
               )

@@ -414,10 +414,10 @@ function PSectionScoreInput({ scoreType, value, onChange }: { scoreType: PScoreT
     return (
       <div className="flex items-center gap-1.5">
         <input type="number" min={0} placeholder="00" value={mm ?? ''} onChange={(e) => onChange(`${e.target.value}:${ss ?? '00'}`)}
-          className="w-16 border rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-1 focus:ring-purple-300" />
+          className="w-16 border rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-1 focus:ring-teal-300" />
         <span className="text-gray-400 font-medium">:</span>
         <input type="number" min={0} max={59} placeholder="00" value={ss ?? ''} onChange={(e) => onChange(`${mm ?? '0'}:${e.target.value}`)}
-          className="w-16 border rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-1 focus:ring-purple-300" />
+          className="w-16 border rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-1 focus:ring-teal-300" />
         <span className="text-xs text-gray-400">min : sec (target / cap)</span>
       </div>
     )
@@ -427,10 +427,10 @@ function PSectionScoreInput({ scoreType, value, onChange }: { scoreType: PScoreT
     return (
       <div className="flex items-center gap-1.5">
         <input type="number" min={0} placeholder="0" value={r ?? ''} onChange={(e) => onChange(`${e.target.value}+${rp ?? '0'}`)}
-          className="w-16 border rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-1 focus:ring-purple-300" />
+          className="w-16 border rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-1 focus:ring-teal-300" />
         <span className="text-gray-400 font-medium">+</span>
         <input type="number" min={0} placeholder="0" value={rp ?? ''} onChange={(e) => onChange(`${r ?? '0'}+${e.target.value}`)}
-          className="w-16 border rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-1 focus:ring-purple-300" />
+          className="w-16 border rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-1 focus:ring-teal-300" />
         <span className="text-xs text-gray-400">rounds + reps (target)</span>
       </div>
     )
@@ -441,7 +441,7 @@ function PSectionScoreInput({ scoreType, value, onChange }: { scoreType: PScoreT
       <input type={scoreType === 'custom' ? 'text' : 'number'} min={0} value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={scoreType === 'custom' ? 'e.g. Rx, scaled, 21-15-9…' : '0'}
-        className="w-36 border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-purple-300" />
+        className="w-36 border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-teal-300" />
       {units[scoreType] && <span className="text-xs text-gray-400">{units[scoreType]} (target)</span>}
     </div>
   )
@@ -477,7 +477,7 @@ function PSectionBlock({ section, canUp, canDown, onChange, onRemove, onMoveUp, 
     <div className="bg-white rounded-xl border p-4 space-y-3">
       <div className="flex items-center gap-2">
         <PMoveButtons onUp={onMoveUp} onDown={onMoveDown} canUp={canUp} canDown={canDown} />
-        <span className="text-xs font-semibold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full uppercase tracking-wide flex-shrink-0">Section</span>
+        <span className="text-xs font-semibold text-teal-600 bg-teal-50 px-2 py-0.5 rounded-full uppercase tracking-wide flex-shrink-0">Section</span>
         <input value={section.title} onChange={(e) => onChange({ ...section, title: e.target.value })}
           placeholder="Section title (e.g. Warm Up, Metcon, WOD)"
           className="flex-1 text-sm font-semibold text-gray-900 bg-transparent outline-none border-b border-transparent focus:border-gray-300 min-w-0" />
@@ -486,7 +486,7 @@ function PSectionBlock({ section, canUp, canDown, onChange, onRemove, onMoveUp, 
       <textarea value={section.notes} onChange={(e) => onChange({ ...section, notes: e.target.value })}
         placeholder="Add notes, WOD description, or instructions…"
         rows={3}
-        className="w-full text-sm text-gray-700 border rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-purple-300 placeholder:text-gray-300" />
+        className="w-full text-sm text-gray-700 border rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-teal-300 placeholder:text-gray-300" />
 
       {/* Section exercise list — informational reference to the exercises
           mentioned in the section's instructions (e.g. movements in a WOD).
@@ -497,7 +497,7 @@ function PSectionBlock({ section, canUp, canDown, onChange, onRemove, onMoveUp, 
           {!showPicker && (
             <button
               onClick={() => setShowPicker(true)}
-              className="text-xs font-semibold text-purple-600 hover:text-purple-800 transition-colors"
+              className="text-xs font-semibold text-teal-600 hover:text-teal-800 transition-colors"
             >
               + Add exercise
             </button>
@@ -540,7 +540,7 @@ function PSectionBlock({ section, canUp, canDown, onChange, onRemove, onMoveUp, 
         <div className="flex gap-1.5 flex-wrap">
           {P_SCORE_TYPES.map((t) => (
             <button key={t} onClick={() => onChange({ ...section, scoreType: t, scoreValue: '' })}
-              className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${section.scoreType === t ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+              className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${section.scoreType === t ? 'bg-teal-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
               {P_SCORE_LABEL[t]}
             </button>
           ))}
@@ -608,12 +608,12 @@ function PExerciseBlock({ we, canUp, canDown, onMoveUp, onMoveDown, onChange, on
   }
 
   return (
-    <div className={`bg-white rounded-xl border p-4 space-y-3 ${isInSuperset ? 'border-purple-200' : ''}`}>
+    <div className={`bg-white rounded-xl border p-4 space-y-3 ${isInSuperset ? 'border-teal-200' : ''}`}>
       <div className="flex items-start gap-2">
         <PMoveButtons onUp={onMoveUp} onDown={onMoveDown} canUp={canUp} canDown={canDown} />
         <div className="flex-1 min-w-0">
           {supersetLabel && (
-            <span className="inline-block text-[10px] font-bold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded mr-2 align-middle">{supersetLabel}</span>
+            <span className="inline-block text-[10px] font-bold text-teal-700 bg-teal-100 px-1.5 py-0.5 rounded mr-2 align-middle">{supersetLabel}</span>
           )}
           <p className="font-semibold text-gray-900 inline">{we.name || <span className="text-gray-300 italic font-normal">Unnamed exercise</span>}</p>
           {(we.category || we.equipment) && <p className="text-xs text-gray-400 capitalize mt-0.5">{we.category}{we.equipment ? ` · ${we.equipment}` : ''}</p>}
@@ -631,14 +631,14 @@ function PExerciseBlock({ we, canUp, canDown, onMoveUp, onMoveDown, onChange, on
           {isInSuperset ? (
             <button
               onClick={onUnlinkSuperset}
-              className="font-semibold text-purple-700 hover:text-purple-900 underline"
+              className="font-semibold text-teal-700 hover:text-teal-900 underline"
             >
               Unlink from superset
             </button>
           ) : (
             <button
               onClick={onLinkToPrev}
-              className="font-semibold text-purple-600 hover:text-purple-800 underline"
+              className="font-semibold text-teal-600 hover:text-teal-800 underline"
             >
               ⇲ Link with previous (superset)
             </button>
@@ -957,8 +957,8 @@ function PDayEditor({ day, onChange, onClose }: { day: PDay; onChange: (d: PDay)
           // splitting it across the group members using shared classes.
           if (meta?.isFirstInGroup) {
             return (
-              <div key={item.id} className="rounded-2xl border-2 border-purple-200 bg-purple-50/40 p-3 pb-1 space-y-2 -mx-0.5">
-                <p className="text-[10px] font-bold text-purple-700 uppercase tracking-widest px-1">
+              <div key={item.id} className="rounded-2xl border-2 border-teal-200 bg-teal-50/40 p-3 pb-1 space-y-2 -mx-0.5">
+                <p className="text-[10px] font-bold text-teal-700 uppercase tracking-widest px-1">
                   Superset {supersetLabelById.get(meta.supersetId!)} — alternate sets between exercises
                 </p>
                 {block}
@@ -967,14 +967,14 @@ function PDayEditor({ day, onChange, onClose }: { day: PDay; onChange: (d: PDay)
           }
           if (meta?.isLastInGroup) {
             return (
-              <div key={item.id} className="rounded-2xl border-2 border-purple-200 bg-purple-50/40 p-3 pt-1 -mx-0.5 -mt-3">
+              <div key={item.id} className="rounded-2xl border-2 border-teal-200 bg-teal-50/40 p-3 pt-1 -mx-0.5 -mt-3">
                 {block}
               </div>
             )
           }
           // Middle of a group
           return (
-            <div key={item.id} className="border-x-2 border-purple-200 bg-purple-50/40 px-3 -mx-0.5 -mt-3 -mb-3">
+            <div key={item.id} className="border-x-2 border-teal-200 bg-teal-50/40 px-3 -mx-0.5 -mt-3 -mb-3">
               {block}
             </div>
           )
@@ -991,7 +991,7 @@ function PDayEditor({ day, onChange, onClose }: { day: PDay; onChange: (d: PDay)
                   Add Exercise
                 </button>
                 <button onClick={addSection}
-                  className="flex-1 flex items-center justify-center gap-2 border border-purple-200 text-purple-600 rounded-xl py-2.5 text-sm font-semibold hover:bg-purple-50 transition-colors">
+                  className="flex-1 flex items-center justify-center gap-2 border border-teal-200 text-teal-600 rounded-xl py-2.5 text-sm font-semibold hover:bg-teal-50 transition-colors">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" /></svg>
                   Add Section
                 </button>

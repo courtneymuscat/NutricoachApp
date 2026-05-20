@@ -31,8 +31,8 @@ export default function OrgSetupPrompt() {
   return (
     <div className="flex items-start justify-center py-12">
       <div className="bg-white rounded-2xl border border-gray-100 p-8 w-full max-w-md space-y-5 text-center">
-        <div className="w-12 h-12 bg-purple-50 rounded-xl flex items-center justify-center mx-auto">
-          <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="w-12 h-12 bg-teal-50 rounded-xl flex items-center justify-center mx-auto">
+          <svg className="w-6 h-6 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
           </svg>
         </div>
@@ -53,14 +53,14 @@ export default function OrgSetupPrompt() {
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && setup()}
               placeholder="e.g. Peak Performance Coaching"
-              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
           <button
             onClick={setup}
             disabled={!name.trim() || loading}
-            className="w-full bg-purple-600 text-white rounded-xl py-2.5 text-sm font-medium hover:bg-purple-700 disabled:opacity-50 transition-colors"
+            className="w-full bg-teal-600 text-white rounded-xl py-2.5 text-sm font-medium hover:bg-teal-700 disabled:opacity-50 transition-colors"
           >
             {loading ? 'Creating…' : 'Create organisation'}
           </button>

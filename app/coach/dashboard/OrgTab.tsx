@@ -57,7 +57,7 @@ const TIER_COLOR: Record<string, string> = {
   coached: 'bg-blue-100 text-blue-700',
   individual_free: 'bg-gray-100 text-gray-600',
   individual_optimiser: 'bg-yellow-100 text-yellow-700',
-  individual_elite: 'bg-purple-100 text-purple-700',
+  individual_elite: 'bg-teal-100 text-teal-700',
 }
 
 function initials(name: string | null, email: string | null): string {
@@ -160,7 +160,7 @@ function PermissionsDrawer({
         <div className="px-6 py-5 border-b border-gray-100 flex items-start justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-700 text-sm font-semibold flex items-center justify-center">
+              <div className="w-8 h-8 rounded-full bg-teal-100 text-teal-700 text-sm font-semibold flex items-center justify-center">
                 {initials(coach.full_name, coach.email)}
               </div>
               <div>
@@ -567,7 +567,7 @@ export default function OrgTab() {
           <div className="divide-y divide-gray-50">
             {coaches.map((coach) => (
               <div key={coach.id} className="flex items-center gap-3 py-3">
-                <div className="w-9 h-9 rounded-full bg-purple-100 text-purple-700 font-semibold text-sm flex items-center justify-center shrink-0">
+                <div className="w-9 h-9 rounded-full bg-teal-100 text-teal-700 font-semibold text-sm flex items-center justify-center shrink-0">
                   {initials(coach.full_name, coach.email)}
                 </div>
                 <div className="min-w-0 flex-1">

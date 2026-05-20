@@ -35,7 +35,7 @@ const TIER_LABELS: Record<string, string> = {
 const TIER_COLORS: Record<string, string> = {
   individual_free:      'bg-gray-100 text-gray-500',
   individual_optimiser: 'bg-blue-100 text-blue-600',
-  individual_elite:     'bg-purple-100 text-purple-600',
+  individual_elite:     'bg-teal-100 text-teal-600',
   coached:              'bg-green-100 text-green-600',
   coach_solo:           'bg-gray-100 text-gray-500',
   coach_pro:            'bg-blue-100 text-blue-600',

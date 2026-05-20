@@ -18,14 +18,14 @@ type ServeTargets = {
 
 const CAT_CONFIG: Record<string, { label: string; serve: string; badge: string; color: string }> = {
   protein:   { label: 'Protein',      serve: '1 serve ≈ 30g protein',  badge: 'bg-pink-100 text-pink-700',    color: 'bg-pink-50' },
-  carb:      { label: 'Carbs',        serve: '1 serve ≈ 20g carbs',    badge: 'bg-purple-100 text-purple-700',color: 'bg-purple-50' },
+  carb:      { label: 'Carbs',        serve: '1 serve ≈ 20g carbs',    badge: 'bg-teal-100 text-teal-700',color: 'bg-teal-50' },
   fruit:     { label: 'Fruit',        serve: '1 serve ≈ 20g carbs',    badge: 'bg-orange-100 text-orange-700',color: 'bg-orange-50' },
   fat:       { label: 'Fats',         serve: '1 serve ≈ 10g fat',      badge: 'bg-green-100 text-green-700',  color: 'bg-green-50' },
   condiment: { label: 'Condiments',   serve: '~1 fat or carb serve',   badge: 'bg-blue-100 text-blue-700',    color: 'bg-blue-50' },
   free:      { label: 'Free Foods',   serve: 'Unlimited',              badge: 'bg-gray-100 text-gray-600',    color: 'bg-gray-50' },
 }
 const SEC_LABELS: Record<string, string> = { fat: '+ 1 fat', carb: '+ 1 carb', fat_half: '+ ½ fat', carb_half: '+ ½ carb', protein_half: '+ ½ protein', protein: '+ 1 protein' }
-const SEC_COLORS: Record<string, string> = { fat: 'bg-green-100 text-green-700', carb: 'bg-purple-100 text-purple-700', fat_half: 'bg-green-50 text-green-600', carb_half: 'bg-purple-50 text-purple-600', protein_half: 'bg-pink-50 text-pink-600', protein: 'bg-pink-100 text-pink-700' }
+const SEC_COLORS: Record<string, string> = { fat: 'bg-green-100 text-green-700', carb: 'bg-teal-100 text-teal-700', fat_half: 'bg-green-50 text-green-600', carb_half: 'bg-teal-50 text-teal-600', protein_half: 'bg-pink-50 text-pink-600', protein: 'bg-pink-100 text-pink-700' }
 
 function macrosToServes(macros: { proteinG: number; carbG: number; fatG: number }) {
   const roundHalf = (n: number) => Math.round(n * 2) / 2
@@ -157,7 +157,7 @@ export default function ClientServeGuide({ clientId }: { clientId: string }) {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {([
                 { key: 'protein_serves', label: 'Protein', color: 'text-pink-600' },
-                { key: 'carb_serves', label: 'Carbs', color: 'text-purple-600' },
+                { key: 'carb_serves', label: 'Carbs', color: 'text-teal-600' },
                 { key: 'fat_serves', label: 'Fats', color: 'text-green-600' },
                 { key: 'fruit_serves', label: 'Fruit', color: 'text-orange-500' },
               ] as const).map(({ key, label, color }) => (
@@ -196,7 +196,7 @@ export default function ClientServeGuide({ clientId }: { clientId: string }) {
                   </div>
                   <div className="flex gap-3 text-xs font-semibold">
                     <span className="text-pink-600">~{estP}g P</span>
-                    <span className="text-purple-600">~{estC}g C</span>
+                    <span className="text-teal-600">~{estC}g C</span>
                     <span className="text-green-600">~{estF}g F</span>
                     <span className="text-gray-400 font-normal">(primary macros only)</span>
                   </div>
@@ -220,7 +220,7 @@ export default function ClientServeGuide({ clientId }: { clientId: string }) {
             <div className="flex flex-wrap gap-3">
               {[
                 { label: 'Protein', value: targets.protein_serves, color: 'bg-pink-50 text-pink-700 border-pink-100' },
-                { label: 'Carbs', value: targets.carb_serves, color: 'bg-purple-50 text-purple-700 border-purple-100' },
+                { label: 'Carbs', value: targets.carb_serves, color: 'bg-teal-50 text-teal-700 border-teal-100' },
                 { label: 'Fats', value: targets.fat_serves, color: 'bg-green-50 text-green-700 border-green-100' },
                 { label: 'Fruit', value: targets.fruit_serves, color: 'bg-orange-50 text-orange-700 border-orange-100' },
                 { label: 'Veg', value: targets.veg_unlimited ? '∞' : '—', color: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
@@ -293,7 +293,7 @@ export default function ClientServeGuide({ clientId }: { clientId: string }) {
                           {f.serving_desc && <span className="text-gray-400 text-xs ml-2">{f.serving_desc}</span>}
                         </td>
                         <td className="px-3 py-2.5 text-right text-gray-600 tabular-nums text-xs">{f.calories_per_serve ?? '—'}</td>
-                        <td className="px-3 py-2.5 text-right text-purple-700 font-medium tabular-nums text-xs">{f.carbs_per_serve ?? '—'}</td>
+                        <td className="px-3 py-2.5 text-right text-teal-700 font-medium tabular-nums text-xs">{f.carbs_per_serve ?? '—'}</td>
                         <td className="px-3 py-2.5 text-right text-green-700 font-medium tabular-nums text-xs">{f.fat_per_serve ?? '—'}</td>
                         <td className="px-3 py-2.5 text-right text-pink-700 font-medium tabular-nums text-xs">{f.protein_per_serve ?? '—'}</td>
                         <td className="px-3 py-2.5 text-right">

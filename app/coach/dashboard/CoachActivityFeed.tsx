@@ -39,7 +39,7 @@ const TYPE_COLOR: Record<string, string> = {
   checkin:           'bg-green-50 text-green-500',
   form_submission:   'bg-blue-50 text-blue-500',
   workout:           'bg-orange-50 text-orange-500',
-  autoflow_response: 'bg-purple-50 text-purple-500',
+  autoflow_response: 'bg-teal-50 text-teal-500',
 }
 
 function timeAgo(iso: string) {

@@ -19,7 +19,7 @@ type Assignment = {
 
 const TYPE_META: Record<string, { icon: string; bg: string; text: string }> = {
   link:     { icon: '🔗', bg: 'bg-blue-50',   text: 'text-blue-700' },
-  video:    { icon: '🎬', bg: 'bg-purple-50',  text: 'text-purple-700' },
+  video:    { icon: '🎬', bg: 'bg-teal-50',  text: 'text-teal-700' },
   pdf:      { icon: '📄', bg: 'bg-red-50',     text: 'text-red-700' },
   document: { icon: '📝', bg: 'bg-gray-50',    text: 'text-gray-700' },
 }
