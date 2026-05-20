@@ -98,6 +98,8 @@ type AutoflowCheckIn = {
   flow_id: string
   flow_name: string
   step_number: number
+  step_title?: string | null
+  step_description?: string | null
   submitted_at: string
   answers: Record<string, string>
   questions: { id: string; label: string; type: string }[]
@@ -2082,6 +2084,9 @@ function ExpandableAutoflowCheckIn({ item, clientId, onDelete }: { item: Autoflo
   const [open, setOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const hasAnswers = item.questions.length > 0 && Object.keys(item.answers).length > 0
+  const answeredQuestions = item.questions.filter((q) => q.id in item.answers)
+  const previewCount = answeredQuestions.length
+  const previewItems = answeredQuestions.slice(0, 3)
 
   async function handleDelete() {
     if (!confirm('Delete this check-in response?')) return
@@ -2094,10 +2099,17 @@ function ExpandableAutoflowCheckIn({ item, clientId, onDelete }: { item: Autoflo
   return (
     <div className="bg-white rounded-2xl border overflow-hidden">
       <div className="flex items-center justify-between px-5 py-4">
-        <div>
+        <div className="flex-1 min-w-0">
           <p className="text-xs font-medium text-gray-400">{fmt(item.submitted_at)}</p>
-          <p className="text-sm font-semibold text-gray-900 mt-0.5">{item.flow_name} — Step {item.step_number}</p>
-          <p className="text-xs text-gray-400 mt-0.5">Autoflow check-in</p>
+          <p className="text-sm font-semibold text-gray-900 mt-0.5">
+            {item.flow_name} — Step {item.step_number}
+            {item.step_title ? <span className="text-gray-600">: {item.step_title}</span> : null}
+          </p>
+          {item.step_description ? (
+            <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{item.step_description}</p>
+          ) : (
+            <p className="text-xs text-gray-400 mt-0.5">Autoflow check-in</p>
+          )}
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <button
@@ -2118,6 +2130,26 @@ function ExpandableAutoflowCheckIn({ item, clientId, onDelete }: { item: Autoflo
           </button>
         </div>
       </div>
+      {/* Always-visible preview of what the client answered, so the coach
+          can see the step's content at a glance without expanding. */}
+      {!open && hasAnswers && (
+        <div className="px-5 pb-4 -mt-1 space-y-1.5">
+          {previewItems.map((q) => {
+            const value = item.answers[q.id]
+            const text = typeof value === 'string' ? value : String(value ?? '')
+            const trimmed = text.length > 120 ? text.slice(0, 117) + '…' : text
+            return (
+              <div key={q.id} className="text-xs leading-snug">
+                <span className="text-gray-400">{q.label}: </span>
+                <span className="text-gray-700">{trimmed || <em className="text-gray-300">empty</em>}</span>
+              </div>
+            )
+          })}
+          {previewCount > previewItems.length && (
+            <p className="text-[11px] text-gray-400 italic">+ {previewCount - previewItems.length} more answer{previewCount - previewItems.length === 1 ? '' : 's'} — tap “View responses” to see all</p>
+          )}
+        </div>
+      )}
       {open && (
         <div className="px-5 pb-3 border-t border-gray-100">
           {item.questions.length === 0 ? (

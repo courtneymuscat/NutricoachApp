@@ -148,14 +148,13 @@ export async function GET(
         : Promise.resolve({ data: [] }),
       admin
         .from('autoflow_template_steps')
-        .select('template_id, step_number, questions')
+        .select('template_id, step_number, title, description, questions')
         .in('template_id', [...checkinTemplateIds]),
       checkinFlowIds.length
         ? admin
             .from('client_autoflow_step_overrides')
-            .select('client_autoflow_id, step_number, questions')
+            .select('client_autoflow_id, step_number, title, description, questions')
             .in('client_autoflow_id', checkinFlowIds)
-            .not('questions', 'is', null)
         : Promise.resolve({ data: [] }),
     ])
 
@@ -165,31 +164,50 @@ export async function GET(
       coreQByTemplate[t.id] = cqs.filter((q) => q.type !== 'note' && q.type !== 'section')
     }
 
-    const stepQMap: Record<string, Record<number, { id: string; label: string; type: string }[]>> = {}
+    type StepMeta = { title: string | null; description: string | null; questions: { id: string; label: string; type: string }[] }
+    const stepMetaByTemplate: Record<string, Record<number, StepMeta>> = {}
     for (const s of steps ?? []) {
-      if (!stepQMap[s.template_id]) stepQMap[s.template_id] = {}
+      const rec = s as Record<string, unknown>
+      if (!stepMetaByTemplate[s.template_id]) stepMetaByTemplate[s.template_id] = {}
       const qs = (s.questions as { id: string; label: string; type: string }[] | null) ?? []
-      stepQMap[s.template_id][s.step_number] = qs.filter((q) => q.type !== 'note' && q.type !== 'section')
+      stepMetaByTemplate[s.template_id][s.step_number] = {
+        title: (rec.title as string | null) ?? null,
+        description: (rec.description as string | null) ?? null,
+        questions: qs.filter((q) => q.type !== 'note' && q.type !== 'section'),
+      }
     }
 
-    // Per-client step question overrides take precedence over template questions
-    const overrideQMap: Record<string, Record<number, { id: string; label: string; type: string }[]>> = {}
+    // Per-client step overrides take precedence over template values for any
+    // field they explicitly set (title, description, questions).
+    const overrideMetaMap: Record<string, Record<number, Partial<StepMeta>>> = {}
     for (const ov of stepOverrides ?? []) {
-      if (!overrideQMap[ov.client_autoflow_id]) overrideQMap[ov.client_autoflow_id] = {}
-      const qs = (ov.questions as { id: string; label: string; type: string }[] | null) ?? []
-      overrideQMap[ov.client_autoflow_id][ov.step_number] = qs.filter((q) => q.type !== 'note' && q.type !== 'section')
+      const rec = ov as Record<string, unknown>
+      if (!overrideMetaMap[ov.client_autoflow_id]) overrideMetaMap[ov.client_autoflow_id] = {}
+      const patch: Partial<StepMeta> = {}
+      if (rec.title != null) patch.title = rec.title as string
+      if (rec.description != null) patch.description = rec.description as string
+      if (rec.questions != null) {
+        const qs = (rec.questions as { id: string; label: string; type: string }[] | null) ?? []
+        patch.questions = qs.filter((q) => q.type !== 'note' && q.type !== 'section')
+      }
+      overrideMetaMap[ov.client_autoflow_id][ov.step_number] = patch
     }
 
     autoflowCheckIns = (resps ?? []).map((r) => {
       const templateId = flowTemplateById[r.client_autoflow_id]
       const coreQs = coreQByTemplate[templateId] ?? []
-      // Use per-client override questions if present, otherwise fall back to template questions
-      const stepQs = overrideQMap[r.client_autoflow_id]?.[r.step_number] ?? stepQMap[templateId]?.[r.step_number] ?? []
+      const tplMeta = stepMetaByTemplate[templateId]?.[r.step_number]
+      const overrideMeta = overrideMetaMap[r.client_autoflow_id]?.[r.step_number]
+      const stepQs = overrideMeta?.questions ?? tplMeta?.questions ?? []
+      const stepTitle = overrideMeta?.title ?? tplMeta?.title ?? null
+      const stepDescription = overrideMeta?.description ?? tplMeta?.description ?? null
       return {
         id: r.id,
         flow_id: r.client_autoflow_id,
         flow_name: flowNameById[r.client_autoflow_id] ?? 'Check-in',
         step_number: r.step_number,
+        step_title: stepTitle,
+        step_description: stepDescription,
         submitted_at: r.submitted_at,
         answers: (r.answers as Record<string, string>) ?? {},
         questions: [...coreQs, ...stepQs],
