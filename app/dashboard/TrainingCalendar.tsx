@@ -137,6 +137,7 @@ type ProgramItem = {
   exercises?: SectionExerciseRef[] // section-only: list of referenced exercises
   alternates?: AlternateExerciseRef[] // exercise-only: client-selectable subs
   video_url?: string | null // exercise-only: video link from the library
+  superset_id?: string | null // exercise-only: groups consecutive exercises
 }
 
 type ProgramDay = {
@@ -705,6 +706,65 @@ function WorkoutModal({ workout, onClose, onSaved, onMoved }: {
 
   const items = workout.day.items ?? []
 
+  // Superset group meta — adjacent exercises sharing a superset_id render
+  // inside a single purple-bordered block with A1/A2/A3 labels.
+  type SupersetMeta = { supersetId: string | null; positionInGroup: number; groupSize: number; isFirstInGroup: boolean; isLastInGroup: boolean }
+  const supersetMeta: SupersetMeta[] = []
+  {
+    let currentGroupStart = -1
+    let currentGroupId: string | null = null
+    let currentGroupSize = 0
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i]
+      if (it.type !== 'exercise' || !it.superset_id) {
+        if (currentGroupStart >= 0) {
+          for (let j = currentGroupStart; j < i; j++) {
+            if (supersetMeta[j]) supersetMeta[j].groupSize = currentGroupSize
+            if (supersetMeta[j]) supersetMeta[j].isLastInGroup = j === i - 1
+          }
+        }
+        currentGroupStart = -1
+        currentGroupId = null
+        currentGroupSize = 0
+        supersetMeta.push({ supersetId: null, positionInGroup: 0, groupSize: 0, isFirstInGroup: false, isLastInGroup: false })
+        continue
+      }
+      if (it.superset_id === currentGroupId) {
+        currentGroupSize += 1
+        supersetMeta.push({ supersetId: it.superset_id, positionInGroup: currentGroupSize, groupSize: currentGroupSize, isFirstInGroup: false, isLastInGroup: false })
+      } else {
+        if (currentGroupStart >= 0) {
+          for (let j = currentGroupStart; j < i; j++) {
+            if (supersetMeta[j]) supersetMeta[j].groupSize = currentGroupSize
+            if (supersetMeta[j]) supersetMeta[j].isLastInGroup = j === i - 1
+          }
+        }
+        currentGroupStart = i
+        currentGroupId = it.superset_id
+        currentGroupSize = 1
+        supersetMeta.push({ supersetId: it.superset_id, positionInGroup: 1, groupSize: 1, isFirstInGroup: true, isLastInGroup: false })
+      }
+    }
+    if (currentGroupStart >= 0) {
+      const end = items.length
+      for (let j = currentGroupStart; j < end; j++) {
+        if (supersetMeta[j]) supersetMeta[j].groupSize = currentGroupSize
+        if (supersetMeta[j]) supersetMeta[j].isLastInGroup = j === end - 1
+      }
+    }
+  }
+  const supersetLabelById = new Map<string, string>()
+  {
+    let nextCode = 65
+    for (const meta of supersetMeta) {
+      if (meta.supersetId && meta.groupSize >= 2 && !supersetLabelById.has(meta.supersetId)) {
+        supersetLabelById.set(meta.supersetId, String.fromCharCode(nextCode++))
+      }
+    }
+  }
+  // Quick lookup by item index for use inside the items.map below
+  function metaForIndex(index: number): SupersetMeta | undefined { return supersetMeta[index] }
+
   // Build initial exercise sets from program targets if not pre-filled
   function getExSets(ex: ProgramItem): Array<{ weight: string; reps: string }> {
     if (exSets[ex.id]) return exSets[ex.id]
@@ -828,7 +888,7 @@ function WorkoutModal({ workout, onClose, onSaved, onMoved }: {
             <p className="text-sm text-gray-400 text-center py-4">No exercises scheduled.</p>
           )}
 
-          {items.map((item) => {
+          {items.map((item, idx) => {
             if (item.type === 'section') {
               const hasScore = item.scoreType && item.scoreType !== 'none'
               return (
@@ -905,11 +965,19 @@ function WorkoutModal({ workout, onClose, onSaved, onMoved }: {
             const swapped = swappedTo[item.id] ?? null
             const displayedName = swapped?.name ?? item.name
             const alts = item.alternates ?? []
-            return (
-              <div key={item.id} className="border border-gray-100 rounded-xl px-4 py-3 space-y-2">
+            const meta = metaForIndex(idx)
+            const inGroup = !!(meta?.supersetId && meta.groupSize >= 2)
+            const groupLabel = inGroup && meta?.supersetId ? `${supersetLabelById.get(meta.supersetId)}${meta.positionInGroup}` : null
+            const exerciseCard = (
+              <div className={`rounded-xl px-4 py-3 space-y-2 ${inGroup ? 'border-2 border-purple-200 bg-purple-50/40' : 'border border-gray-100'}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-gray-800">{displayedName}</p>
+                    <p className="text-sm font-semibold text-gray-800">
+                      {groupLabel && (
+                        <span className="inline-block text-[10px] font-bold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded mr-1.5 align-middle">{groupLabel}</span>
+                      )}
+                      {displayedName}
+                    </p>
                     {swapped && (
                       <p className="text-[10px] text-blue-600 mt-0.5">
                         ⇄ Swapped from <span className="italic">{item.name}</span>
@@ -1071,6 +1139,19 @@ function WorkoutModal({ workout, onClose, onSaved, onMoved }: {
                 )}
               </div>
             )
+            // Wrap the card with a superset header on the first member so the
+            // client sees the group + alternation reminder before the block.
+            if (inGroup && meta?.isFirstInGroup) {
+              return (
+                <div key={item.id} className="space-y-2">
+                  <p className="text-[10px] font-bold text-purple-700 uppercase tracking-widest px-1">
+                    Superset {meta.supersetId ? supersetLabelById.get(meta.supersetId) : ''} — alternate sets between exercises
+                  </p>
+                  {exerciseCard}
+                </div>
+              )
+            }
+            return <div key={item.id}>{exerciseCard}</div>
           })}
         </div>
 

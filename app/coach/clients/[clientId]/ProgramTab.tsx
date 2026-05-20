@@ -30,6 +30,10 @@ type PExercise = {
   name: string; category: string; equipment: string; video_url: string
   metrics: PMetrics; showRest: boolean; sets: PSet[]; notes: string
   alternates?: PAlternateExercise[]
+  // Supersets: adjacent exercises in a day that share the same superset_id
+  // render as a single grouped block (purple border + 'A1/A2/A3' labels)
+  // and tell the client to alternate sets between them.
+  superset_id?: string | null
 }
 type PScoreType = 'time' | 'reps' | 'rounds' | 'weight' | 'distance' | 'calories' | 'custom'
 // PSectionExercise is a lightweight reference — sections list exercises
@@ -382,10 +386,15 @@ function PSectionBlock({ section, canUp, canDown, onChange, onRemove, onMoveUp, 
   )
 }
 
-function PExerciseBlock({ we, canUp, canDown, onMoveUp, onMoveDown, onChange, onRemove }: {
+function PExerciseBlock({ we, canUp, canDown, onMoveUp, onMoveDown, onChange, onRemove, supersetLabel, canLinkToPrev, isInSuperset, onLinkToPrev, onUnlinkSuperset }: {
   we: PExercise; canUp: boolean; canDown: boolean
   onMoveUp: () => void; onMoveDown: () => void
   onChange: (u: PExercise) => void; onRemove: () => void
+  supersetLabel?: string | null
+  canLinkToPrev?: boolean
+  isInSuperset?: boolean
+  onLinkToPrev?: () => void
+  onUnlinkSuperset?: () => void
 }) {
   const [showPicker, setShowPicker] = useState(false)
   const [showAltPicker, setShowAltPicker] = useState(false)
@@ -433,11 +442,14 @@ function PExerciseBlock({ we, canUp, canDown, onMoveUp, onMoveDown, onChange, on
   }
 
   return (
-    <div className="bg-white rounded-xl border p-4 space-y-3">
+    <div className={`bg-white rounded-xl border p-4 space-y-3 ${isInSuperset ? 'border-purple-200' : ''}`}>
       <div className="flex items-start gap-2">
         <PMoveButtons onUp={onMoveUp} onDown={onMoveDown} canUp={canUp} canDown={canDown} />
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-gray-900">{we.name || <span className="text-gray-300 italic font-normal">Unnamed exercise</span>}</p>
+          {supersetLabel && (
+            <span className="inline-block text-[10px] font-bold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded mr-2 align-middle">{supersetLabel}</span>
+          )}
+          <p className="font-semibold text-gray-900 inline">{we.name || <span className="text-gray-300 italic font-normal">Unnamed exercise</span>}</p>
           {(we.category || we.equipment) && <p className="text-xs text-gray-400 capitalize mt-0.5">{we.category}{we.equipment ? ` · ${we.equipment}` : ''}</p>}
         </div>
         <button onClick={() => setShowPicker(true)}
@@ -446,6 +458,28 @@ function PExerciseBlock({ we, canUp, canDown, onMoveUp, onMoveDown, onChange, on
         </button>
         <button onClick={onRemove} className="text-gray-300 hover:text-red-400 text-xl leading-none flex-shrink-0">×</button>
       </div>
+
+      {/* Superset link / unlink controls */}
+      {(canLinkToPrev || isInSuperset) && (
+        <div className="flex items-center gap-2 text-[11px]">
+          {isInSuperset ? (
+            <button
+              onClick={onUnlinkSuperset}
+              className="font-semibold text-purple-700 hover:text-purple-900 underline"
+            >
+              Unlink from superset
+            </button>
+          ) : (
+            <button
+              onClick={onLinkToPrev}
+              className="font-semibold text-purple-600 hover:text-purple-800 underline"
+            >
+              ⇲ Link with previous (superset)
+            </button>
+          )}
+        </div>
+      )}
+
       {showPicker && <PExercisePicker onSelect={handleLibSelect} onClose={() => setShowPicker(false)} />}
       <div className="flex items-center gap-1.5 flex-wrap">
         {(Object.keys(PMETRICS_LABELS) as PMetrics[]).map((m) => (
@@ -565,6 +599,107 @@ function PDayEditor({ day, onChange, onClose }: { day: PDay; onChange: (d: PDay)
     setShowAddMenu(false)
   }
 
+  // Link an exercise to form a superset with the immediately-previous
+  // exercise. If the previous exercise has no superset_id, generate a new
+  // one and apply it to both. If it already has one, inherit it.
+  function linkSuperset(i: number) {
+    const prev = day.items[i - 1]
+    const cur = day.items[i]
+    if (!prev || prev.type !== 'exercise' || !cur || cur.type !== 'exercise') return
+    const supersetId = (prev.superset_id ?? null) || crypto.randomUUID()
+    const items = day.items.map((it, idx) => {
+      if (idx !== i && idx !== i - 1) return it
+      if (it.type !== 'exercise') return it
+      return { ...it, superset_id: supersetId }
+    })
+    onChange({ ...day, items })
+  }
+
+  // Unlink this exercise from its superset. If the resulting group would
+  // only have one remaining member, clear that member's superset_id too.
+  function unlinkSuperset(i: number) {
+    const cur = day.items[i]
+    if (!cur || cur.type !== 'exercise' || !cur.superset_id) return
+    const targetId = cur.superset_id
+    const items = day.items.map((it, idx) => {
+      if (idx !== i) return it
+      if (it.type !== 'exercise') return it
+      return { ...it, superset_id: null }
+    })
+    const remaining = items.filter((it) => it.type === 'exercise' && (it as PExercise).superset_id === targetId)
+    if (remaining.length === 1) {
+      const lonelyIdx = items.findIndex((it) => it.type === 'exercise' && (it as PExercise).superset_id === targetId)
+      if (lonelyIdx >= 0) {
+        const target = items[lonelyIdx] as PExercise
+        items[lonelyIdx] = { ...target, superset_id: null }
+      }
+    }
+    onChange({ ...day, items })
+  }
+
+  // Compute superset adjacency: for each exercise, the previous-in-the-same-group
+  // and the position within the group (for A1/A2/A3 labels). Sections break a
+  // group — adjacency is exercise-to-exercise only.
+  type GroupMeta = { supersetId: string | null; positionInGroup: number; groupSize: number; isFirstInGroup: boolean; isLastInGroup: boolean }
+  const groupMeta: GroupMeta[] = []
+  {
+    let currentGroupStart = -1
+    let currentGroupId: string | null = null
+    let currentGroupSize = 0
+    for (let i = 0; i < day.items.length; i++) {
+      const it = day.items[i]
+      if (it.type !== 'exercise' || !it.superset_id) {
+        // Backfill group size for any previously-tracked group
+        if (currentGroupStart >= 0) {
+          for (let j = currentGroupStart; j < i; j++) {
+            if (groupMeta[j]) groupMeta[j].groupSize = currentGroupSize
+            if (groupMeta[j]) groupMeta[j].isLastInGroup = j === i - 1
+          }
+        }
+        currentGroupStart = -1
+        currentGroupId = null
+        currentGroupSize = 0
+        groupMeta.push({ supersetId: null, positionInGroup: 0, groupSize: 0, isFirstInGroup: false, isLastInGroup: false })
+        continue
+      }
+      // Same group as previous?
+      if (it.superset_id === currentGroupId) {
+        currentGroupSize += 1
+        groupMeta.push({ supersetId: it.superset_id, positionInGroup: currentGroupSize, groupSize: currentGroupSize, isFirstInGroup: false, isLastInGroup: false })
+      } else {
+        // Close any prior group
+        if (currentGroupStart >= 0) {
+          for (let j = currentGroupStart; j < i; j++) {
+            if (groupMeta[j]) groupMeta[j].groupSize = currentGroupSize
+            if (groupMeta[j]) groupMeta[j].isLastInGroup = j === i - 1
+          }
+        }
+        currentGroupStart = i
+        currentGroupId = it.superset_id
+        currentGroupSize = 1
+        groupMeta.push({ supersetId: it.superset_id, positionInGroup: 1, groupSize: 1, isFirstInGroup: true, isLastInGroup: false })
+      }
+    }
+    if (currentGroupStart >= 0) {
+      const end = day.items.length
+      for (let j = currentGroupStart; j < end; j++) {
+        if (groupMeta[j]) groupMeta[j].groupSize = currentGroupSize
+        if (groupMeta[j]) groupMeta[j].isLastInGroup = j === end - 1
+      }
+    }
+  }
+
+  // Group label: A, B, C … per superset, in order of appearance
+  const supersetLabelById = new Map<string, string>()
+  {
+    let nextCode = 65 // 'A'
+    for (const meta of groupMeta) {
+      if (meta.supersetId && meta.groupSize >= 2 && !supersetLabelById.has(meta.supersetId)) {
+        supersetLabelById.set(meta.supersetId, String.fromCharCode(nextCode++))
+      }
+    }
+  }
+
   return (
     <div className="border-t border-blue-100 bg-blue-50/30 p-5 space-y-4">
       <div className="flex items-center justify-between">
@@ -575,19 +710,60 @@ function PDayEditor({ day, onChange, onClose }: { day: PDay; onChange: (d: PDay)
         {day.items.length === 0 && !showSearch && (
           <p className="text-sm text-gray-400 text-center py-4">No exercises yet. Add one below.</p>
         )}
-        {day.items.map((item, i) =>
-          item.type === 'exercise' ? (
+        {day.items.map((item, i) => {
+          if (item.type !== 'exercise') {
+            return (
+              <PSectionBlock key={item.id} section={item}
+                canUp={i > 0} canDown={i < day.items.length - 1}
+                onChange={(u) => updateItem(i, u)} onRemove={() => removeItem(i)}
+                onMoveUp={() => moveItem(i, 'up')} onMoveDown={() => moveItem(i, 'down')} />
+            )
+          }
+          const meta = groupMeta[i]
+          const inGroup = !!(meta?.supersetId && meta.groupSize >= 2)
+          const label = inGroup && meta?.supersetId ? `${supersetLabelById.get(meta.supersetId)}${meta.positionInGroup}` : null
+          const prevIsExercise = i > 0 && day.items[i - 1]?.type === 'exercise'
+          const block = (
             <PExerciseBlock key={item.id} we={item}
               canUp={i > 0} canDown={i < day.items.length - 1}
               onMoveUp={() => moveItem(i, 'up')} onMoveDown={() => moveItem(i, 'down')}
-              onChange={(u) => updateItem(i, u)} onRemove={() => removeItem(i)} />
-          ) : (
-            <PSectionBlock key={item.id} section={item}
-              canUp={i > 0} canDown={i < day.items.length - 1}
               onChange={(u) => updateItem(i, u)} onRemove={() => removeItem(i)}
-              onMoveUp={() => moveItem(i, 'up')} onMoveDown={() => moveItem(i, 'down')} />
+              supersetLabel={label}
+              canLinkToPrev={prevIsExercise && !inGroup}
+              isInSuperset={inGroup}
+              onLinkToPrev={() => linkSuperset(i)}
+              onUnlinkSuperset={() => unlinkSuperset(i)} />
           )
-        )}
+
+          if (!inGroup) return <div key={item.id}>{block}</div>
+
+          // Wrap first item of a group with an open container; close on the
+          // last item. We render the container as a continuous block by
+          // splitting it across the group members using shared classes.
+          if (meta?.isFirstInGroup) {
+            return (
+              <div key={item.id} className="rounded-2xl border-2 border-purple-200 bg-purple-50/40 p-3 pb-1 space-y-2 -mx-0.5">
+                <p className="text-[10px] font-bold text-purple-700 uppercase tracking-widest px-1">
+                  Superset {supersetLabelById.get(meta.supersetId!)} — alternate sets between exercises
+                </p>
+                {block}
+              </div>
+            )
+          }
+          if (meta?.isLastInGroup) {
+            return (
+              <div key={item.id} className="rounded-2xl border-2 border-purple-200 bg-purple-50/40 p-3 pt-1 -mx-0.5 -mt-3">
+                {block}
+              </div>
+            )
+          }
+          // Middle of a group
+          return (
+            <div key={item.id} className="border-x-2 border-purple-200 bg-purple-50/40 px-3 -mx-0.5 -mt-3 -mb-3">
+              {block}
+            </div>
+          )
+        })}
         {showSearch && <PExercisePicker onSelect={addExercise} onClose={() => { setShowSearch(false); setShowAddMenu(false) }} />}
         {!showSearch && (
           showAddMenu ? (
