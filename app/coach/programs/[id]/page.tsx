@@ -60,6 +60,18 @@ type ProgramExercise = {
 
 type ScoreType = 'time' | 'reps' | 'rounds' | 'weight' | 'distance' | 'calories' | 'custom'
 
+// Lightweight reference to an exercise listed inside a section's
+// instructions — informational only, not loggable like a top-level
+// ProgramExercise. Snapshot lib metadata so the listing remains stable
+// even if the library exercise is later renamed.
+type SectionExerciseRef = {
+  id: string
+  name: string
+  category?: string
+  equipment?: string
+  video_url?: string | null
+}
+
 type ProgramSection = {
   type: 'section'
   id: string
@@ -67,6 +79,7 @@ type ProgramSection = {
   notes: string
   scoreType: ScoreType | 'none'
   scoreValue: string
+  exercises?: SectionExerciseRef[]
 }
 
 type DayItem = ProgramExercise | ProgramSection
@@ -185,7 +198,7 @@ function newExerciseItem(lib?: LibraryExercise): ProgramExercise {
 }
 
 function newSectionItem(): ProgramSection {
-  return { type: 'section', id: crypto.randomUUID(), title: '', notes: '', scoreType: 'none', scoreValue: '' }
+  return { type: 'section', id: crypto.randomUUID(), title: '', notes: '', scoreType: 'none', scoreValue: '', exercises: [] }
 }
 
 function newDay(): Day {
@@ -376,6 +389,28 @@ function SectionBlock({ section, canUp, canDown, onChange, onRemove, onMoveUp, o
   section: ProgramSection; canUp: boolean; canDown: boolean
   onChange: (s: ProgramSection) => void; onRemove: () => void; onMoveUp: () => void; onMoveDown: () => void
 }) {
+  const [showPicker, setShowPicker] = useState(false)
+  const sectionExercises = section.exercises ?? []
+
+  function addExercise(lib: LibraryExercise) {
+    if (sectionExercises.some((e) => e.id === lib.id)) {
+      setShowPicker(false)
+      return
+    }
+    onChange({
+      ...section,
+      exercises: [
+        ...sectionExercises,
+        { id: lib.id, name: lib.name, category: lib.category, equipment: lib.equipment, video_url: lib.video_url ?? null },
+      ],
+    })
+    setShowPicker(false)
+  }
+
+  function removeExercise(id: string) {
+    onChange({ ...section, exercises: sectionExercises.filter((e) => e.id !== id) })
+  }
+
   return (
     <div className="bg-white rounded-xl border p-4 space-y-3">
       <div className="flex items-center gap-2">
@@ -390,6 +425,52 @@ function SectionBlock({ section, canUp, canDown, onChange, onRemove, onMoveUp, o
         placeholder="Add notes, WOD description, or instructions…"
         rows={3}
         className="w-full text-sm text-gray-700 border rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-purple-300 placeholder:text-gray-300" />
+
+      {/* Section exercise list — informational reference to the exercises
+          mentioned in the section's instructions (e.g. movements in a WOD). */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">List Exercises <span className="font-normal normal-case text-gray-300">(optional)</span></p>
+          {!showPicker && (
+            <button
+              onClick={() => setShowPicker(true)}
+              className="text-xs font-semibold text-purple-600 hover:text-purple-800 transition-colors"
+            >
+              + Add exercise
+            </button>
+          )}
+        </div>
+        {sectionExercises.length > 0 && (
+          <div className="space-y-1.5">
+            {sectionExercises.map((ex) => (
+              <div key={ex.id} className="flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">{ex.name}</p>
+                  {(ex.category || ex.equipment) && (
+                    <p className="text-[11px] text-gray-400 capitalize">
+                      {[ex.category, ex.equipment].filter(Boolean).join(' · ')}
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={() => removeExercise(ex.id)}
+                  className="text-gray-300 hover:text-red-400 text-lg leading-none flex-shrink-0"
+                  aria-label={`Remove ${ex.name}`}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        {showPicker && (
+          <ExercisePicker onSelect={addExercise} onClose={() => setShowPicker(false)} />
+        )}
+        {!showPicker && sectionExercises.length === 0 && (
+          <p className="text-xs text-gray-300">No exercises listed yet — useful for WODs, circuits, or referencing movements named in the instructions.</p>
+        )}
+      </div>
+
       {/* Score type */}
       <div className="space-y-2">
         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Score type</p>
