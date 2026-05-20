@@ -328,8 +328,11 @@ export default function CoachSidebar({
 
       {/* Mobile top spacer — must match the fixed bar's actual rendered
           height (content + safe-area-inset-top) or page content slides up
-          behind the bar on iPhones with a dynamic island/notch. */}
-      <div className="md:hidden" style={{ height: 'calc(56px + env(safe-area-inset-top, 0px))' }} />
+          behind the bar on iPhones with a dynamic island/notch. Extra
+          buffer (72px instead of the ~49px the bar actually measures) so
+          we never undershoot regardless of font rendering / line-height
+          variance across devices. */}
+      <div className="md:hidden" style={{ height: 'calc(72px + env(safe-area-inset-top, 0px))' }} />
 
       {/* Mobile "More" drawer — full-screen overlay */}
       {moreOpen && (
@@ -454,8 +457,9 @@ export default function CoachSidebar({
         </div>
       </nav>
 
-      {/* Mobile bottom spacer */}
-      <div className="md:hidden" style={{ height: 'calc(64px + env(safe-area-inset-bottom, 0px))' }} />
+      {/* Mobile bottom spacer — same buffer treatment as the top spacer
+          so the last item on any page can't slide behind the tab bar. */}
+      <div className="md:hidden" style={{ height: 'calc(80px + env(safe-area-inset-bottom, 0px))' }} />
     </>
   )
 }
