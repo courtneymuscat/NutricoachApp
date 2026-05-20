@@ -123,7 +123,210 @@ function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+type SavedWorkout = {
+  id: string
+  name: string
+  description: string | null
+  content: { name?: string; items?: { type: string }[] }
+  is_org_template: boolean
+  org_id: string | null
+  coach_id?: string
+  created_at: string
+  updated_at: string
+}
+
+function workoutSummary(content: SavedWorkout['content']) {
+  const items = Array.isArray(content?.items) ? content.items : []
+  const ex = items.filter((i) => i?.type === 'exercise').length
+  const sec = items.filter((i) => i?.type !== 'exercise').length
+  const parts: string[] = []
+  if (ex > 0) parts.push(`${ex} exercise${ex === 1 ? '' : 's'}`)
+  if (sec > 0) parts.push(`${sec} section${sec === 1 ? '' : 's'}`)
+  if (parts.length === 0) return 'Empty workout'
+  return parts.join(' · ')
+}
+
+function SavedWorkoutsTab({ orgName, orgRole }: { orgName: string | null; orgRole: 'owner' | 'admin' | 'coach' | null }) {
+  const [own, setOwn] = useState<SavedWorkout[]>([])
+  const [orgTemplates, setOrgTemplates] = useState<SavedWorkout[]>([])
+  const [orgId, setOrgId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [savingId, setSavingId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  async function refresh() {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/coach/saved-workouts')
+      if (res.ok) {
+        const data = await res.json()
+        setOwn(data.own ?? [])
+        setOrgTemplates(data.org_templates ?? [])
+        setOrgId(data.org_id ?? null)
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { refresh() }, [])
+
+  async function rename(w: SavedWorkout) {
+    const next = window.prompt('Rename saved workout:', w.name)
+    if (!next || !next.trim() || next.trim() === w.name) return
+    setSavingId(w.id)
+    try {
+      const res = await fetch(`/api/coach/saved-workouts/${w.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: next.trim() }),
+      })
+      if (res.ok) setOwn((prev) => prev.map((p) => (p.id === w.id ? { ...p, name: next.trim() } : p)))
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  async function togglePublish(w: SavedWorkout) {
+    if (!orgId) {
+      alert('You need to be in an organisation to publish workouts.')
+      return
+    }
+    const next = !w.is_org_template
+    if (next && !window.confirm(`Publish "${w.name}" to ${orgName ?? 'your organisation'}? Other coaches will be able to use it.`)) return
+    setSavingId(w.id)
+    try {
+      const res = await fetch(`/api/coach/saved-workouts/${w.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_org_template: next }),
+      })
+      if (res.ok) setOwn((prev) => prev.map((p) => (p.id === w.id ? { ...p, is_org_template: next } : p)))
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  async function remove(w: SavedWorkout) {
+    if (!window.confirm(`Delete "${w.name}"? This cannot be undone.`)) return
+    setDeletingId(w.id)
+    try {
+      const res = await fetch(`/api/coach/saved-workouts/${w.id}`, { method: 'DELETE' })
+      if (res.ok) setOwn((prev) => prev.filter((p) => p.id !== w.id))
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  const canPublish = orgRole === 'owner' || orgRole === 'admin' || orgRole === 'coach'
+
+  if (loading) return <p className="text-sm text-gray-400 text-center py-16">Loading saved workouts…</p>
+
+  if (own.length === 0 && orgTemplates.length === 0) {
+    return (
+      <div className="text-center py-20">
+        <div className="w-14 h-14 rounded-2xl bg-blue-50 flex items-center justify-center mx-auto mb-4">
+          <svg className="w-7 h-7 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z" />
+          </svg>
+        </div>
+        <p className="text-sm font-semibold text-gray-700 mb-1">No saved workouts yet</p>
+        <p className="text-xs text-gray-400 max-w-sm mx-auto">
+          When you build a day in any program, tap <span className="font-mono">📥 Save as workout</span> to reuse it across other programs and clients.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {orgTemplates.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-gray-900">Organisation workouts</h2>
+            <span className="text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+              {orgName ? `From ${orgName}` : 'Org template'}
+            </span>
+          </div>
+          <p className="text-xs text-gray-500 -mt-1">Published by coaches in your organisation. View only — these will appear in your program day picker.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {orgTemplates.map((w) => (
+              <div key={w.id} className="bg-white rounded-2xl border border-blue-100 p-5 flex flex-col">
+                <p className="text-sm font-semibold text-gray-900 leading-snug mb-1">{w.name}</p>
+                {w.description && <p className="text-xs text-gray-500 mb-2 line-clamp-2">{w.description}</p>}
+                <p className="text-xs text-gray-400 mt-auto">{workoutSummary(w.content)}</p>
+                <p className="text-[10px] text-gray-400 mt-1">Updated {fmtDate(w.updated_at)}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {own.length > 0 && (
+        <div className="space-y-3">
+          {orgTemplates.length > 0 && (
+            <h2 className="text-sm font-semibold text-gray-900">Your workouts</h2>
+          )}
+          <p className="text-xs text-gray-500 -mt-1">
+            {orgName
+              ? `Private to you. Other coaches in ${orgName} can't see these unless you publish them.`
+              : 'Private to you. Use these to populate program days.'}
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {own.map((w) => (
+              <div key={w.id} className="bg-white rounded-2xl border p-5 flex flex-col hover:shadow-sm transition-shadow group">
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <p className="text-sm font-semibold text-gray-900 leading-snug flex-1">{w.name}</p>
+                  {w.is_org_template && (
+                    <span className="text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100 flex-shrink-0">
+                      Published
+                    </span>
+                  )}
+                </div>
+                {w.description && <p className="text-xs text-gray-500 mb-2 line-clamp-2">{w.description}</p>}
+                <p className="text-xs text-gray-400 mt-1">{workoutSummary(w.content)}</p>
+                <p className="text-[10px] text-gray-400 mt-1 mb-3">Updated {fmtDate(w.updated_at)}</p>
+                <div className="flex flex-wrap gap-2 mt-auto">
+                  <button
+                    onClick={() => rename(w)}
+                    disabled={savingId === w.id}
+                    className="flex-1 text-center text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg py-1.5 hover:bg-gray-50 transition-colors disabled:opacity-50"
+                  >
+                    Rename
+                  </button>
+                  {canPublish && orgId && (
+                    <button
+                      onClick={() => togglePublish(w)}
+                      disabled={savingId === w.id}
+                      className={`flex-1 text-center text-xs font-semibold rounded-lg py-1.5 transition-colors disabled:opacity-50 ${
+                        w.is_org_template
+                          ? 'text-amber-700 border border-amber-200 hover:bg-amber-50'
+                          : 'text-blue-700 border border-blue-200 hover:bg-blue-50'
+                      }`}
+                    >
+                      {w.is_org_template ? 'Unpublish' : 'Publish to org'}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => remove(w)}
+                    disabled={deletingId === w.id}
+                    className="text-center text-xs font-semibold text-red-500 border border-red-100 rounded-lg py-1.5 px-2.5 hover:bg-red-50 transition-colors disabled:opacity-50"
+                    title="Delete saved workout"
+                  >
+                    {deletingId === w.id ? '…' : 'Delete'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function ProgramsPage() {
+  const [tab, setTab] = useState<'programs' | 'saved'>('programs')
   const [programs, setPrograms] = useState<ProgramSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
@@ -196,17 +399,42 @@ export default function ProgramsPage() {
   return (
     <div className="flex-1 flex flex-col">
       {/* Header */}
-      <div className="bg-white border-b px-6 py-4 flex items-center justify-between">
-        <h1 className="text-lg font-bold text-gray-900">Programs</h1>
-        <button
-          onClick={() => { setShowModal(true); setName(''); setDescription(''); setError(null) }}
-          className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors"
-        >
-          + New Program
-        </button>
+      <div className="bg-white border-b px-6 pt-4 flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <h1 className="text-lg font-bold text-gray-900">Programs</h1>
+          {tab === 'programs' && (
+            <button
+              onClick={() => { setShowModal(true); setName(''); setDescription(''); setError(null) }}
+              className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors"
+            >
+              + New Program
+            </button>
+          )}
+        </div>
+        <nav className="flex gap-1 -mb-px">
+          <button
+            onClick={() => setTab('programs')}
+            className={`px-3 pb-2.5 text-sm font-semibold border-b-2 transition-colors ${
+              tab === 'programs' ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            Programs
+          </button>
+          <button
+            onClick={() => setTab('saved')}
+            className={`px-3 pb-2.5 text-sm font-semibold border-b-2 transition-colors ${
+              tab === 'saved' ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            Saved workouts
+          </button>
+        </nav>
       </div>
 
       <main className="w-full p-6">
+        {tab === 'saved' ? (
+          <SavedWorkoutsTab orgName={orgName} orgRole={orgRole} />
+        ) : (<>
         {loading && (
           <p className="text-sm text-gray-400 text-center py-16">Loading programs…</p>
         )}
@@ -353,6 +581,7 @@ export default function ProgramsPage() {
             )}
           </div>
         )}
+        </>)}
       </main>
 
       {/* Create modal */}

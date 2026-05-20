@@ -824,6 +824,39 @@ function DayBlock({ day, dayIndex, isDragging, isDragOver, onChange, onDelete, o
 
   const exCount = day.items.filter((i) => i.type === 'exercise').length
 
+  // Save this day as a reusable workout template in the coach's library.
+  const [savingTemplate, setSavingTemplate] = useState(false)
+  const [savedTemplate, setSavedTemplate] = useState(false)
+  async function handleSaveAsTemplate() {
+    if (exCount === 0) {
+      alert('Add at least one exercise to this day before saving as a template.')
+      return
+    }
+    const defaultName = day.name?.trim() || `Day ${dayIndex + 1}`
+    const name = window.prompt('Save this day to your workout library as:', defaultName)
+    if (!name || !name.trim()) return
+    setSavingTemplate(true)
+    try {
+      const res = await fetch('/api/coach/saved-workouts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name.trim(),
+          content: { name: day.name ?? '', items: day.items },
+        }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        alert(d.error ?? 'Failed to save workout')
+      } else {
+        setSavedTemplate(true)
+        setTimeout(() => setSavedTemplate(false), 2500)
+      }
+    } finally {
+      setSavingTemplate(false)
+    }
+  }
+
   return (
     <div
       draggable
@@ -858,6 +891,14 @@ function DayBlock({ day, dayIndex, isDragging, isDragOver, onChange, onDelete, o
           </button>
         )}
         <span className="text-xs text-gray-400 flex-shrink-0">{exCount} exercise{exCount !== 1 ? 's' : ''}</span>
+        <button
+          onClick={handleSaveAsTemplate}
+          disabled={savingTemplate || exCount === 0}
+          className="text-[11px] font-semibold text-gray-500 hover:text-blue-600 border border-gray-200 hover:border-blue-200 px-2 py-1 rounded-lg transition-colors disabled:opacity-40 flex-shrink-0"
+          title="Save this day to your workout library"
+        >
+          {savedTemplate ? '✓ Saved' : savingTemplate ? '…' : '📥 Save'}
+        </button>
         <button onClick={onDelete} className="text-gray-300 hover:text-red-400 transition-colors">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
         </button>

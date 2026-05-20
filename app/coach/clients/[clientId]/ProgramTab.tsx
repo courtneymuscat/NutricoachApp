@@ -700,11 +700,52 @@ function PDayEditor({ day, onChange, onClose }: { day: PDay; onChange: (d: PDay)
     }
   }
 
+  const exCount = day.items.filter((i) => i.type === 'exercise').length
+  const [savingTemplate, setSavingTemplate] = useState(false)
+  const [savedTemplate, setSavedTemplate] = useState(false)
+  async function handleSaveAsTemplate() {
+    if (exCount === 0) {
+      alert('Add at least one exercise to this day before saving as a template.')
+      return
+    }
+    const defaultName = day.name?.trim() || 'Day'
+    const name = window.prompt('Save this day to your workout library as:', defaultName)
+    if (!name || !name.trim()) return
+    setSavingTemplate(true)
+    try {
+      const res = await fetch('/api/coach/saved-workouts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name.trim(),
+          content: { name: day.name ?? '', items: day.items },
+        }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        alert(d.error ?? 'Failed to save workout')
+      } else {
+        setSavedTemplate(true)
+        setTimeout(() => setSavedTemplate(false), 2500)
+      }
+    } finally {
+      setSavingTemplate(false)
+    }
+  }
+
   return (
     <div className="border-t border-blue-100 bg-blue-50/30 p-5 space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-bold text-gray-800">{day.name}</p>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-sm">✕ Close</button>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-bold text-gray-800 flex-1 min-w-0 truncate">{day.name}</p>
+        <button
+          onClick={handleSaveAsTemplate}
+          disabled={savingTemplate || exCount === 0}
+          className="text-[11px] font-semibold text-gray-500 hover:text-blue-600 border border-gray-200 hover:border-blue-200 px-2 py-1 rounded-lg transition-colors disabled:opacity-40 flex-shrink-0"
+          title="Save this day to your workout library"
+        >
+          {savedTemplate ? '✓ Saved' : savingTemplate ? '…' : '📥 Save as workout'}
+        </button>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-sm flex-shrink-0">✕ Close</button>
       </div>
       <div className="space-y-3">
         {day.items.length === 0 && !showSearch && (
