@@ -114,13 +114,13 @@ export default function AutoflowTasksPanel({ onEmpty }: Props) {
               </div>
             )}
 
-            {/* More steps unlocked after completion */}
+            {/* Reminder to mark the step complete to unlock the next one */}
             {step.unlocks_next_step && (
               <div className="flex items-center gap-1.5 pt-1 border-t border-gray-50">
-                <svg className="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                <svg className="w-3 h-3 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <p className="text-xs text-gray-400">More steps to complete after this</p>
+                <p className="text-xs text-amber-600 font-medium">Tick off this step to unlock the next one</p>
               </div>
             )}
           </a>
