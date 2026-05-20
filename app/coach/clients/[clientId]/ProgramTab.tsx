@@ -19,10 +19,17 @@ const PMETRICS_CONFIG: Record<PMetrics, PMetricsCfg> = {
 }
 type PSet = { id: string; setNumber: number; weight: string; reps: string; duration: string; calories: string; rest: string }
 type PLibEx = { id: string; name: string; category: string; equipment: string; muscles?: string; video_url?: string | null }
+// Alternate / substitute exercise — same shape as PSectionExercise. The
+// client can swap the parent exercise for one of these when logging the
+// workout (e.g. 'no leg press → leg extensions'). The swap is recorded on
+// the workout result, the program template stays unchanged.
+type PAlternateExercise = { id: string; name: string; category?: string; equipment?: string; video_url?: string | null }
+
 type PExercise = {
   type: 'exercise'; id: string; exercise_id: string | null
   name: string; category: string; equipment: string; video_url: string
   metrics: PMetrics; showRest: boolean; sets: PSet[]; notes: string
+  alternates?: PAlternateExercise[]
 }
 type PScoreType = 'time' | 'reps' | 'rounds' | 'weight' | 'distance' | 'calories' | 'custom'
 // PSectionExercise is a lightweight reference — sections list exercises
@@ -381,6 +388,28 @@ function PExerciseBlock({ we, canUp, canDown, onMoveUp, onMoveDown, onChange, on
   onChange: (u: PExercise) => void; onRemove: () => void
 }) {
   const [showPicker, setShowPicker] = useState(false)
+  const [showAltPicker, setShowAltPicker] = useState(false)
+  const alternates = we.alternates ?? []
+
+  function addAlternate(lib: PLibEx) {
+    if (alternates.some((a) => a.id === lib.id) || lib.id === we.exercise_id) {
+      setShowAltPicker(false)
+      return
+    }
+    onChange({
+      ...we,
+      alternates: [
+        ...alternates,
+        { id: lib.id, name: lib.name, category: lib.category, equipment: lib.equipment, video_url: lib.video_url ?? null },
+      ],
+    })
+    setShowAltPicker(false)
+  }
+
+  function removeAlternate(id: string) {
+    onChange({ ...we, alternates: alternates.filter((a) => a.id !== id) })
+  }
+
   const cfg = PMETRICS_CONFIG[we.metrics]
   const hasTwoCols = !!cfg.col2
   const gridCols = we.showRest
@@ -461,6 +490,51 @@ function PExerciseBlock({ we, canUp, canDown, onMoveUp, onMoveDown, onChange, on
         placeholder="Coaching notes, cues, or tempo…"
         rows={we.notes ? 2 : 1}
         className="w-full text-xs text-gray-600 border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-blue-300 placeholder:text-gray-300" />
+
+      {/* Alternate / substitute exercises — coach attaches subs for
+          equipment/availability swaps (e.g. 'no leg press → leg
+          extensions'). Client can pick one of these when logging. */}
+      <div className="space-y-2 pt-1 border-t border-gray-100">
+        <div className="flex items-center gap-2">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Alternates <span className="font-normal normal-case text-gray-300">(optional)</span></p>
+          {!showAltPicker && (
+            <button
+              onClick={() => setShowAltPicker(true)}
+              className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors"
+            >
+              + Add alternate
+            </button>
+          )}
+        </div>
+        {alternates.length > 0 && (
+          <div className="space-y-1.5">
+            {alternates.map((a) => (
+              <div key={a.id} className="flex items-center gap-2 bg-blue-50/50 border border-blue-100 rounded-lg px-3 py-1.5">
+                <span className="text-blue-400 text-xs flex-shrink-0">⇄</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-gray-800 truncate">{a.name}</p>
+                  {(a.category || a.equipment) && (
+                    <p className="text-[10px] text-gray-400 capitalize">{[a.category, a.equipment].filter(Boolean).join(' · ')}</p>
+                  )}
+                </div>
+                <button
+                  onClick={() => removeAlternate(a.id)}
+                  className="text-gray-300 hover:text-red-400 text-base leading-none flex-shrink-0"
+                  aria-label={`Remove ${a.name}`}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        {showAltPicker && (
+          <PExercisePicker onSelect={addAlternate} onClose={() => setShowAltPicker(false)} />
+        )}
+        {!showAltPicker && alternates.length === 0 && (
+          <p className="text-[11px] text-gray-300">No alternates yet — if the client doesn&apos;t have access to this equipment they&apos;ll be stuck. Add a substitute so they can swap it out.</p>
+        )}
+      </div>
     </div>
   )
 }

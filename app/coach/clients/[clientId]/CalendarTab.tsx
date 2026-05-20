@@ -168,6 +168,7 @@ type SavedExercise = {
   videoPath?: string
   clientNote?: string
   coachNote?: string
+  swappedTo?: { id: string; name: string; category?: string; equipment?: string; video_url?: string | null }
 }
 
 function CoachVideoPlayer({ path, clientId }: { path: string; clientId: string }) {
@@ -338,9 +339,15 @@ function CoachWorkoutModal({ workout, clientId, clientTimezone, onClose }: {
             }
 
             const savedEx = savedExercises.find((e) => e.id === item.id)
+            const swappedTo = savedEx?.swappedTo
             return (
               <div key={item.id} className="border border-gray-100 rounded-xl px-4 py-3 space-y-1.5">
-                <p className="text-sm font-semibold text-gray-800">{item.name}</p>
+                <p className="text-sm font-semibold text-gray-800">{swappedTo?.name ?? item.name}</p>
+                {swappedTo && (
+                  <p className="text-[10px] text-blue-600">
+                    ⇄ Client swapped from <span className="italic">{item.name}</span>
+                  </p>
+                )}
                 {item.notes && <p className="text-xs text-gray-400">{item.notes}</p>}
                 <p className="text-xs text-gray-400">Target: {item.sets?.length ?? 0} sets × {item.sets?.[0]?.reps ?? '—'}</p>
 

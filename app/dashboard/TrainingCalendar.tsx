@@ -115,9 +115,18 @@ type SectionExerciseRef = {
   video_url?: string | null
 }
 
+type AlternateExerciseRef = {
+  id: string
+  name: string
+  category?: string
+  equipment?: string
+  video_url?: string | null
+}
+
 type ProgramItem = {
   type: 'exercise' | 'section'
   id: string
+  exercise_id?: string | null // exercise — original library id (for matching alternates)
   name?: string        // exercise
   title?: string       // section
   notes?: string
@@ -126,6 +135,8 @@ type ProgramItem = {
   sets?: ProgramSet[]
   metrics?: string
   exercises?: SectionExerciseRef[] // section-only: list of referenced exercises
+  alternates?: AlternateExerciseRef[] // exercise-only: client-selectable subs
+  video_url?: string | null // exercise-only: video link from the library
 }
 
 type ProgramDay = {
@@ -643,6 +654,21 @@ function WorkoutModal({ workout, onClose, onSaved, onMoved }: {
   const [restCountdown, setRestCountdown] = useState<number | null>(null)
   const restTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const [completedSets, setCompletedSets] = useState<Set<string>>(new Set())
+  // Per-item swap map: itemId → AlternateExerciseRef the client chose. When
+  // set, the exercise renders with the alternate's name + video link and
+  // the swap is persisted alongside the workout result so the coach sees
+  // what the client actually did.
+  const [swappedTo, setSwappedTo] = useState<Record<string, AlternateExerciseRef>>(() => {
+    const map: Record<string, AlternateExerciseRef> = {}
+    const existing = workout.result
+      ? ((workout.result.content.exercises ?? []) as Array<{ id: string; swappedTo?: AlternateExerciseRef }>)
+      : []
+    for (const e of existing) {
+      if (e.swappedTo) map[e.id] = e.swappedTo
+    }
+    return map
+  })
+  const [swapPickerFor, setSwapPickerFor] = useState<string | null>(null)
 
   function startRest(seconds: number) {
     if (seconds <= 0) return
@@ -700,6 +726,9 @@ function WorkoutModal({ workout, onClose, onSaved, onMoved }: {
           sets: exSets[i.id] ?? getExSets(i),
           ...(exVideos[i.id] ? { videoPath: exVideos[i.id] } : {}),
           ...(exNotes[i.id]?.trim() ? { clientNote: exNotes[i.id].trim() } : {}),
+          // Persist the client's swap so the coach sees what was actually
+          // done instead of the original prescribed exercise.
+          ...(swappedTo[i.id] ? { swappedTo: swappedTo[i.id] } : {}),
         }))
 
       const res = await fetch('/api/workouts/program-session', {
@@ -873,9 +902,82 @@ function WorkoutModal({ workout, onClose, onSaved, onMoved }: {
             const savedResult = workout.result
               ? ((workout.result.content.exercises ?? []) as Array<{ id: string; coachNote?: string; videoPath?: string; clientNote?: string }>).find((e) => e.id === item.id)
               : null
+            const swapped = swappedTo[item.id] ?? null
+            const displayedName = swapped?.name ?? item.name
+            const alts = item.alternates ?? []
             return (
               <div key={item.id} className="border border-gray-100 rounded-xl px-4 py-3 space-y-2">
-                <p className="text-sm font-semibold text-gray-800">{item.name}</p>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-gray-800">{displayedName}</p>
+                    {swapped && (
+                      <p className="text-[10px] text-blue-600 mt-0.5">
+                        ⇄ Swapped from <span className="italic">{item.name}</span>
+                      </p>
+                    )}
+                  </div>
+                  {alts.length > 0 && logging && (
+                    <button
+                      onClick={() => setSwapPickerFor(swapPickerFor === item.id ? null : item.id)}
+                      className="text-[11px] font-semibold text-blue-600 border border-blue-100 rounded-full px-2.5 py-0.5 hover:bg-blue-50 transition-colors flex-shrink-0"
+                    >
+                      {swapped ? 'Change sub' : 'Swap'}
+                    </button>
+                  )}
+                </div>
+
+                {/* Inline swap picker — shows the original + alternates */}
+                {swapPickerFor === item.id && (
+                  <div className="bg-blue-50 border border-blue-100 rounded-lg p-2 space-y-1">
+                    <p className="text-[10px] text-blue-700 font-semibold uppercase tracking-wide">Swap to…</p>
+                    <button
+                      onClick={() => {
+                        setSwappedTo((prev) => {
+                          const next = { ...prev }
+                          delete next[item.id]
+                          return next
+                        })
+                        setSwapPickerFor(null)
+                      }}
+                      className={`w-full text-left px-2.5 py-1.5 rounded-md text-xs transition-colors ${!swapped ? 'bg-blue-600 text-white' : 'bg-white hover:bg-blue-100 text-gray-800'}`}
+                    >
+                      <p className="font-medium truncate">{item.name} <span className="text-[10px] opacity-70">(original)</span></p>
+                    </button>
+                    {alts.map((a) => (
+                      <button
+                        key={a.id}
+                        onClick={() => {
+                          setSwappedTo((prev) => ({ ...prev, [item.id]: a }))
+                          setSwapPickerFor(null)
+                        }}
+                        className={`w-full text-left px-2.5 py-1.5 rounded-md text-xs transition-colors ${swapped?.id === a.id ? 'bg-blue-600 text-white' : 'bg-white hover:bg-blue-100 text-gray-800'}`}
+                      >
+                        <p className="font-medium truncate">{a.name}</p>
+                        {(a.category || a.equipment) && (
+                          <p className={`text-[10px] capitalize ${swapped?.id === a.id ? 'text-blue-100' : 'text-gray-400'}`}>
+                            {[a.category, a.equipment].filter(Boolean).join(' · ')}
+                          </p>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Video demo for the currently-displayed exercise */}
+                {(swapped?.video_url || (!swapped && item.video_url)) && (
+                  <a
+                    href={(swapped?.video_url ?? item.video_url) as string}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-[11px] text-red-600 hover:text-red-700"
+                  >
+                    <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                    Watch demo
+                  </a>
+                )}
+
                 {item.notes && <p className="text-xs text-gray-400">{item.notes}</p>}
                 <div className="text-xs text-gray-400">
                   Target: {item.sets?.length ?? 0} sets × {item.sets?.[0]?.reps ?? '—'}
