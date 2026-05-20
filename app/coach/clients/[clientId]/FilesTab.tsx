@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
-type ClientFile = { id?: string; url: string; label: string; formTitle: string; submittedAt: string; source?: string }
+type ClientFile = { id?: string; url: string; label: string; formTitle: string; submittedAt: string; source?: string; saveToFile?: boolean }
 
 function fmtFull(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -130,13 +130,27 @@ export default function FilesTab({ clientId }: { clientId: string }) {
       {files.length === 0 && <Empty label="No files uploaded yet." />}
       {files.map((f, i) => {
         const isFormResponse = f.source === 'form'
+        const isSavedToFile = isFormResponse && f.saveToFile === true
         const filename = isFormResponse ? '' : decodeURIComponent(f.url.split('/').pop()?.split('?')[0] ?? 'file')
         const ext = filename.split('.').pop()?.toLowerCase() ?? ''
         const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic'].includes(ext)
         return (
-          <div key={i} className={`bg-white rounded-2xl border p-4 flex items-center gap-4 ${isFormResponse ? 'border-indigo-100' : ''}`}>
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${isFormResponse ? 'bg-indigo-50' : 'bg-blue-50'}`}>
-              {isFormResponse ? (
+          <div
+            key={i}
+            className={`bg-white rounded-2xl border p-4 flex items-center gap-4 ${
+              isSavedToFile ? 'border-emerald-200' : isFormResponse ? 'border-indigo-100' : ''
+            }`}
+          >
+            <div
+              className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                isSavedToFile ? 'bg-emerald-50' : isFormResponse ? 'bg-indigo-50' : 'bg-blue-50'
+              }`}
+            >
+              {isSavedToFile ? (
+                <svg className="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 8h14M5 8a2 2 0 110-4h4l2 2h6a2 2 0 012 2M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8" />
+                </svg>
+              ) : isFormResponse ? (
                 <svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                 </svg>
@@ -166,9 +180,13 @@ export default function FilesTab({ clientId }: { clientId: string }) {
               ) : (
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="text-sm font-medium text-gray-900 truncate">{f.label}</p>
-                  {isFormResponse && (
+                  {isSavedToFile ? (
+                    <span className="text-[10px] bg-emerald-50 text-emerald-600 font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0">
+                      Saved to file
+                    </span>
+                  ) : isFormResponse ? (
                     <span className="text-[10px] bg-indigo-50 text-indigo-500 font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0">Form</span>
-                  )}
+                  ) : null}
                   {f.source === 'coach' && (
                     <span className="text-[10px] bg-purple-50 text-purple-500 font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0">Coach</span>
                   )}

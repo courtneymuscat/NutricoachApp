@@ -24,50 +24,67 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
   // Admin client — coach reading another user's data is blocked by RLS
   const admin = createAdminClient()
 
-  const [submissionsRes, coachFilesRes] = await Promise.all([
-    admin
+  // Try to read the save_to_file flag (added in a recent migration). If the
+  // column doesn't exist yet, fall back gracefully so the Files tab still
+  // works on older databases.
+  let submissionsData: unknown[] = []
+  const withFlag = await admin
+    .from('form_submissions')
+    .select('id, form_id, submitted_at, save_to_file, forms ( title ), form_answers ( value, form_questions ( label, type ) )')
+    .eq('client_id', clientId)
+    .eq('coach_id', coachId)
+    .order('submitted_at', { ascending: false })
+  if (withFlag.error && /save_to_file/i.test(withFlag.error.message)) {
+    const fallback = await admin
       .from('form_submissions')
       .select('id, form_id, submitted_at, forms ( title ), form_answers ( value, form_questions ( label, type ) )')
       .eq('client_id', clientId)
       .eq('coach_id', coachId)
-      .order('submitted_at', { ascending: false }),
-    admin
-      .from('client_files')
-      .select('id, url, name, created_at, uploaded_by')
-      .eq('client_id', clientId)
-      .eq('coach_id', coachId)
-      .order('created_at', { ascending: false }),
-  ])
+      .order('submitted_at', { ascending: false })
+    submissionsData = (fallback.data ?? []) as unknown[]
+  } else {
+    submissionsData = (withFlag.data ?? []) as unknown[]
+  }
 
-  const files: { id?: string; url: string; label: string; formTitle: string; submittedAt: string; source: string }[] = []
+  const { data: coachFilesData } = await admin
+    .from('client_files')
+    .select('id, url, name, created_at, uploaded_by')
+    .eq('client_id', clientId)
+    .eq('coach_id', coachId)
+    .order('created_at', { ascending: false })
+
+  const files: { id?: string; url: string; label: string; formTitle: string; submittedAt: string; source: string; saveToFile?: boolean }[] = []
 
   // Form submissions: one entry per submission (links to response viewer) + any uploaded files
-  for (const submission of submissionsRes.data ?? []) {
-    const formsField = submission.forms as unknown as { title: string } | null
+  for (const submission of submissionsData) {
+    const s = submission as Record<string, unknown>
+    const formsField = s.forms as { title: string } | { title: string }[] | null
     const formTitle = (Array.isArray(formsField) ? formsField[0] : formsField)?.title ?? 'Form'
-    const formId = (submission as unknown as Record<string, unknown>).form_id as string
+    const formId = s.form_id as string
+    const saveToFile = s.save_to_file === true
 
     // Add the form submission itself as a viewable entry
     files.push({
-      url: `/coach/forms/${formId}/responses/${submission.id}`,
+      url: `/coach/forms/${formId}/responses/${s.id}`,
       label: formTitle,
-      formTitle: 'Form response',
-      submittedAt: submission.submitted_at ?? '',
+      formTitle: saveToFile ? 'Saved to file' : 'Form response',
+      submittedAt: (s.submitted_at as string | null) ?? '',
       source: 'form',
+      saveToFile,
     })
 
     // Also surface any file uploads from answers as separate entries
-    const answers = submission.form_answers as unknown as { value: string; form_questions: { label: string; type: string } | null }[]
+    const answers = s.form_answers as { value: string; form_questions: { label: string; type: string } | { label: string; type: string }[] | null }[] | null
     for (const answer of answers ?? []) {
       const q = Array.isArray(answer.form_questions) ? answer.form_questions[0] : answer.form_questions
       if (q?.type === 'file_upload' && answer.value?.startsWith('http')) {
-        files.push({ url: answer.value, label: q.label, formTitle, submittedAt: submission.submitted_at ?? '', source: 'client' })
+        files.push({ url: answer.value, label: q.label, formTitle, submittedAt: (s.submitted_at as string | null) ?? '', source: 'client' })
       }
     }
   }
 
   // Files uploaded directly by coach
-  for (const f of coachFilesRes.data ?? []) {
+  for (const f of coachFilesData ?? []) {
     files.push({ id: f.id, url: f.url, label: f.name, formTitle: 'Coach upload', submittedAt: f.created_at, source: 'coach' })
   }
 
