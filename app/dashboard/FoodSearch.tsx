@@ -67,13 +67,41 @@ function hasMacros(f: { calories_per_100g?: number; protein_per_100g?: number; c
   return c > 0 || p > 0 || cb > 0 || ft > 0
 }
 
+// Reject macros that can't be physically true. Catches Open Food Facts
+// junk entries like "Apple — 100 kcal, P 60g, C 70g, F 50g" where the
+// macros sum to >100g per 100g of food, or the stated calories are wildly
+// inconsistent with the macro breakdown (4·P + 4·C + 9·F).
+//
+// Allows generous tolerance (±50% drift, only over 50 kcal absolute) so
+// rounding and minor calorie sources (alcohol, polyols, fibre) don't
+// false-positive on real foods.
+function isPlausibleMacros(f: { calories_per_100g?: number; protein_per_100g?: number; carbs_per_100g?: number; fat_per_100g?: number }): boolean {
+  const c = f.calories_per_100g ?? 0
+  const p = f.protein_per_100g ?? 0
+  const cb = f.carbs_per_100g ?? 0
+  const ft = f.fat_per_100g ?? 0
+  // Macros can never exceed total mass of the food. Allow a small buffer
+  // for rounding (e.g. 101g of nutrients in 100g is allowed).
+  if (p + cb + ft > 105) return false
+  const computed = p * 4 + cb * 4 + ft * 9
+  // If both numbers exist, they should roughly match. >50% drift over a
+  // 50-kcal absolute difference means the data is broken.
+  if (c > 0 && computed > 0) {
+    const drift = Math.abs(c - computed) / Math.max(c, computed)
+    if (drift > 0.5 && Math.abs(c - computed) > 50) return false
+  }
+  return true
+}
+
 function sortByRelevance<T extends { name: string; calories_per_100g?: number; protein_per_100g?: number; carbs_per_100g?: number; fat_per_100g?: number }>(items: T[], query: string): T[] {
   const terms = query.toLowerCase().trim().split(/\s+/).filter(Boolean)
   return [...items].sort((a, b) => {
-    // Primary: complete entries always above zero-macro entries
-    const aHas = hasMacros(a) ? 1 : 0
-    const bHas = hasMacros(b) ? 1 : 0
-    if (aHas !== bHas) return bHas - aHas
+    // Primary: complete + plausible entries above empty or junk entries.
+    // Treat "good" = has at least one nutrient AND macros are physically
+    // possible / consistent with calories.
+    const aGood = hasMacros(a) && isPlausibleMacros(a) ? 1 : 0
+    const bGood = hasMacros(b) && isPlausibleMacros(b) ? 1 : 0
+    if (aGood !== bGood) return bGood - aGood
     // Secondary: relevance to the query (only when there's a query)
     if (terms.length === 0) return 0
     return getRelevanceScore(b.name, terms) - getRelevanceScore(a.name, terms)

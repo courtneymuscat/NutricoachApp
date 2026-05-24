@@ -141,6 +141,24 @@ function hasMacros(f: FoodResult): boolean {
   return c > 0 || p > 0 || cb > 0 || ft > 0
 }
 
+// Catches Open Food Facts junk where macros sum to >100g/100g of food, or
+// stated calories differ wildly from 4·P + 4·C + 9·F. Generous tolerance
+// (±50% drift over a 50-kcal absolute floor) so rounding + minor calorie
+// sources don't false-positive on real foods.
+function isPlausibleMacros(f: FoodResult): boolean {
+  const c = f.calories_per_100g ?? 0
+  const p = f.protein_per_100g ?? 0
+  const cb = f.carbs_per_100g ?? 0
+  const ft = f.fat_per_100g ?? 0
+  if (p + cb + ft > 105) return false
+  const computed = p * 4 + cb * 4 + ft * 9
+  if (c > 0 && computed > 0) {
+    const drift = Math.abs(c - computed) / Math.max(c, computed)
+    if (drift > 0.5 && Math.abs(c - computed) > 50) return false
+  }
+  return true
+}
+
 function mergeResults(local: FoodResult[], off: FoodResult[], query: string): FoodResult[] {
   const terms = query.toLowerCase().trim().split(/\s+/).filter(t => t.length >= 2)
   const localNames = new Set(local.map(f => f.name.toLowerCase()))
@@ -150,10 +168,10 @@ function mergeResults(local: FoodResult[], off: FoodResult[], query: string): Fo
     : off
   const combined = [...local, ...offFiltered.filter(f => !localNames.has(f.name.toLowerCase()))]
   return [...combined].sort((a, b) => {
-    // Primary: complete entries above zero-macro entries
-    const aHas = hasMacros(a) ? 1 : 0
-    const bHas = hasMacros(b) ? 1 : 0
-    if (aHas !== bHas) return bHas - aHas
+    // Primary: complete + plausible entries above empty / junk ones.
+    const aGood = hasMacros(a) && isPlausibleMacros(a) ? 1 : 0
+    const bGood = hasMacros(b) && isPlausibleMacros(b) ? 1 : 0
+    if (aGood !== bGood) return bGood - aGood
     // Secondary: query relevance
     return getRelevanceScore(b.name, terms) - getRelevanceScore(a.name, terms)
   })
