@@ -12,13 +12,20 @@ export async function GET() {
     .order('logged_at', { ascending: false })
     .limit(40)
 
-  // Deduplicate by food_id (or name), keep most recent occurrence
+  // Deduplicate by food_id (or name), keep most recent occurrence. Also
+  // drop entries where every nutrient is zero/missing — usually OFF
+  // placeholders that snuck into history once and would clutter the
+  // dropdown forever.
   const seen = new Set<string>()
   const unique = (data ?? []).filter((item) => {
     const key = item.food_id ?? item.name
     if (seen.has(key)) return false
     seen.add(key)
-    return true
+    const c = item.calories_per_100g ?? 0
+    const p = item.protein_per_100g ?? 0
+    const cb = item.carbs_per_100g ?? 0
+    const ft = item.fat_per_100g ?? 0
+    return c > 0 || p > 0 || cb > 0 || ft > 0
   }).slice(0, 10)
 
   // Map to FoodResult shape (id instead of food_id)

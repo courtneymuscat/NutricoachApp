@@ -54,10 +54,30 @@ function getRelevanceScore(name: string, terms: string[]): number {
   return score
 }
 
-function sortByRelevance<T extends { name: string }>(items: T[], query: string): T[] {
+// A food is "empty" when its calorie + macro fields are all zero/missing —
+// usually an Open Food Facts entry where the product exists but no one's
+// filled in nutrition. We don't drop these (so they're still searchable by
+// barcode/name in edge cases) but we push them below complete entries so
+// the top of every search is useful.
+function hasMacros(f: { calories_per_100g?: number; protein_per_100g?: number; carbs_per_100g?: number; fat_per_100g?: number }): boolean {
+  const c = f.calories_per_100g ?? 0
+  const p = f.protein_per_100g ?? 0
+  const cb = f.carbs_per_100g ?? 0
+  const ft = f.fat_per_100g ?? 0
+  return c > 0 || p > 0 || cb > 0 || ft > 0
+}
+
+function sortByRelevance<T extends { name: string; calories_per_100g?: number; protein_per_100g?: number; carbs_per_100g?: number; fat_per_100g?: number }>(items: T[], query: string): T[] {
   const terms = query.toLowerCase().trim().split(/\s+/).filter(Boolean)
-  if (terms.length === 0) return items
-  return [...items].sort((a, b) => getRelevanceScore(b.name, terms) - getRelevanceScore(a.name, terms))
+  return [...items].sort((a, b) => {
+    // Primary: complete entries always above zero-macro entries
+    const aHas = hasMacros(a) ? 1 : 0
+    const bHas = hasMacros(b) ? 1 : 0
+    if (aHas !== bHas) return bHas - aHas
+    // Secondary: relevance to the query (only when there's a query)
+    if (terms.length === 0) return 0
+    return getRelevanceScore(b.name, terms) - getRelevanceScore(a.name, terms)
+  })
 }
 
 // Merge local + OFF results, deduplicate by name, sort by relevance.

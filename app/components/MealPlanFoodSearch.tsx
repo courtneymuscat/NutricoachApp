@@ -129,6 +129,18 @@ function getRelevanceScore(name: string, terms: string[]): number {
   return score
 }
 
+// A food is "empty" when calories + macros are all zero/missing — usually
+// an Open Food Facts entry with no nutrition filled in. We push these
+// below complete entries instead of dropping them so they're still
+// searchable when no better match exists.
+function hasMacros(f: FoodResult): boolean {
+  const c = f.calories_per_100g ?? 0
+  const p = f.protein_per_100g ?? 0
+  const cb = f.carbs_per_100g ?? 0
+  const ft = f.fat_per_100g ?? 0
+  return c > 0 || p > 0 || cb > 0 || ft > 0
+}
+
 function mergeResults(local: FoodResult[], off: FoodResult[], query: string): FoodResult[] {
   const terms = query.toLowerCase().trim().split(/\s+/).filter(t => t.length >= 2)
   const localNames = new Set(local.map(f => f.name.toLowerCase()))
@@ -137,7 +149,14 @@ function mergeResults(local: FoodResult[], off: FoodResult[], query: string): Fo
     ? off.filter(f => { const n = f.name.toLowerCase(); return terms.every(t => n.includes(t)) })
     : off
   const combined = [...local, ...offFiltered.filter(f => !localNames.has(f.name.toLowerCase()))]
-  return [...combined].sort((a, b) => getRelevanceScore(b.name, terms) - getRelevanceScore(a.name, terms))
+  return [...combined].sort((a, b) => {
+    // Primary: complete entries above zero-macro entries
+    const aHas = hasMacros(a) ? 1 : 0
+    const bHas = hasMacros(b) ? 1 : 0
+    if (aHas !== bHas) return bHas - aHas
+    // Secondary: query relevance
+    return getRelevanceScore(b.name, terms) - getRelevanceScore(a.name, terms)
+  })
 }
 
 function toMealFood(
