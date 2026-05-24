@@ -891,17 +891,22 @@ export default function MealPlanFoodSearch({ onAdd }: { onAdd: (food: MealFood) 
           </div>
         )}
 
-        {/* No local results — prompt to try expanded */}
+        {/* No local results — prompt to try expanded + scan barcode */}
         {open && !loading && results.length === 0 && query.length >= 2 && (
-          <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-20 px-4 py-3 flex items-center justify-between gap-3">
+          <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-20 px-4 py-3 space-y-2">
             <p className="text-sm text-gray-400">No foods found for &ldquo;{query}&rdquo;</p>
             <button
               type="button"
               onMouseDown={(e) => { e.preventDefault(); setShowModal(true) }}
-              className="text-xs font-semibold text-blue-600 hover:underline whitespace-nowrap"
+              className="block text-xs font-semibold text-blue-600 hover:underline"
             >
-              Search Open Food Facts →
+              Search all of Open Food Facts →
             </button>
+            <p className="text-[11px] text-gray-400 leading-relaxed">
+              Can&apos;t find it? Look it up on{' '}
+              <a href="https://world.openfoodfacts.org/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">openfoodfacts.org</a>
+              {' '}or scan the brand&apos;s barcode below — new entries land in the library straight away.
+            </p>
           </div>
         )}
 
@@ -1032,6 +1037,11 @@ export default function MealPlanFoodSearch({ onAdd }: { onAdd: (food: MealFood) 
           </svg>
           Scan or upload a barcode
         </button>
+        <p className="mt-1.5 text-[11px] text-gray-400 leading-relaxed">
+          Missing a brand? Search it on{' '}
+          <a href="https://world.openfoodfacts.org/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">openfoodfacts.org</a>
+          {' '}or scan its barcode above — the food gets added to your library instantly.
+        </p>
       </div>
 
       {showModal && (
