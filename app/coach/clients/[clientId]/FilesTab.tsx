@@ -203,6 +203,17 @@ export default function FilesTab({ clientId }: { clientId: string }) {
               >
                 {isFormResponse ? 'View response' : 'View'}
               </a>
+              {isFormResponse && (
+                <a
+                  href={`${f.url}${f.url.includes('?') ? '&' : '?'}print=1`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-semibold text-gray-500 hover:text-blue-600"
+                  title="Open the response and trigger Save as PDF"
+                >
+                  PDF
+                </a>
+              )}
               {f.source === 'coach' && f.id && renamingId !== f.id && (
                 <>
                   <button

@@ -197,7 +197,7 @@ export default function CoachSidebar({
   return (
     <>
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex flex-col w-56 bg-white shrink-0 min-h-screen sticky top-0 h-screen border-r border-gray-100">
+      <aside className="hidden md:flex flex-col w-56 bg-white shrink-0 min-h-screen sticky top-0 h-screen border-r border-gray-100 print:hidden">
         <div className="px-5 pt-6 pb-5">
           <Link href="/dashboard" className="flex items-center gap-2">
             {branding.logoUrl ? (
@@ -314,7 +314,7 @@ export default function CoachSidebar({
       </aside>
 
       {/* Mobile top bar (branding only) */}
-      <div className="md:hidden fixed top-0 left-0 right-0 z-30 bg-white px-4 border-b border-gray-100"
+      <div className="md:hidden fixed top-0 left-0 right-0 z-30 bg-white px-4 border-b border-gray-100 print:hidden"
            style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         <div className="flex items-center gap-2 py-3">
           {branding.logoUrl ? (
@@ -409,7 +409,7 @@ export default function CoachSidebar({
 
       {/* Mobile bottom tab bar */}
       <nav
-        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-100"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-100 print:hidden"
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >
         <div className="flex items-stretch">

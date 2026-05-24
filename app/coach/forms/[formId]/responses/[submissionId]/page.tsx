@@ -3,6 +3,7 @@ import { requireCoach } from '@/lib/coach'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import DeleteSubmissionButton from './DeleteSubmissionButton'
+import PrintButton from './PrintButton'
 
 type Ctx = { params: Promise<{ formId: string; submissionId: string }> }
 
@@ -136,7 +137,7 @@ export default async function SubmissionDetailPage({ params }: Ctx) {
       .from('form_answers')
       .select('question_id, value, form_questions(label, description, type, order_index)')
       .eq('submission_id', submissionId),
-    admin.from('profiles').select('email').eq('id', sub.client_id).single(),
+    admin.from('profiles').select('email, full_name').eq('id', sub.client_id).single(),
     admin.from('forms').select('title').eq('id', sub.form_id).single(),
     admin.from('form_questions').select('id, label, description, type, order_index').eq('form_id', sub.form_id).order('order_index'),
   ])
@@ -157,8 +158,8 @@ export default async function SubmissionDetailPage({ params }: Ctx) {
   }))
 
   return (
-    <div className="flex-1 flex flex-col">
-      <div className="bg-white border-b px-6 py-4 flex items-center gap-3">
+    <div className="flex-1 flex flex-col print:bg-white">
+      <div className="bg-white border-b px-6 py-4 flex items-center gap-3 print:hidden">
         <a href={`/coach/forms/${formId}/responses`} className="text-gray-400 hover:text-gray-600">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -170,10 +171,21 @@ export default async function SubmissionDetailPage({ params }: Ctx) {
             {profile?.email} · {new Date(sub.submitted_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
           </p>
         </div>
+        <PrintButton />
         <DeleteSubmissionButton submissionId={submissionId} formId={formId} />
       </div>
 
-      <main className="max-w-2xl mx-auto w-full p-6 space-y-3">
+      {/* Print-only header — clean title + meta for the saved PDF */}
+      <header className="hidden print:block px-6 pt-6 pb-4 border-b border-gray-200">
+        <h1 className="text-xl font-bold text-gray-900">{form?.title ?? 'Submission'}</h1>
+        <p className="text-xs text-gray-500 mt-1">
+          {profile?.full_name ? `${profile.full_name} · ` : ''}{profile?.email}
+          {' · '}
+          {new Date(sub.submitted_at).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+        </p>
+      </header>
+
+      <main className="max-w-2xl mx-auto w-full p-6 space-y-3 print:max-w-none print:p-6">
         {sorted.length === 0 && (
           <p className="text-gray-400 text-sm text-center py-8">No answers recorded.</p>
         )}
