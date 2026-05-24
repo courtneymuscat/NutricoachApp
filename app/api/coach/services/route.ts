@@ -45,11 +45,15 @@ export async function GET() {
 
   if (error) return Response.json({ error: error.message }, { status: 500 })
 
-  const merged = [
-    ...orgItems.map((s) => ({ ...s, is_org_template: true })),
-    ...((data as ServiceRow[] | null) ?? []).map((s) => ({ ...s, is_org_template: false })),
-  ]
-  return Response.json(merged)
+  // Dedupe by id — see comment in /api/forms route.
+  const byId = new Map<string, ServiceRow & { is_org_template: boolean }>()
+  for (const s of (data as ServiceRow[] | null) ?? []) {
+    byId.set(s.id, { ...s, is_org_template: false })
+  }
+  for (const s of orgItems) {
+    byId.set(s.id, { ...s, is_org_template: true })
+  }
+  return Response.json(Array.from(byId.values()))
 }
 
 export async function POST(req: NextRequest) {

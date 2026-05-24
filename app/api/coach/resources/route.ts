@@ -33,12 +33,18 @@ export async function GET() {
   ])
 
   // Org resources don't have the coach's folder relation — flatten and tag
-  // them so the UI can render an "Organisation resources" group.
-  const merged = [
-    ...orgItems.map((r) => ({ ...r, is_org_template: true, coach_resource_folders: null })),
-    ...((own as ResourceRow[] | null) ?? []).map((r) => ({ ...r, is_org_template: false })),
-  ]
-  return Response.json(merged)
+  // them so the UI can render an "Organisation resources" group. Dedupe by
+  // id so the coach-publisher case (where the same row exists in both
+  // 'own' and orgItems) doesn't render twice. Prefer the org-template
+  // entry to preserve the badge.
+  const byId = new Map<string, Record<string, unknown> & { id: string; is_org_template: boolean }>()
+  for (const r of (own as ResourceRow[] | null) ?? []) {
+    byId.set(r.id, { ...r, is_org_template: false })
+  }
+  for (const r of orgItems) {
+    byId.set(r.id, { ...r, is_org_template: true, coach_resource_folders: null })
+  }
+  return Response.json(Array.from(byId.values()))
 }
 
 export async function POST(req: NextRequest) {

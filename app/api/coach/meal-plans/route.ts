@@ -26,11 +26,17 @@ export async function GET() {
     ),
   ])
 
-  const merged = [
-    ...orgItems.map((p) => ({ ...p, is_org_template: true })),
-    ...((own as Array<{ id: string }> | null) ?? []).map((p) => ({ ...p, is_org_template: false })),
-  ]
-  return Response.json(merged)
+  // Dedupe by id — the coach who publishes an org template also owns the
+  // underlying row, so it would otherwise appear once in 'own' and once
+  // in orgItems. Prefer the org-template entry so the UI keeps its badge.
+  const byId = new Map<string, Record<string, unknown> & { id: string; is_org_template: boolean }>()
+  for (const p of ((own as Array<{ id: string }> | null) ?? [])) {
+    byId.set(p.id, { ...p, is_org_template: false })
+  }
+  for (const p of orgItems) {
+    byId.set(p.id, { ...p, is_org_template: true })
+  }
+  return Response.json(Array.from(byId.values()))
 }
 
 export async function POST(req: NextRequest) {

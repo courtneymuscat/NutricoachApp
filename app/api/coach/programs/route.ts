@@ -38,10 +38,17 @@ export async function GET(_req: NextRequest) {
 
   if (ownResult.error) return Response.json({ error: ownResult.error.message }, { status: 500 })
 
-  const combined = [
-    ...orgItems.map((p) => ({ ...p, is_org_template: true })),
-    ...((ownResult.data as ProgramRow[] | null) ?? []).map((p) => ({ ...p, is_org_template: false })),
-  ]
+  // Dedupe by id — coach-publisher rows otherwise appear once in 'own'
+  // and once in orgItems. Prefer the org-template flag so the UI shows
+  // the published badge.
+  const byId = new Map<string, ProgramRow & { is_org_template: boolean }>()
+  for (const p of (ownResult.data as ProgramRow[] | null) ?? []) {
+    byId.set(p.id, { ...p, is_org_template: false })
+  }
+  for (const p of orgItems) {
+    byId.set(p.id, { ...p, is_org_template: true })
+  }
+  const combined = Array.from(byId.values())
 
   // Shape response: replace content with week_count
   const programs = combined.map((p) => ({

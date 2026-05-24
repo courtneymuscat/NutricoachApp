@@ -31,11 +31,18 @@ export async function GET() {
     ),
   ])
 
-  const merged = [
-    ...orgItems.map((t) => ({ ...t, is_org_template: true })),
-    ...((own as FormRow[] | null) ?? []).map((t) => ({ ...t, is_org_template: false })),
-  ]
-  return Response.json(merged)
+  // Dedupe by id: if the coach is the publisher of an org template they
+  // also own the underlying row, so it appears in both 'own' and orgItems
+  // — which produces duplicates in dropdowns (e.g. check-in form picker).
+  // Prefer the org-template entry so the UI keeps its 'Published' badge.
+  const byId = new Map<string, FormRow & { is_org_template: boolean }>()
+  for (const t of (own as FormRow[] | null) ?? []) {
+    byId.set(t.id, { ...t, is_org_template: false })
+  }
+  for (const t of orgItems) {
+    byId.set(t.id, { ...t, is_org_template: true })
+  }
+  return Response.json(Array.from(byId.values()))
 }
 
 export async function POST(req: NextRequest) {

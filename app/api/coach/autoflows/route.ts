@@ -30,11 +30,15 @@ export async function GET() {
     ),
   ])
 
-  const merged = [
-    ...orgItems.map((t) => ({ ...t, is_org_template: true })),
-    ...((own as AutoflowRow[] | null) ?? []).map((t) => ({ ...t, is_org_template: false })),
-  ]
-  return Response.json(merged)
+  // Dedupe by id — see comment in /api/forms route.
+  const byId = new Map<string, AutoflowRow & { is_org_template: boolean }>()
+  for (const t of (own as AutoflowRow[] | null) ?? []) {
+    byId.set(t.id, { ...t, is_org_template: false })
+  }
+  for (const t of orgItems) {
+    byId.set(t.id, { ...t, is_org_template: true })
+  }
+  return Response.json(Array.from(byId.values()))
 }
 
 export async function POST(req: NextRequest) {
