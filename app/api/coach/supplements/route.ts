@@ -14,7 +14,20 @@ export async function GET() {
     .order('created_at', { ascending: true })
 
   if (error) return Response.json({ error: error.message }, { status: 400 })
-  return Response.json(data ?? [])
+
+  // Dedupe by lowercased name, preferring the coach's own row over the
+  // shared seed row of the same name. PATCH on a shared row forks a
+  // coach-owned copy; without this dedupe the library would briefly show
+  // both versions side by side.
+  const byName = new Map<string, Record<string, unknown>>()
+  for (const row of data ?? []) {
+    const key = String((row as { name?: string }).name ?? '').trim().toLowerCase()
+    const current = byName.get(key)
+    if (!current || (row as { coach_id: string | null }).coach_id === coachId) {
+      byName.set(key, row as Record<string, unknown>)
+    }
+  }
+  return Response.json(Array.from(byName.values()))
 }
 
 export async function POST(req: NextRequest) {
