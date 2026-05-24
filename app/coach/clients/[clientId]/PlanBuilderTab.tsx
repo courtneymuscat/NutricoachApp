@@ -582,7 +582,8 @@ function WeeklySchedule({
 
                     {/* Macros */}
                     <div>
-                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">Macros (g) — optional</p>
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">Macros (g) — optional</p>
+                      <p className="text-[11px] text-gray-400 mb-2">Enter a single target (e.g. <span className="font-medium text-gray-500">140</span>) — ranges aren&apos;t supported here. Use the macro note below if you want to give the client a range or reasoning.</p>
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                         {([
                           { gKey: 'protein_g', noteKey: 'protein_note', label: 'Protein' },
