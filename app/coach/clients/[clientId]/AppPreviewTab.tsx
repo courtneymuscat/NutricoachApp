@@ -564,7 +564,9 @@ export default function AppPreviewTab({
               </Section>
             )}
 
-            {/* Protocol — matches ProtocolPanel */}
+            {/* Protocol — matches ProtocolPanel. We cap the preview list at
+                3 to keep the phone frame readable; the live client app
+                renders the full list with no limit. */}
             {protocol.length > 0 && (
               <Section label="Protocol">
                 <div className="bg-white rounded-2xl border border-gray-200 px-4 py-3.5 space-y-2.5">
@@ -574,11 +576,17 @@ export default function AppPreviewTab({
                       <p className="text-xs text-gray-800 line-clamp-3 leading-relaxed">{s.content}</p>
                     </div>
                   ))}
+                  {protocol.length > 3 && (
+                    <p className="text-[10px] text-gray-400 text-center pt-1">
+                      + {protocol.length - 3} more (client sees all)
+                    </p>
+                  )}
                 </div>
               </Section>
             )}
 
-            {/* Supplements — matches SupplementsPanel */}
+            {/* Supplements — matches SupplementsPanel. Preview caps at 5
+                for layout; the client app shows all assigned supplements. */}
             {supplements.length > 0 && (
               <Section label="Supplements">
                 <div className="bg-white rounded-2xl border border-gray-200 divide-y divide-gray-50">
@@ -590,6 +598,11 @@ export default function AppPreviewTab({
                       </div>
                     </div>
                   ))}
+                  {supplements.length > 5 && (
+                    <p className="text-[10px] text-gray-400 text-center py-2">
+                      + {supplements.length - 5} more (client sees all)
+                    </p>
+                  )}
                 </div>
               </Section>
             )}
@@ -641,6 +654,11 @@ export default function AppPreviewTab({
                       <div className="w-6 h-6 rounded-full border-2 border-gray-200 flex-shrink-0" />
                     </div>
                   ))}
+                  {habits.length > 5 && (
+                    <p className="text-[10px] text-gray-400 text-center py-2">
+                      + {habits.length - 5} more (client sees all)
+                    </p>
+                  )}
                 </div>
               </Section>
             )}
