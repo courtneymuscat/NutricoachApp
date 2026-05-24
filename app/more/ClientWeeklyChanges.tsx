@@ -22,6 +22,11 @@ type Phase = {
     protein_g: number | null
     carbs_g: number | null
     fat_g: number | null
+    fibre_g?: number | null
+    protein_note?: string | null
+    carbs_note?: string | null
+    fat_note?: string | null
+    fibre_note?: string | null
   }>
 }
 
@@ -209,7 +214,19 @@ export default function ClientWeeklyChanges() {
               ? `${wd.calorie_adjustment_pct > 0 ? '+' : ''}${wd.calorie_adjustment_pct}% TDEE`
               : null
             const note = (row.phase.week_notes ?? [])[row.weekIndexInPhase] ?? ''
-            const hasMacros = wd && (wd.protein_g != null || wd.carbs_g != null || wd.fat_g != null)
+            const hasMacros = wd && (wd.protein_g != null || wd.carbs_g != null || wd.fat_g != null || wd.fibre_g != null)
+            // List of macros with values + optional reasoning notes, in
+            // canonical display order. Filtered down to whichever ones the
+            // coach actually set.
+            type MacroEntry = { label: string; value: number; note?: string | null; colour: string }
+            const macroEntries: MacroEntry[] = wd
+              ? ([
+                  wd.protein_g != null ? { label: 'protein', value: wd.protein_g, note: wd.protein_note, colour: 'text-teal-500' } : null,
+                  wd.carbs_g   != null ? { label: 'carbs',   value: wd.carbs_g,   note: wd.carbs_note,   colour: 'text-green-500' } : null,
+                  wd.fat_g     != null ? { label: 'fat',     value: wd.fat_g,     note: wd.fat_note,     colour: 'text-blue-400' } : null,
+                  wd.fibre_g   != null ? { label: 'fibre',   value: wd.fibre_g,   note: wd.fibre_note,   colour: 'text-amber-500' } : null,
+                ] as (MacroEntry | null)[]).filter((m): m is MacroEntry => !!m)
+              : []
             const hasContent = calorie || note || hasMacros
 
             return (
@@ -278,54 +295,36 @@ export default function ClientWeeklyChanges() {
                       <div className="pt-3">
                         <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-1">Calorie target</p>
                         <p className="text-xl font-bold text-gray-900">{calorie}</p>
-                        {hasMacros && wd && (
-                          <div className="flex gap-4 mt-2">
-                            {wd.protein_g != null && (
-                              <div className="text-center">
-                                <p className="text-sm font-bold text-teal-500">{wd.protein_g}g</p>
-                                <p className="text-[10px] text-gray-400">protein</p>
+                        {hasMacros && macroEntries.length > 0 && (
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-2">
+                            {macroEntries.map((m) => (
+                              <div key={m.label} className="text-center">
+                                <p className={`text-sm font-bold ${m.colour}`}>{m.value}g</p>
+                                <p className="text-[10px] text-gray-400">{m.label}</p>
+                                {m.note && (
+                                  <p className="text-[10px] text-gray-500 mt-1 leading-snug">{m.note}</p>
+                                )}
                               </div>
-                            )}
-                            {wd.carbs_g != null && (
-                              <div className="text-center">
-                                <p className="text-sm font-bold text-green-500">{wd.carbs_g}g</p>
-                                <p className="text-[10px] text-gray-400">carbs</p>
-                              </div>
-                            )}
-                            {wd.fat_g != null && (
-                              <div className="text-center">
-                                <p className="text-sm font-bold text-blue-400">{wd.fat_g}g</p>
-                                <p className="text-[10px] text-gray-400">fat</p>
-                              </div>
-                            )}
+                            ))}
                           </div>
                         )}
                       </div>
                     )}
 
                     {/* Macros without calories */}
-                    {!calorie && hasMacros && wd && (
+                    {!calorie && hasMacros && macroEntries.length > 0 && (
                       <div className="pt-3">
                         <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-2">Macro targets</p>
-                        <div className="flex gap-4">
-                          {wd.protein_g != null && (
-                            <div className="text-center">
-                              <p className="text-sm font-bold text-teal-500">{wd.protein_g}g</p>
-                              <p className="text-[10px] text-gray-400">protein</p>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          {macroEntries.map((m) => (
+                            <div key={m.label} className="text-center">
+                              <p className={`text-sm font-bold ${m.colour}`}>{m.value}g</p>
+                              <p className="text-[10px] text-gray-400">{m.label}</p>
+                              {m.note && (
+                                <p className="text-[10px] text-gray-500 mt-1 leading-snug">{m.note}</p>
+                              )}
                             </div>
-                          )}
-                          {wd.carbs_g != null && (
-                            <div className="text-center">
-                              <p className="text-sm font-bold text-green-500">{wd.carbs_g}g</p>
-                              <p className="text-[10px] text-gray-400">carbs</p>
-                            </div>
-                          )}
-                          {wd.fat_g != null && (
-                            <div className="text-center">
-                              <p className="text-sm font-bold text-blue-400">{wd.fat_g}g</p>
-                              <p className="text-[10px] text-gray-400">fat</p>
-                            </div>
-                          )}
+                          ))}
                         </div>
                       </div>
                     )}

@@ -21,10 +21,30 @@ type WeekData = {
   protein_g: number | null
   carbs_g: number | null
   fat_g: number | null
+  fibre_g: number | null
+  // Optional per-macro reasoning the coach can leave for themselves /
+  // their client (e.g. "bumped protein for training block"). Stored
+  // alongside the targets so they travel with whichever week they
+  // describe.
+  protein_note: string | null
+  carbs_note: string | null
+  fat_note: string | null
+  fibre_note: string | null
 }
 
 function emptyWeekData(): WeekData {
-  return { calorie_target: null, calorie_adjustment_pct: null, protein_g: null, carbs_g: null, fat_g: null }
+  return {
+    calorie_target: null,
+    calorie_adjustment_pct: null,
+    protein_g: null,
+    carbs_g: null,
+    fat_g: null,
+    fibre_g: null,
+    protein_note: null,
+    carbs_note: null,
+    fat_note: null,
+    fibre_note: null,
+  }
 }
 
 function resizeWeekData(arr: WeekData[], n: number): WeekData[] {
@@ -457,7 +477,7 @@ function WeeklySchedule({
             const coachNote = (row.phase.coach_week_notes ?? [])[row.weekIndexInPhase] ?? ''
             const wd: WeekData = (row.phase.week_data ?? [])[row.weekIndexInPhase] ?? emptyWeekData()
             const hasAnyNote = weekNote || coachNote
-            const hasTargets = wd.calorie_target != null || wd.calorie_adjustment_pct != null || wd.protein_g != null
+            const hasTargets = wd.calorie_target != null || wd.calorie_adjustment_pct != null || wd.protein_g != null || wd.carbs_g != null || wd.fat_g != null || wd.fibre_g != null
 
             const calorie = wd.calorie_target
               ? `${wd.calorie_target} kcal`
@@ -563,16 +583,28 @@ function WeeklySchedule({
                     {/* Macros */}
                     <div>
                       <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">Macros (g) — optional</p>
-                      <div className="grid grid-cols-3 gap-3">
-                        {(['protein_g', 'carbs_g', 'fat_g'] as const).map((key) => (
-                          <div key={key}>
-                            <label className="text-xs text-gray-500 mb-1 block capitalize">{key.replace('_g', '')}</label>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {([
+                          { gKey: 'protein_g', noteKey: 'protein_note', label: 'Protein' },
+                          { gKey: 'carbs_g',   noteKey: 'carbs_note',   label: 'Carbs' },
+                          { gKey: 'fat_g',     noteKey: 'fat_note',     label: 'Fat' },
+                          { gKey: 'fibre_g',   noteKey: 'fibre_note',   label: 'Fibre' },
+                        ] as const).map(({ gKey, noteKey, label }) => (
+                          <div key={gKey} className="space-y-1.5">
+                            <label className="text-xs text-gray-500 block">{label}</label>
                             <input
                               type="number"
-                              value={wd[key] ?? ''}
-                              onChange={(e) => onUpdateWeekData(row.phase.id, row.weekIndexInPhase, { [key]: e.target.value === '' ? null : Number(e.target.value) })}
+                              value={wd[gKey] ?? ''}
+                              onChange={(e) => onUpdateWeekData(row.phase.id, row.weekIndexInPhase, { [gKey]: e.target.value === '' ? null : Number(e.target.value) })}
                               placeholder="g"
                               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+                            />
+                            <input
+                              type="text"
+                              value={wd[noteKey] ?? ''}
+                              onChange={(e) => onUpdateWeekData(row.phase.id, row.weekIndexInPhase, { [noteKey]: e.target.value === '' ? null : e.target.value })}
+                              placeholder="Note (e.g. why this target)"
+                              className="w-full border border-gray-100 bg-gray-50 rounded-xl px-3 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1D9E75]/40 focus:bg-white placeholder:text-gray-400"
                             />
                           </div>
                         ))}
