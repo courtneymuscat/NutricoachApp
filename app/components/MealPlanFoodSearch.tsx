@@ -905,7 +905,7 @@ export default function MealPlanFoodSearch({ onAdd }: { onAdd: (food: MealFood) 
             <p className="text-[11px] text-gray-400 leading-relaxed">
               Can&apos;t find it? Look it up on{' '}
               <a href="https://world.openfoodfacts.org/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">openfoodfacts.org</a>
-              {' '}or scan the brand&apos;s barcode below — new entries land in the library straight away.
+              {' '}and screenshot the barcode — upload it with the scan button below and the food lands in your library straight away.
             </p>
           </div>
         )}
@@ -1040,7 +1040,7 @@ export default function MealPlanFoodSearch({ onAdd }: { onAdd: (food: MealFood) 
         <p className="mt-1.5 text-[11px] text-gray-400 leading-relaxed">
           Missing a brand? Search it on{' '}
           <a href="https://world.openfoodfacts.org/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">openfoodfacts.org</a>
-          {' '}or scan its barcode above — the food gets added to your library instantly.
+          {' '}and screenshot the barcode — upload it with the scan button above and the food lands in your library instantly.
         </p>
       </div>
 
