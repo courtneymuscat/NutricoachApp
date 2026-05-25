@@ -13,11 +13,20 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
 
   const { data: flow } = await supabase
     .from('client_autoflows')
-    .select('id, name, start_date, status, template_id, autoflow_templates(type, total_steps, core_questions)')
+    .select('id, name, start_date, status, template_id, core_questions, autoflow_templates(type, total_steps, core_questions)')
     .eq('id', flowId)
     .eq('coach_id', coachId)
     .single()
   if (!flow) return Response.json({ error: 'Not found' }, { status: 404 })
+
+  // Effective core questions: the flow-level override wins over the
+  // template default. The frontend treats this as a single source of
+  // truth so it doesn't have to coalesce.
+  const tplCore = (flow.autoflow_templates as { core_questions?: unknown[] } | null)?.core_questions ?? []
+  const effectiveCoreQuestions = Array.isArray((flow as { core_questions?: unknown[] }).core_questions)
+    ? (flow as { core_questions: unknown[] }).core_questions
+    : tplCore
+  const hasCoreOverride = Array.isArray((flow as { core_questions?: unknown[] }).core_questions)
 
   const [{ data: steps }, { data: overrides }, { data: responses }] = await Promise.all([
     supabase
@@ -86,7 +95,15 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     }
   })
 
-  return Response.json({ ...flow, steps: enrichedSteps })
+  return Response.json({
+    ...flow,
+    // Expose the resolved core_questions at the top level so the UI can
+    // show a single editable list, plus a flag the editor uses to decide
+    // whether to label the entries as overridden.
+    effective_core_questions: effectiveCoreQuestions,
+    core_questions_overridden: hasCoreOverride,
+    steps: enrichedSteps,
+  })
 }
 
 // PUT: save client-specific question and/or due-date override for a step
@@ -95,7 +112,7 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
   const coachId = await requireCoach()
   if (!coachId) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { step_number, questions, due_date, title, description } = await req.json()
+  const { step_number, questions, due_date, title, description, core_questions } = await req.json()
   if (!step_number) return Response.json({ error: 'step_number required' }, { status: 400 })
 
   const supabase = await createClient()
@@ -118,6 +135,17 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
   await supabase
     .from('client_autoflow_step_overrides')
     .upsert(upsertPayload, { onConflict: 'client_autoflow_id,step_number' })
+
+  // Core questions are flow-level (applied to every step) — when the
+  // coach edits them inside the per-step editor, the change propagates
+  // to the parent client_autoflows row instead of the per-step override.
+  if (core_questions !== undefined) {
+    await supabase
+      .from('client_autoflows')
+      .update({ core_questions: Array.isArray(core_questions) ? core_questions : null })
+      .eq('id', flowId)
+      .eq('coach_id', coachId)
+  }
 
   // If due_date changed, update the corresponding calendar event
   if (due_date !== undefined && due_date !== null) {

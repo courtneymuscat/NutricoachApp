@@ -65,6 +65,13 @@ type FlowDetail = {
   status: string
   template_id: string
   autoflow_templates: { type: string; total_steps: number; core_questions: unknown[] } | null
+  // Flow-level core question override: when the coach has customised the
+  // template's core questions for this specific client, the server
+  // returns them here. effective_core_questions is the resolved list
+  // (override if present, otherwise template default).
+  core_questions: Question[] | null
+  effective_core_questions: Question[]
+  core_questions_overridden: boolean
   steps: FlowStep[]
 }
 
@@ -73,6 +80,11 @@ type StepEditor = {
   title: string
   description: string
   questions: Question[]
+  // Editable copy of the flow-level core questions. Saved via the same
+  // PUT endpoint but separately keyed in the upsert so a change here
+  // doesn't trample per-step state.
+  coreQuestions: Question[]
+  coreQuestionsDirty: boolean
 }
 
 const Q_TYPES: { value: Question['type']; label: string }[] = [
@@ -177,6 +189,10 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
         title: editingStep.title,
         description: editingStep.description,
         questions: editingStep.questions,
+        // Only push core_questions when the coach has actually touched
+        // them — otherwise we'd inadvertently lock in the template's
+        // defaults as a client-specific override.
+        ...(editingStep.coreQuestionsDirty ? { core_questions: editingStep.coreQuestions } : {}),
       }),
     })
     const d = await res.json()
@@ -194,6 +210,8 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
       title: step.title,
       description: step.description ?? '',
       questions: JSON.parse(JSON.stringify(step.questions ?? [])),
+      coreQuestions: JSON.parse(JSON.stringify(selectedFlow?.effective_core_questions ?? [])),
+      coreQuestionsDirty: false,
     })
     setStepIsDirty(false)
     setStepSaveError(null)
@@ -228,6 +246,50 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
   function removeQuestion(idx: number) {
     if (!editingStep) return
     updateStepEditor({ questions: editingStep.questions.filter((_, i) => i !== idx) })
+  }
+
+  // Core question editors — mirror per-step but mutate coreQuestions and
+  // flip coreQuestionsDirty so saveStep knows to push the override.
+  function updateCoreQuestion(idx: number, patch: Partial<Question>) {
+    if (!editingStep) return
+    const qs = [...editingStep.coreQuestions]
+    qs[idx] = { ...qs[idx], ...patch }
+    setEditingStep({ ...editingStep, coreQuestions: qs, coreQuestionsDirty: true })
+    setStepIsDirty(true)
+  }
+
+  function addCoreQuestion() {
+    if (!editingStep) return
+    const q: Question = { id: crypto.randomUUID(), type: 'text', label: '', required: false }
+    setEditingStep({
+      ...editingStep,
+      coreQuestions: [...editingStep.coreQuestions, q],
+      coreQuestionsDirty: true,
+    })
+    setStepIsDirty(true)
+  }
+
+  function removeCoreQuestion(idx: number) {
+    if (!editingStep) return
+    setEditingStep({
+      ...editingStep,
+      coreQuestions: editingStep.coreQuestions.filter((_, i) => i !== idx),
+      coreQuestionsDirty: true,
+    })
+    setStepIsDirty(true)
+  }
+
+  function resetCoreToTemplate() {
+    if (!editingStep) return
+    const tplCore = (selectedFlow?.autoflow_templates?.core_questions as Question[] | undefined) ?? []
+    setEditingStep({
+      ...editingStep,
+      coreQuestions: JSON.parse(JSON.stringify(tplCore)),
+      // Push `core_questions: null` on save to wipe the override and fall
+      // back to the template — handled in saveStep via the dirty flag.
+      coreQuestionsDirty: true,
+    })
+    setStepIsDirty(true)
   }
 
   async function removeFlow(flowId: string) {
@@ -306,9 +368,80 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
           />
         </div>
 
+        {/* Core questions — flow-level, apply to every step. Edits here
+            propagate to the parent client_autoflows row instead of the
+            per-step override. */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-xs font-medium text-gray-700">
+              Core questions <span className="text-gray-400 font-normal">— apply to every step</span>
+            </label>
+            {selectedFlow?.core_questions_overridden && !editingStep.coreQuestionsDirty && (
+              <button
+                onClick={resetCoreToTemplate}
+                className="text-[11px] text-gray-400 hover:text-blue-600 underline"
+                title="Discard the client-specific override and use the template's core questions"
+              >
+                Reset to template
+              </button>
+            )}
+          </div>
+          <div className="space-y-2">
+            {editingStep.coreQuestions.map((q, i) => (
+              <div key={q.id} className="border border-blue-100 rounded-xl p-3 space-y-2 bg-blue-50/40">
+                <div className="flex items-start gap-2">
+                  <div className="flex-1 space-y-1.5">
+                    <input
+                      value={q.label}
+                      onChange={e => updateCoreQuestion(i, { label: e.target.value })}
+                      placeholder={q.type === 'note' ? 'Note text…' : q.type === 'section' ? 'Section heading…' : 'Question…'}
+                      className="w-full border border-blue-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white"
+                    />
+                    <div className="flex items-center gap-3">
+                      <select
+                        value={q.type}
+                        onChange={e => updateCoreQuestion(i, { type: e.target.value as Question['type'] })}
+                        className="text-xs border border-blue-200 rounded-lg px-2 py-1 focus:outline-none bg-white"
+                      >
+                        {Q_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                      </select>
+                      {q.type !== 'note' && q.type !== 'section' && (
+                        <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={q.required}
+                            onChange={e => updateCoreQuestion(i, { required: e.target.checked })}
+                            className="rounded"
+                          />
+                          Required
+                        </label>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => removeCoreQuestion(i)}
+                    className="text-gray-300 hover:text-red-500 transition-colors flex-shrink-0 mt-1"
+                    title="Remove core question"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            ))}
+            <button
+              onClick={addCoreQuestion}
+              className="w-full text-xs text-blue-600 hover:text-blue-800 border border-dashed border-blue-200 rounded-xl py-2 px-3 transition-colors"
+            >
+              + Add core question
+            </button>
+          </div>
+        </div>
+
         {/* Questions */}
         <div>
-          <label className="block text-xs font-medium text-gray-700 mb-2">Questions</label>
+          <label className="block text-xs font-medium text-gray-700 mb-2">Step-specific questions</label>
           <div className="space-y-2">
             {editingStep.questions.map((q, i) => (
               <div key={q.id} className="border border-gray-200 rounded-xl p-3 space-y-2 bg-white">
