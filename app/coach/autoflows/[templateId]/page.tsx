@@ -622,6 +622,36 @@ export default function AutoflowTemplatePage({ params }: { params: Promise<{ tem
     })
   }
 
+  // Duplicate the step identified by step_number. Gives the copy a fresh
+  // step_number (max + 1, appended to the end) so existing per-client
+  // overrides for the source step stay attached to the original. The copy
+  // gets fresh ids on its questions and tasks. Coach can rename + move
+  // afterwards.
+  function duplicateStep(stepNum: number) {
+    if (!template) return
+    const source = template.steps.find(s => s.step_number === stepNum)
+    if (!source) return
+    const nextNum = Math.max(0, ...template.steps.map(s => s.step_number)) + 1
+    const copy: Step = {
+      ...source,
+      step_number: nextNum,
+      title: source.title ? `${source.title} (copy)` : `Step ${nextNum}`,
+      questions: source.questions.map(q => ({ ...q, id: crypto.randomUUID() })),
+      tasks: (source.tasks ?? []).map(t => ({ ...t, id: crypto.randomUUID() })),
+      // Preserve trigger semantics but if the source was on_step_complete
+      // pointing at itself, that's nonsensical for the copy — reset to
+      // day_offset trigger so the coach picks a sensible source.
+      trigger_step_number: source.trigger_step_number === stepNum ? null : source.trigger_step_number,
+    }
+    setTemplate({
+      ...template,
+      total_steps: nextNum,
+      steps: [...template.steps, copy],
+    })
+    setActiveStep(nextNum)
+    setTab('steps')
+  }
+
   // Swap the step at sorted index `idx` with the neighbour at `idx + dir`.
   // We swap their step_number values (instead of resequencing) so per-client
   // overrides keyed on step_number stay attached to the same step. Any
@@ -864,25 +894,35 @@ export default function AutoflowTemplatePage({ params }: { params: Promise<{ tem
                 </span>
               </button>
               {!readOnly && (
-                <div className="absolute right-1 top-1/2 -translate-y-1/2 flex flex-col opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); moveStep(i, -1) }}
-                    disabled={i === 0}
-                    className="text-gray-300 hover:text-gray-700 disabled:opacity-30 disabled:hover:text-gray-300 p-0.5"
-                    title="Move up"
+                    onClick={(e) => { e.stopPropagation(); duplicateStep(s.step_number) }}
+                    className="text-gray-300 hover:text-blue-600 p-0.5"
+                    title="Duplicate this step"
                   >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7" /></svg>
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
                   </button>
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); moveStep(i, 1) }}
-                    disabled={i === arr.length - 1}
-                    className="text-gray-300 hover:text-gray-700 disabled:opacity-30 disabled:hover:text-gray-300 p-0.5"
-                    title="Move down"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
-                  </button>
+                  <div className="flex flex-col">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); moveStep(i, -1) }}
+                      disabled={i === 0}
+                      className="text-gray-300 hover:text-gray-700 disabled:opacity-30 disabled:hover:text-gray-300 p-0.5"
+                      title="Move up"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7" /></svg>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); moveStep(i, 1) }}
+                      disabled={i === arr.length - 1}
+                      className="text-gray-300 hover:text-gray-700 disabled:opacity-30 disabled:hover:text-gray-300 p-0.5"
+                      title="Move down"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
