@@ -240,7 +240,11 @@ export default async function CoachCheckInsPage() {
       const tplIds = [...new Set(activeFlows.map((f) => f.template_id))]
       const { data: templates } = await admin
         .from('autoflow_templates').select('id, type').in('id', tplIds)
-      const weeklyTplIds = new Set((templates ?? []).filter((t) => t.type === 'weekly_checkin').map((t) => t.id))
+      // Onboarding + custom autoflows also collect responses from the
+      // client, so they count as a scheduled "check-in" for the
+      // "no check-in in next 7 days" calc — not just weekly_checkin.
+      const RESPONSE_TYPES = new Set(['weekly_checkin', 'onboarding', 'custom'])
+      const weeklyTplIds = new Set((templates ?? []).filter((t) => RESPONSE_TYPES.has(t.type as string)).map((t) => t.id))
       const weeklyFlows = activeFlows.filter((f) => weeklyTplIds.has(f.template_id))
 
       if (weeklyFlows.length) {

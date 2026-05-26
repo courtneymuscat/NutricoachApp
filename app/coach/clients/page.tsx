@@ -69,12 +69,20 @@ export default async function CoachClientsPage() {
     }
 
     const activeIds = (allRows ?? []).filter(r => r.status !== 'pending_invite').map(r => r.client_id)
-    const [{ data: latestCheckIns }, { data: latestAutoflowResps }] = await Promise.all([
+    // Three sources feed "last check-in": the raw daily check_ins table,
+    // autoflow step responses, and form_submissions (weekly check-in
+    // forms, onboarding forms, etc.). All three count — without
+    // form_submissions, clients who exclusively submit via a form show
+    // as 'never' even though they're checking in regularly.
+    const [{ data: latestCheckIns }, { data: latestAutoflowResps }, { data: latestFormSubs }] = await Promise.all([
       activeIds.length
         ? admin.from('check_ins').select('user_id, created_at').in('user_id', activeIds).or('sleep_hours.not.is.null,notes.not.is.null,rhr.not.is.null,hrv.not.is.null').order('created_at', { ascending: false })
         : Promise.resolve({ data: [] }),
       activeIds.length
         ? admin.from('autoflow_responses').select('client_id, submitted_at').in('client_id', activeIds).order('submitted_at', { ascending: false })
+        : Promise.resolve({ data: [] }),
+      activeIds.length
+        ? admin.from('form_submissions').select('client_id, submitted_at').in('client_id', activeIds).order('submitted_at', { ascending: false })
         : Promise.resolve({ data: [] }),
     ])
 
@@ -83,6 +91,10 @@ export default async function CoachClientsPage() {
       if (!lastCheckIn[c.user_id]) lastCheckIn[c.user_id] = c.created_at
     }
     for (const r of latestAutoflowResps ?? []) {
+      const existing = lastCheckIn[r.client_id]
+      if (!existing || r.submitted_at > existing) lastCheckIn[r.client_id] = r.submitted_at
+    }
+    for (const r of latestFormSubs ?? []) {
       const existing = lastCheckIn[r.client_id]
       if (!existing || r.submitted_at > existing) lastCheckIn[r.client_id] = r.submitted_at
     }
