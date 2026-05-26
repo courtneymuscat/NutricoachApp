@@ -10,26 +10,30 @@ type FormRow = {
   type: string | null
   is_active: boolean | null
   created_at: string
+  archived_at?: string | null
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const coachId = await requireCoach()
   if (!coachId) return Response.json({ error: 'Unauthorised' }, { status: 401 })
 
   const supabase = await createClient()
+  const archivedView = new URL(req.url).searchParams.get('archived') === '1'
   const [{ data: own }, orgItems] = await Promise.all([
     supabase
       .from('forms')
-      .select('id, title, description, type, is_active, created_at')
+      .select('id, title, description, type, is_active, created_at, archived_at')
       .eq('coach_id', coachId)
       .eq('is_client_copy', false)
-      .is('archived_at', null)
+      .filter('archived_at', archivedView ? 'not.is' : 'is', null)
       .order('created_at', { ascending: false }),
-    fetchOrgTemplatesForCoach<FormRow>(
-      coachId,
-      'forms',
-      'id, title, description, type, is_active, created_at',
-    ),
+    archivedView
+      ? Promise.resolve([] as FormRow[])
+      : fetchOrgTemplatesForCoach<FormRow>(
+          coachId,
+          'forms',
+          'id, title, description, type, is_active, created_at',
+        ),
   ])
 
   // Dedupe by id: if the coach is the publisher of an org template they

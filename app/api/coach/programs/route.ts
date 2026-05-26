@@ -11,30 +11,34 @@ type ProgramRow = {
   content: unknown
   created_at: string
   updated_at: string | null
+  archived_at?: string | null
 }
 
-export async function GET(_req: NextRequest) {
+export async function GET(req: NextRequest) {
   const coachId = await requireCoach()
   if (!coachId) return Response.json({ error: 'Unauthorised' }, { status: 401 })
 
   const supabase = await createClient()
+  const archivedView = new URL(req.url).searchParams.get('archived') === '1'
 
   // Auto-seed starter templates if they haven't been added yet
-  await seedCoachTemplates(coachId)
+  if (!archivedView) await seedCoachTemplates(coachId)
 
   const [ownResult, orgItems] = await Promise.all([
     supabase
       .from('programs')
-      .select('id, name, description, content, created_at, updated_at')
+      .select('id, name, description, content, created_at, updated_at, archived_at')
       .eq('coach_id', coachId)
       .eq('is_org_template', false)
-      .is('archived_at', null)
-      .order('created_at', { ascending: false }),
-    fetchOrgTemplatesForCoach<ProgramRow>(
-      coachId,
-      'programs',
-      'id, name, description, content, created_at, updated_at',
-    ),
+      .filter('archived_at', archivedView ? 'not.is' : 'is', null)
+      .order(archivedView ? 'updated_at' : 'created_at', { ascending: false }),
+    archivedView
+      ? Promise.resolve([] as ProgramRow[])
+      : fetchOrgTemplatesForCoach<ProgramRow>(
+          coachId,
+          'programs',
+          'id, name, description, content, created_at, updated_at',
+        ),
   ])
 
   if (ownResult.error) return Response.json({ error: ownResult.error.message }, { status: 500 })
@@ -59,6 +63,7 @@ export async function GET(_req: NextRequest) {
     week_count: Array.isArray(p.content) ? p.content.length : 0,
     created_at: p.created_at,
     updated_at: p.updated_at,
+    archived_at: p.archived_at ?? null,
     is_org_template: p.is_org_template,
   }))
 

@@ -10,25 +10,29 @@ type AutoflowRow = {
   type: string | null
   total_steps: number | null
   created_at: string
+  archived_at?: string | null
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const coachId = await requireCoach()
   if (!coachId) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
   const supabase = await createClient()
+  const archivedView = new URL(req.url).searchParams.get('archived') === '1'
   const [{ data: own }, orgItems] = await Promise.all([
     supabase
       .from('autoflow_templates')
-      .select('id, name, description, type, total_steps, created_at')
+      .select('id, name, description, type, total_steps, created_at, archived_at')
       .eq('coach_id', coachId)
-      .is('archived_at', null)
+      .filter('archived_at', archivedView ? 'not.is' : 'is', null)
       .order('created_at', { ascending: false }),
-    fetchOrgTemplatesForCoach<AutoflowRow>(
-      coachId,
-      'autoflow_templates',
-      'id, name, description, type, total_steps, created_at',
-    ),
+    archivedView
+      ? Promise.resolve([] as AutoflowRow[])
+      : fetchOrgTemplatesForCoach<AutoflowRow>(
+          coachId,
+          'autoflow_templates',
+          'id, name, description, type, total_steps, created_at',
+        ),
   ])
 
   // Dedupe by id — see comment in /api/forms route.

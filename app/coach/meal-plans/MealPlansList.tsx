@@ -31,6 +31,7 @@ type MealPlan = {
   content: MealSlot[]
   created_at: string
   updated_at: string
+  archived_at?: string | null
   is_org_template?: boolean
 }
 
@@ -184,6 +185,9 @@ export default function MealPlansList({
 }) {
   const router = useRouter()
   const [plans, setPlans] = useState<MealPlan[]>(initialPlans)
+  const [archivedPlans, setArchivedPlans] = useState<MealPlan[]>([])
+  const [view, setView] = useState<'active' | 'archived'>('active')
+  const [restoringId, setRestoringId] = useState<string | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [name, setName] = useState('')
   const [goal, setGoal] = useState('omnivore')
@@ -194,6 +198,33 @@ export default function MealPlansList({
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null)
   const [assigningPlan, setAssigningPlan] = useState<MealPlan | null>(null)
   const [copying, setCopying] = useState<string | null>(null)
+
+  // Lazy-load archived plans on first switch into that view.
+  useEffect(() => {
+    if (view !== 'archived' || archivedPlans.length > 0) return
+    fetch('/api/coach/meal-plans?archived=1')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => { if (Array.isArray(d)) setArchivedPlans(d) })
+      .catch(() => {/* silent */})
+  }, [view, archivedPlans.length])
+
+  async function restorePlan(id: string) {
+    setRestoringId(id)
+    try {
+      const res = await fetch('/api/coach/templates/archive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ table: 'meal_plans', id, restore: true }),
+      })
+      if (res.ok) {
+        const restored = archivedPlans.find((p) => p.id === id)
+        setArchivedPlans((prev) => prev.filter((p) => p.id !== id))
+        if (restored) setPlans((prev) => [restored, ...prev])
+      }
+    } finally {
+      setRestoringId(null)
+    }
+  }
 
   async function handleMakeCopy(id: string) {
     setCopying(id)
@@ -261,17 +292,71 @@ export default function MealPlansList({
   return (
     <div className="flex-1 flex flex-col">
       {/* Header */}
-      <div className="bg-white border-b px-6 py-4 flex items-center justify-between">
+      <div className="bg-white border-b px-6 py-4 flex items-center justify-between gap-3">
         <h1 className="text-lg font-bold text-gray-900">Meal Plans</h1>
-        <button
-          onClick={openModal}
-          className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors"
-        >
-          + New Plan
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setView(view === 'active' ? 'archived' : 'active')}
+            className="text-xs font-semibold text-gray-500 hover:text-gray-800 border border-gray-200 px-3 py-2 rounded-xl hover:bg-gray-50 transition-colors"
+            title={view === 'archived' ? 'Switch back to active plans' : 'View archived plans'}
+          >
+            {view === 'archived' ? 'Show active' : 'View archived'}
+          </button>
+          {view === 'active' && (
+            <button
+              onClick={openModal}
+              className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors"
+            >
+              + New Plan
+            </button>
+          )}
+        </div>
       </div>
 
       <main className="flex-1 p-6 w-full">
+        {/* Archived view */}
+        {view === 'archived' && (
+          archivedPlans.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-16">
+              No archived meal plans.<br />
+              <span className="text-xs">Archive a plan to send it here while keeping every client&apos;s assignment intact.</span>
+            </p>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-xs text-gray-500">
+                Archived plans are hidden from your library. Clients already assigned keep their meals. Restore any time, or delete permanently to wipe the cascade.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {archivedPlans.map((p) => (
+                  <div key={p.id} className="bg-gray-50 rounded-2xl border border-gray-200 p-5 flex flex-col">
+                    <p className="text-sm font-semibold text-gray-700 leading-snug">{p.name}</p>
+                    <p className="text-[11px] text-gray-400 mt-2">
+                      Archived {p.archived_at ? new Date(p.archived_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                    </p>
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        onClick={() => restorePlan(p.id)}
+                        disabled={restoringId === p.id}
+                        className="flex-1 text-center text-xs font-semibold text-emerald-700 border border-emerald-200 rounded-lg py-1.5 hover:bg-emerald-50 transition-colors disabled:opacity-50"
+                      >
+                        {restoringId === p.id ? '…' : 'Restore'}
+                      </button>
+                      <button
+                        onClick={() => setDeletingTarget(p)}
+                        className="flex-1 text-center text-xs font-semibold text-red-500 border border-red-100 rounded-lg py-1.5 hover:bg-red-50 transition-colors"
+                      >
+                        Delete forever
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        )}
+
+        {view === 'active' && (
+          <>
         {/* Empty state */}
         {plans.length === 0 && (
           <div className="text-center py-20">
@@ -428,6 +513,8 @@ export default function MealPlansList({
             </div>
           )
         })()}
+        </>
+        )}
       </main>
 
       {/* Create modal */}
@@ -525,16 +612,26 @@ export default function MealPlansList({
         <AssignMealPlanModal plan={assigningPlan} onClose={() => setAssigningPlan(null)} />
       )}
 
-      {/* Archive / delete modal */}
+      {/* Archive / delete modal — works for active + archived rows */}
       {deletingTarget && (
         <DeleteTemplateDialog
           table="meal_plans"
           templateId={deletingTarget.id}
           templateName={deletingTarget.name}
           hardDeleteUrl={`/api/coach/meal-plans/${deletingTarget.id}`}
+          alreadyArchived={!!deletingTarget.archived_at}
           onClose={() => setDeletingTarget(null)}
-          onRemoved={() => {
-            setPlans((prev) => prev.filter((p) => p.id !== deletingTarget.id))
+          onRemoved={(mode) => {
+            const t = deletingTarget
+            if (mode === 'archive') {
+              setPlans((prev) => prev.filter((p) => p.id !== t.id))
+              if (archivedPlans.length > 0) {
+                setArchivedPlans((prev) => [{ ...t, archived_at: new Date().toISOString() }, ...prev])
+              }
+            } else {
+              setPlans((prev) => prev.filter((p) => p.id !== t.id))
+              setArchivedPlans((prev) => prev.filter((p) => p.id !== t.id))
+            }
             setDeletingTarget(null)
           }}
         />

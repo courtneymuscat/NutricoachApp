@@ -4,27 +4,30 @@ import { seedCoachTemplates } from '@/lib/seed-coach-templates'
 import { fetchOrgTemplatesForCoach } from '@/lib/org'
 import type { NextRequest } from 'next/server'
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const coachId = await requireCoach()
   if (!coachId) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
   const supabase = await createClient()
+  const archivedView = new URL(req.url).searchParams.get('archived') === '1'
 
   // Auto-seed starter templates if they haven't been added yet
-  await seedCoachTemplates(coachId)
+  if (!archivedView) await seedCoachTemplates(coachId)
 
   const [{ data: own }, orgItems] = await Promise.all([
     supabase
       .from('meal_plans')
       .select('*')
       .eq('coach_id', coachId)
-      .is('archived_at', null)
+      .filter('archived_at', archivedView ? 'not.is' : 'is', null)
       .order('created_at', { ascending: false }),
-    fetchOrgTemplatesForCoach<{ id: string }>(
-      coachId,
-      'meal_plans',
-      '*',
-    ),
+    archivedView
+      ? Promise.resolve([] as Array<{ id: string }>)
+      : fetchOrgTemplatesForCoach<{ id: string }>(
+          coachId,
+          'meal_plans',
+          '*',
+        ),
   ])
 
   // Dedupe by id — the coach who publishes an org template also owns the

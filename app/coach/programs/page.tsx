@@ -10,6 +10,7 @@ type ProgramSummary = {
   week_count: number
   created_at: string
   updated_at: string
+  archived_at?: string | null
   is_org_template?: boolean
 }
 
@@ -327,11 +328,16 @@ function SavedWorkoutsTab({ orgName, orgRole }: { orgName: string | null; orgRol
 }
 
 export default function ProgramsPage() {
-  const [tab, setTab] = useState<'programs' | 'saved'>(() => {
+  const [tab, setTab] = useState<'programs' | 'saved' | 'archived'>(() => {
     if (typeof window === 'undefined') return 'programs'
-    return new URLSearchParams(window.location.search).get('tab') === 'saved' ? 'saved' : 'programs'
+    const t = new URLSearchParams(window.location.search).get('tab')
+    if (t === 'saved') return 'saved'
+    if (t === 'archived') return 'archived'
+    return 'programs'
   })
   const [programs, setPrograms] = useState<ProgramSummary[]>([])
+  const [archivedPrograms, setArchivedPrograms] = useState<ProgramSummary[]>([])
+  const [restoringId, setRestoringId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   const [showModal, setShowModal] = useState(false)
@@ -355,6 +361,33 @@ export default function ProgramsPage() {
       })
       .finally(() => setLoading(false))
   }, [])
+
+  // Lazy-load archived programs the first time the coach opens that tab.
+  useEffect(() => {
+    if (tab !== 'archived' || archivedPrograms.length > 0) return
+    fetch('/api/coach/programs?archived=1')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => { if (Array.isArray(d)) setArchivedPrograms(d) })
+      .catch(() => {/* silent */})
+  }, [tab, archivedPrograms.length])
+
+  async function restoreProgram(id: string) {
+    setRestoringId(id)
+    try {
+      const res = await fetch('/api/coach/templates/archive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ table: 'programs', id, restore: true }),
+      })
+      if (res.ok) {
+        const restored = archivedPrograms.find((p) => p.id === id)
+        setArchivedPrograms((prev) => prev.filter((p) => p.id !== id))
+        if (restored) setPrograms((prev) => [restored, ...prev])
+      }
+    } finally {
+      setRestoringId(null)
+    }
+  }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
@@ -424,12 +457,61 @@ export default function ProgramsPage() {
           >
             Saved workouts
           </button>
+          <button
+            onClick={() => setTab('archived')}
+            className={`px-3 pb-2.5 text-sm font-semibold border-b-2 transition-colors ${
+              tab === 'archived' ? 'border-gray-700 text-gray-800' : 'border-transparent text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            Archived
+          </button>
         </nav>
       </div>
 
       <main className="w-full p-6">
         {tab === 'saved' ? (
           <SavedWorkoutsTab orgName={orgName} orgRole={orgRole} />
+        ) : tab === 'archived' ? (
+          archivedPrograms.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-16">
+              No archived programs.<br />
+              <span className="text-xs">Archive a program from the Programs tab to send it here while keeping every client&apos;s workout history intact.</span>
+            </p>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-xs text-gray-500">
+                Archived programs are hidden from your library. Clients already assigned keep their workouts, results, and history. Restore any time, or delete permanently to wipe the cascade.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {archivedPrograms.map((p) => (
+                  <div key={p.id} className="bg-gray-50 rounded-2xl border border-gray-200 p-5 flex flex-col">
+                    <p className="text-sm font-semibold text-gray-700 leading-snug">{p.name}</p>
+                    {p.description && (
+                      <p className="text-xs text-gray-400 mt-1 line-clamp-2">{p.description}</p>
+                    )}
+                    <p className="text-[11px] text-gray-400 mt-2">
+                      Archived {p.archived_at ? new Date(p.archived_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                    </p>
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        onClick={() => restoreProgram(p.id)}
+                        disabled={restoringId === p.id}
+                        className="flex-1 text-center text-xs font-semibold text-emerald-700 border border-emerald-200 rounded-lg py-1.5 hover:bg-emerald-50 transition-colors disabled:opacity-50"
+                      >
+                        {restoringId === p.id ? '…' : 'Restore'}
+                      </button>
+                      <button
+                        onClick={() => setDeletingTarget(p)}
+                        className="flex-1 text-center text-xs font-semibold text-red-500 border border-red-100 rounded-lg py-1.5 hover:bg-red-50 transition-colors"
+                      >
+                        Delete forever
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
         ) : (<>
         {loading && (
           <p className="text-sm text-gray-400 text-center py-16">Loading programs…</p>
@@ -653,16 +735,29 @@ export default function ProgramsPage() {
         <AssignProgramModal program={assigningProgram} onClose={() => setAssigningProgram(null)} />
       )}
 
-      {/* Archive / delete modal */}
+      {/* Archive / delete modal — works for both active and archived rows.
+          When the row was already archived we hide the archive option;
+          the dialog still offers permanent-delete. */}
       {deletingTarget && (
         <DeleteTemplateDialog
           table="programs"
           templateId={deletingTarget.id}
           templateName={deletingTarget.name}
           hardDeleteUrl={`/api/coach/programs/${deletingTarget.id}`}
+          alreadyArchived={!!deletingTarget.archived_at}
           onClose={() => setDeletingTarget(null)}
-          onRemoved={() => {
-            setPrograms((prev) => prev.filter((p) => p.id !== deletingTarget.id))
+          onRemoved={(mode) => {
+            const t = deletingTarget
+            if (mode === 'archive') {
+              // Move row from active to archived (if that list is loaded)
+              setPrograms((prev) => prev.filter((p) => p.id !== t.id))
+              if (archivedPrograms.length > 0) {
+                setArchivedPrograms((prev) => [{ ...t, archived_at: new Date().toISOString() }, ...prev])
+              }
+            } else {
+              setPrograms((prev) => prev.filter((p) => p.id !== t.id))
+              setArchivedPrograms((prev) => prev.filter((p) => p.id !== t.id))
+            }
             setDeletingTarget(null)
           }}
         />

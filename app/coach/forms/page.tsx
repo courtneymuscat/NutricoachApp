@@ -35,6 +35,7 @@ export default async function CoachFormsPage() {
       .eq('coach_id', coachId)
       .eq('is_org_template', false)
       .or('is_client_copy.is.null,is_client_copy.eq.false')
+      .is('archived_at', null)
       .order('created_at', { ascending: false }),
     fetchOrgTemplatesForCoach<FormRow>(coachId, 'forms', 'id, title, type, is_active, created_at'),
     getOrgForUser(coachId),
@@ -54,14 +55,22 @@ export default async function CoachFormsPage() {
 
   return (
     <div className="flex-1 flex flex-col">
-      <div className="bg-white border-b px-6 py-4 flex items-center justify-between">
+      <div className="bg-white border-b px-6 py-4 flex items-center justify-between gap-3">
         <h1 className="text-lg font-bold text-gray-900">Forms</h1>
-        <a
-          href="/coach/forms/new/edit"
-          className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors"
-        >
-          + New form
-        </a>
+        <div className="flex items-center gap-2">
+          <a
+            href="/coach/forms/archived"
+            className="text-xs font-semibold text-gray-500 hover:text-gray-800 border border-gray-200 px-3 py-2 rounded-xl hover:bg-gray-50 transition-colors"
+          >
+            View archived
+          </a>
+          <a
+            href="/coach/forms/new/edit"
+            className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors"
+          >
+            + New form
+          </a>
+        </div>
       </div>
 
       <main className="w-full p-6 space-y-6">

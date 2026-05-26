@@ -52,9 +52,13 @@ type Props = {
   // type already has its own DELETE route — we pass the path in rather
   // than duplicating that mapping here.
   hardDeleteUrl: string
+  // When opening from the archived view, the template is already
+  // archived — hide the Archive option entirely and let the caller
+  // expose Restore separately. The dialog still offers permanent-delete.
+  alreadyArchived?: boolean
 }
 
-export default function DeleteTemplateDialog({ table, templateId, templateName, onClose, onRemoved, hardDeleteUrl }: Props) {
+export default function DeleteTemplateDialog({ table, templateId, templateName, onClose, onRemoved, hardDeleteUrl, alreadyArchived = false }: Props) {
   const [usage, setUsage] = useState<Usage | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<'archive' | 'delete' | null>(null)
@@ -156,23 +160,30 @@ export default function DeleteTemplateDialog({ table, templateId, templateName, 
           )}
         </div>
 
-        {/* Archive option */}
-        <div className="border border-emerald-200 bg-emerald-50/40 rounded-xl p-3 space-y-2">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest">Recommended</span>
+        {/* Archive option — hidden when the template is already archived */}
+        {!alreadyArchived && (
+          <div className="border border-emerald-200 bg-emerald-50/40 rounded-xl p-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest">Recommended</span>
+            </div>
+            <p className="text-sm font-semibold text-gray-900">Archive</p>
+            <p className="text-xs text-gray-600 leading-relaxed">
+              Hides this {meta.singular} from your library. Clients already using it keep everything — their assignments, responses, history all stay exactly as they are. You can restore it any time.
+            </p>
+            <button
+              onClick={archive}
+              disabled={!!busy}
+              className="w-full bg-emerald-600 text-white py-2 rounded-xl text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50"
+            >
+              {busy === 'archive' ? 'Archiving…' : 'Archive'}
+            </button>
           </div>
-          <p className="text-sm font-semibold text-gray-900">Archive</p>
-          <p className="text-xs text-gray-600 leading-relaxed">
-            Hides this {meta.singular} from your library. Clients already using it keep everything — their assignments, responses, history all stay exactly as they are. You can restore it any time.
+        )}
+        {alreadyArchived && (
+          <p className="text-xs text-gray-500 bg-gray-50 border border-gray-100 rounded-xl p-3 leading-relaxed">
+            This {meta.singular} is currently archived — clients keep their data, and you can restore it from the archived list at any time. Use the option below only if you want to wipe it out for good.
           </p>
-          <button
-            onClick={archive}
-            disabled={!!busy}
-            className="w-full bg-emerald-600 text-white py-2 rounded-xl text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50"
-          >
-            {busy === 'archive' ? 'Archiving…' : 'Archive'}
-          </button>
-        </div>
+        )}
 
         {/* Hard delete option */}
         <div className="border border-red-200 bg-red-50/40 rounded-xl p-3 space-y-2">

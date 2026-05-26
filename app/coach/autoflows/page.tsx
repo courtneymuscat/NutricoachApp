@@ -25,6 +25,7 @@ export default async function CoachAutoflowsPage() {
       .select('id, name, description, type, total_steps, created_at')
       .eq('coach_id', coachId)
       .eq('is_org_template', false)
+      .is('archived_at', null)
       .order('created_at', { ascending: false }),
     fetchOrgTemplatesForCoach<AutoflowRow>(
       coachId,
@@ -68,12 +69,20 @@ export default async function CoachAutoflowsPage() {
           <h1 className="text-lg font-bold text-gray-900">Autoflows</h1>
           <p className="text-xs text-gray-500 mt-0.5">Automated check-in and onboarding sequences you can assign to clients</p>
         </div>
-        <a
-          href="/coach/autoflows/new"
-          className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors"
-        >
-          + New flow
-        </a>
+        <div className="flex items-center gap-2">
+          <a
+            href="/coach/autoflows/archived"
+            className="text-xs font-semibold text-gray-500 hover:text-gray-800 border border-gray-200 px-3 py-2 rounded-xl hover:bg-gray-50 transition-colors"
+          >
+            View archived
+          </a>
+          <a
+            href="/coach/autoflows/new"
+            className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors"
+          >
+            + New flow
+          </a>
+        </div>
       </div>
 
       <main className="w-full p-6 space-y-8">
