@@ -372,19 +372,26 @@ function SymptomGroup({ title, symptoms, selected, onToggle, color = 'orange' }:
 
 // ── Modal ──────────────────────────────────────────────────────────────────
 function CycleModal({ log, saving, onUpdate, onClose, advancedAccess = true }: {
-  log: CycleLog; saving: boolean; onUpdate: (log: CycleLog) => void; onClose: () => void; advancedAccess?: boolean
+  log: CycleLog; saving: boolean; onUpdate: (log: CycleLog) => void; onClose: (hadChanges: boolean) => void; advancedAccess?: boolean
 }) {
   const [local, setLocal] = useState<CycleLog>(log)
+  const hadChangesRef = useRef(false)
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const bbtTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  useEffect(() => { setLocal(log) }, [log.log_date]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    setLocal(log)
+    hadChangesRef.current = false
+  }, [log.log_date]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function update(patch: Partial<CycleLog>, debounced = false) {
     const next = { ...local, ...patch }
     setLocal(next)
+    hadChangesRef.current = true
     if (!debounced) onUpdate(next)
   }
+
+  const closeWithSignal = () => onClose(hadChangesRef.current)
 
   function toggleSymptom(s: Symptom) {
     const next = local.symptoms.includes(s)
@@ -401,7 +408,7 @@ function CycleModal({ log, saving, onUpdate, onClose, advancedAccess = true }: {
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={closeWithSignal} />
 
       <div className="relative bg-gray-50 rounded-t-3xl max-h-[88vh] flex flex-col shadow-2xl">
         {/* Handle */}
@@ -774,7 +781,7 @@ function CycleModal({ log, saving, onUpdate, onClose, advancedAccess = true }: {
 
         {/* Done */}
         <div className="flex-shrink-0 px-4 py-4 bg-white border-t border-gray-100">
-          <button type="button" onClick={onClose}
+          <button type="button" onClick={closeWithSignal}
             className="w-full py-3 bg-gray-900 hover:bg-gray-800 text-white text-sm font-bold rounded-2xl transition-colors">
             Done
           </button>
@@ -864,7 +871,6 @@ export default function CycleTracker({ advancedAccess = true }: { advancedAccess
     }, { onConflict: 'user_id,log_date' })
     setLogs((prev) => ({ ...prev, [log.log_date]: log }))
     setHistoricLogs((prev) => ({ ...prev, [log.log_date]: log }))
-    notifyMyCoach('cycle')
     setSaving(false)
   }
 
@@ -1047,7 +1053,16 @@ export default function CycleTracker({ advancedAccess = true }: { advancedAccess
       </Card>
 
       {selectedDate && selectedLog && (
-        <CycleModal log={selectedLog} saving={saving} onUpdate={saveLog} onClose={() => setSelectedDate(null)} advancedAccess={advancedAccess} />
+        <CycleModal
+          log={selectedLog}
+          saving={saving}
+          onUpdate={saveLog}
+          onClose={(hadChanges) => {
+            setSelectedDate(null)
+            if (hadChanges) notifyMyCoach('cycle')
+          }}
+          advancedAccess={advancedAccess}
+        />
       )}
     </>
   )
