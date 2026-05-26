@@ -117,6 +117,7 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
   const [editingStep, setEditingStep] = useState<StepEditor | null>(null)
   const [stepIsDirty, setStepIsDirty] = useState(false)
   const [savingStep, setSavingStep] = useState(false)
+  const [stepSaved, setStepSaved] = useState(false)
   const [stepSaveError, setStepSaveError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -199,6 +200,15 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
     setSavingStep(false)
     if (!res.ok) { setStepSaveError(d.error ?? 'Save failed'); return }
     setStepIsDirty(false)
+    setStepSaved(true)
+    // Auto-clear the "Saved" indicator after a couple of seconds so it
+    // doesn't sit there forever after the next edit starts.
+    setTimeout(() => setStepSaved(false), 2500)
+    // Also flip the dirty flag back off for core questions specifically,
+    // so subsequent saves don't keep pushing the same override.
+    if (editingStep.coreQuestionsDirty) {
+      setEditingStep((prev) => prev ? { ...prev, coreQuestionsDirty: false } : null)
+    }
     // Refresh flow detail
     const updated = await fetch(`/api/coach/clients/${clientId}/autoflows/${selectedFlow.id}`).then(r => r.json())
     if (!updated.error) setSelectedFlow(updated)
@@ -248,6 +258,17 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
     updateStepEditor({ questions: editingStep.questions.filter((_, i) => i !== idx) })
   }
 
+  // Move a step-specific question up/down within the list. Bounds-checked
+  // so the swap is a no-op at the ends.
+  function moveQuestion(idx: number, dir: 'up' | 'down') {
+    if (!editingStep) return
+    const target = dir === 'up' ? idx - 1 : idx + 1
+    if (target < 0 || target >= editingStep.questions.length) return
+    const qs = [...editingStep.questions]
+    ;[qs[idx], qs[target]] = [qs[target], qs[idx]]
+    updateStepEditor({ questions: qs })
+  }
+
   // Core question editors — mirror per-step but mutate coreQuestions and
   // flip coreQuestionsDirty so saveStep knows to push the override.
   function updateCoreQuestion(idx: number, patch: Partial<Question>) {
@@ -292,6 +313,19 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
     setStepIsDirty(true)
   }
 
+  // Reorder core questions — swap with the neighbour above/below. Bounds-
+  // checked so the move is a no-op at the ends. coreQuestionsDirty is set
+  // so the override actually persists on save.
+  function moveCoreQuestion(idx: number, dir: 'up' | 'down') {
+    if (!editingStep) return
+    const target = dir === 'up' ? idx - 1 : idx + 1
+    if (target < 0 || target >= editingStep.coreQuestions.length) return
+    const qs = [...editingStep.coreQuestions]
+    ;[qs[idx], qs[target]] = [qs[target], qs[idx]]
+    setEditingStep({ ...editingStep, coreQuestions: qs, coreQuestionsDirty: true })
+    setStepIsDirty(true)
+  }
+
   async function removeFlow(flowId: string) {
     if (!confirm('Remove this autoflow from the client? Their responses will be deleted.')) return
     await fetch(`/api/coach/clients/${clientId}/autoflows/${flowId}`, { method: 'DELETE' })
@@ -318,9 +352,9 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
           <button
             onClick={saveStepContent}
             disabled={savingStep || !stepIsDirty}
-            className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-gray-900 text-white hover:bg-gray-700 disabled:opacity-40 transition-colors"
+            className={`text-xs font-semibold px-3 py-1.5 rounded-lg text-white disabled:opacity-40 transition-colors ${stepSaved && !stepIsDirty ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-gray-900 hover:bg-gray-700'}`}
           >
-            {savingStep ? 'Saving…' : 'Save changes'}
+            {savingStep ? 'Saving…' : stepSaved && !stepIsDirty ? '✓ Saved' : 'Save changes'}
           </button>
         </div>
 
@@ -342,6 +376,14 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">
             Step {editingStep.stepNumber}
             {stepIsDirty && <span className="ml-2 text-amber-500 normal-case font-normal">· Unsaved changes</span>}
+            {stepSaved && !stepIsDirty && (
+              <span className="ml-2 inline-flex items-center gap-1 text-emerald-600 normal-case font-medium">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                </svg>
+                Saved
+              </span>
+            )}
           </p>
         </div>
 
@@ -427,15 +469,33 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
                       )}
                     </div>
                   </div>
-                  <button
-                    onClick={() => removeCoreQuestion(i)}
-                    className="text-gray-300 hover:text-red-500 transition-colors flex-shrink-0 mt-1"
-                    title="Remove core question"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
+                  <div className="flex flex-col items-center gap-0.5 flex-shrink-0 mt-1">
+                    <button
+                      onClick={() => moveCoreQuestion(i, 'up')}
+                      disabled={i === 0}
+                      className="text-gray-300 hover:text-blue-500 transition-colors disabled:opacity-30 disabled:cursor-default"
+                      title="Move up"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7" /></svg>
+                    </button>
+                    <button
+                      onClick={() => moveCoreQuestion(i, 'down')}
+                      disabled={i === editingStep.coreQuestions.length - 1}
+                      className="text-gray-300 hover:text-blue-500 transition-colors disabled:opacity-30 disabled:cursor-default"
+                      title="Move down"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
+                    </button>
+                    <button
+                      onClick={() => removeCoreQuestion(i)}
+                      className="text-gray-300 hover:text-red-500 transition-colors mt-0.5"
+                      title="Remove core question"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -492,15 +552,33 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
                       )}
                     </div>
                   </div>
-                  <button
-                    onClick={() => removeQuestion(i)}
-                    className="text-gray-300 hover:text-red-500 transition-colors flex-shrink-0 mt-1"
-                    title="Remove question"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
+                  <div className="flex flex-col items-center gap-0.5 flex-shrink-0 mt-1">
+                    <button
+                      onClick={() => moveQuestion(i, 'up')}
+                      disabled={i === 0}
+                      className="text-gray-300 hover:text-blue-500 transition-colors disabled:opacity-30 disabled:cursor-default"
+                      title="Move up"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7" /></svg>
+                    </button>
+                    <button
+                      onClick={() => moveQuestion(i, 'down')}
+                      disabled={i === editingStep.questions.length - 1}
+                      className="text-gray-300 hover:text-blue-500 transition-colors disabled:opacity-30 disabled:cursor-default"
+                      title="Move down"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
+                    </button>
+                    <button
+                      onClick={() => removeQuestion(i)}
+                      className="text-gray-300 hover:text-red-500 transition-colors mt-0.5"
+                      title="Remove question"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
