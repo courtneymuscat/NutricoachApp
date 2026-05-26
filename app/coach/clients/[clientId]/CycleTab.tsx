@@ -71,7 +71,7 @@ export default function CycleTab({ clientId }: { clientId: string }) {
   for (const d of sortedDates) {
     if (logMap[d]?.period && !logMap[shiftDate(d, -1)]?.period) periodStarts.push(d)
   }
-  type CyclePrediction = { avgCycleLength: number; nextPeriodStart: string; nextPeriodEnd: string; ovulationDay: string; fertileStart: string; fertileEnd: string; daysUntilPeriod: number }
+  type CyclePrediction = { avgCycleLength: number; nextPeriodStart: string; nextPeriodEnd: string; ovulationDay: string; fertileStart: string; fertileEnd: string; daysUntilPeriod: number; cycleDay: number }
   let prediction: CyclePrediction | null = null
   if (periodStarts.length >= 2) {
     const lengths: number[] = []
@@ -94,7 +94,10 @@ export default function CycleTab({ clientId }: { clientId: string }) {
       const ovulationDay = shiftDate(nextPeriodStart, -14)
       const fertileStart = shiftDate(ovulationDay, -5)
       const fertileEnd = shiftDate(ovulationDay, 1)
-      prediction = { avgCycleLength, nextPeriodStart, nextPeriodEnd, ovulationDay, fertileStart, fertileEnd, daysUntilPeriod: diffDays(todayStr, nextPeriodStart) }
+      // Cycle day = days since the most recent period start (+1 so the
+      // period-start day reads as Day 1, matching client app convention).
+      const cycleDay = Math.max(1, diffDays(lastStart, todayStr) + 1)
+      prediction = { avgCycleLength, nextPeriodStart, nextPeriodEnd, ovulationDay, fertileStart, fertileEnd, daysUntilPeriod: diffDays(todayStr, nextPeriodStart), cycleDay }
     }
   }
 
@@ -146,7 +149,11 @@ export default function CycleTab({ clientId }: { clientId: string }) {
 
       {/* Prediction strip */}
       {prediction && (
-        <div className="grid grid-cols-3 gap-2 mb-4 text-center">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4 text-center">
+          <div className="bg-amber-50 rounded-xl py-2 px-1">
+            <p className="text-xs font-bold text-amber-600">Day {prediction.cycleDay}</p>
+            <p className="text-xs text-amber-400 mt-0.5">Current cycle day</p>
+          </div>
           <div className="bg-rose-50 rounded-xl py-2 px-1">
             <p className="text-xs font-bold text-rose-600">
               {prediction.daysUntilPeriod > 0 ? `In ${prediction.daysUntilPeriod}d` : prediction.daysUntilPeriod === 0 ? 'Today' : 'Overdue'}
