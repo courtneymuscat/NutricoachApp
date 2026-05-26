@@ -652,6 +652,33 @@ export default function AutoflowTemplatePage({ params }: { params: Promise<{ tem
     setTab('steps')
   }
 
+  // Remove a step from the template. Trigger references to the deleted
+  // step are reset to a day-offset trigger so we don't leave orphan
+  // 'on_step_complete' edges. The step's id ceases to exist; saving the
+  // template propagates to the DB (cascade in the PUT handler deletes
+  // the autoflow_template_steps row + any client_autoflow_step_overrides
+  // / responses keyed on that step_number).
+  function deleteStep(stepNum: number) {
+    if (!template) return
+    const remaining = template.steps.filter(s => s.step_number !== stepNum)
+    const repaired = remaining.map(s => (
+      s.trigger_step_number === stepNum
+        ? { ...s, trigger_type: 'day_offset' as const, trigger_step_number: null }
+        : s
+    ))
+    setTemplate({
+      ...template,
+      total_steps: repaired.length,
+      steps: repaired,
+    })
+    // If the deleted step was the active one, fall back to the lowest
+    // remaining step (or 1 if none left).
+    if (activeStep === stepNum) {
+      const next = repaired[0]?.step_number ?? 1
+      setActiveStep(next)
+    }
+  }
+
   // Swap the step at sorted index `idx` with the neighbour at `idx + dir`.
   // We swap their step_number values (instead of resequencing) so per-client
   // overrides keyed on step_number stay attached to the same step. Any
@@ -923,6 +950,20 @@ export default function AutoflowTemplatePage({ params }: { params: Promise<{ tem
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
                     </button>
                   </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      const label = s.title || `Step ${s.step_number}`
+                      if (!confirm(`Remove "${label}" from this autoflow?\n\nThis affects every client on this template — their responses for this step will be deleted when you save. Use the per-client editor instead to remove the step for just one client.`)) return
+                      deleteStep(s.step_number)
+                    }}
+                    disabled={arr.length <= 1}
+                    className="text-gray-300 hover:text-red-500 disabled:opacity-30 disabled:hover:text-gray-300 p-0.5"
+                    title={arr.length <= 1 ? 'Can\'t delete the only step' : 'Delete this step'}
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                  </button>
                 </div>
               )}
             </div>

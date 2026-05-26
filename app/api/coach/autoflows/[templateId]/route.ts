@@ -115,13 +115,60 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
       .from('autoflow_template_steps')
       .upsert(stepRows, { onConflict: 'template_id,step_number' })
 
-    // Delete any steps that were removed from the template
+    // Delete any steps that were removed from the template, plus the
+    // per-client overrides / responses / calendar events that referenced
+    // those step_numbers — otherwise they'd hang around as orphans on
+    // every active client_autoflow tied to this template.
     const keptStepNumbers = steps.map((s: { step_number: number }) => s.step_number)
+    const { data: existingSteps } = await supabase
+      .from('autoflow_template_steps')
+      .select('step_number')
+      .eq('template_id', templateId)
+    const removedStepNumbers = ((existingSteps ?? []) as Array<{ step_number: number }>)
+      .map((s) => s.step_number)
+      .filter((n) => !keptStepNumbers.includes(n))
+
     await supabase
       .from('autoflow_template_steps')
       .delete()
       .eq('template_id', templateId)
       .not('step_number', 'in', `(${keptStepNumbers.join(',')})`)
+
+    if (removedStepNumbers.length > 0) {
+      const { createAdminClient } = await import('@/lib/supabase/admin')
+      const admin = createAdminClient()
+      const { data: siblingFlows } = await admin
+        .from('client_autoflows')
+        .select('id')
+        .eq('template_id', templateId)
+      const flowIds = (siblingFlows ?? []).map((f) => f.id as string)
+      if (flowIds.length > 0) {
+        await Promise.all([
+          admin
+            .from('client_autoflow_step_overrides')
+            .delete()
+            .in('client_autoflow_id', flowIds)
+            .in('step_number', removedStepNumbers),
+          admin
+            .from('autoflow_responses')
+            .delete()
+            .in('client_autoflow_id', flowIds)
+            .in('step_number', removedStepNumbers),
+        ])
+        // Drop the calendar events pointing at any of the removed steps
+        // for any client on this template.
+        for (const flowId of flowIds) {
+          for (const sn of removedStepNumbers) {
+            await admin
+              .from('calendar_events')
+              .delete()
+              .eq('type', 'autoflow')
+              .filter('content->>flow_id', 'eq', flowId)
+              .filter('content->>step_number', 'eq', String(sn))
+          }
+        }
+      }
+    }
 
     // If this autoflow is itself an org template, propagate the org_template
     // marker to any newly added forms / resources referenced by its steps so
