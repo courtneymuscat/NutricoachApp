@@ -333,6 +333,31 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
     if (selectedFlow?.id === flowId) setSelectedFlow(null)
   }
 
+  // Snapshot this client's flow (template overlaid with their per-step +
+  // core overrides) into a brand new autoflow template owned by the
+  // coach. Useful after fine-tuning a flow for one client and wanting to
+  // reuse it elsewhere.
+  const [savingAsTemplate, setSavingAsTemplate] = useState(false)
+  const [saveAsTemplateError, setSaveAsTemplateError] = useState<string | null>(null)
+  async function saveFlowAsTemplate(flowId: string) {
+    if (savingAsTemplate) return
+    setSavingAsTemplate(true)
+    setSaveAsTemplateError(null)
+    try {
+      const res = await fetch(`/api/coach/clients/${clientId}/autoflows/${flowId}/save-as-template`, { method: 'POST' })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok || !d.id) {
+        setSaveAsTemplateError(d.error ?? 'Failed to save as template')
+        return
+      }
+      // Take the coach straight to the new template editor so they can
+      // rename / publish to org / further edit.
+      window.location.href = `/coach/autoflows/${d.id}`
+    } finally {
+      setSavingAsTemplate(false)
+    }
+  }
+
   if (loading) {
     return <div className="p-6 text-sm text-gray-400">Loading…</div>
   }
@@ -716,7 +741,7 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
     const total = selectedFlow.steps.length
     return (
       <div className="p-5 space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <button
             onClick={() => setSelectedFlow(null)}
             className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-800 transition-colors"
@@ -724,13 +749,26 @@ export default function FlowsTab({ clientId }: { clientId: string }) {
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
             All flows
           </button>
-          <button
-            onClick={() => removeFlow(selectedFlow.id)}
-            className="text-xs text-red-400 hover:text-red-600 transition-colors"
-          >
-            Remove flow
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => saveFlowAsTemplate(selectedFlow.id)}
+              disabled={savingAsTemplate}
+              className="text-xs font-semibold text-blue-600 border border-blue-200 px-2.5 py-1 rounded-lg hover:bg-blue-50 transition-colors disabled:opacity-50"
+              title="Create a new autoflow template from this client's flow (template + their overrides)"
+            >
+              {savingAsTemplate ? 'Saving…' : 'Save as template'}
+            </button>
+            <button
+              onClick={() => removeFlow(selectedFlow.id)}
+              className="text-xs text-red-400 hover:text-red-600 transition-colors"
+            >
+              Remove flow
+            </button>
+          </div>
         </div>
+        {saveAsTemplateError && (
+          <p className="text-xs text-red-500">{saveAsTemplateError}</p>
+        )}
 
         <div>
           <h3 className="text-sm font-semibold text-gray-900">{selectedFlow.name}</h3>
